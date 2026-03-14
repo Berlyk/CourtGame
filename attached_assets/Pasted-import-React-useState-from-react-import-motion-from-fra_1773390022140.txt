@@ -1,0 +1,943 @@
+import React, { useState } from "react";
+import { motion } from "framer-motion";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { Separator } from "@/components/ui/separator";
+import { Copy, Gavel, Scale, UserPlus, Play, Eye, Shield, AlertCircle, Sparkles } from "lucide-react";
+
+const mechanicPool = [
+  {
+    name: "Отвечай только ДА!",
+    description: "Задайте вопрос любой стороне. Ответом на который будет — только «да»"
+  },
+  {
+    name: "Закрой Рот",
+    description: "Прервите аргумент другого игрока и заставьте его замолчать."
+  },
+  {
+    name: "Подумай по лучше",
+    description: "Выбранный игрок обязан отказаться от своего аргумента."
+  },
+  {
+    name: "Без воды",
+    description: "Выбранный игрок должен объяснить свою позицию только одним предложением."
+  },
+  {
+    name: "Не увиливай",
+    description: "Выбранный игрок обязан прямо ответить на заданный вопрос без ухода от темы."
+  },
+  {
+    name: "Сомнительно",
+    description: "Выбранный игрок обязан подкрепить свой аргумент ещё одним фактом. Если нет - аргумент снимается"
+  },
+  {
+    name: "Лишнее слово",
+    description: "Выбранный игрок может ответить максимум пятью словами."
+  },
+  {
+    name: "Слабое место",
+    description: "Укажите на самый уязвимый аргумент игрока. Он обязан защищать именно его."
+  },
+  {
+    name: "Приведи пример",
+    description: "Игрок обязан привести пример, подтверждающий его слова."
+  },
+  {
+    name: "Ниче не понял",
+    description: "Игрок обязан привести переформулировать свою мысль."
+  }
+];
+
+const cases = {
+  3: [
+    {
+      id: "civil-car-01",
+      mode: "Гражданский спор",
+      title: "Повреждение машины на парковке",
+      description: "Истец утверждает, что ответчик повредил его машину на парковке и уехал. Ответчик это отрицает.",
+      truth: "Ответчик действительно задел машину истца, но истец завысил сумму ущерба.",
+      evidence: [
+        "ДТП произошло в 19:12.",
+        "Камера зафиксировала автомобиль ответчика рядом с местом происшествия.",
+        "На переднем бампере машины ответчика есть свежая царапина."
+      ],
+      roles: {
+        plaintiff: {
+          title: "Истец",
+          goal: "Убедить судью, что именно ответчик повредил автомобиль и обязан выплатить компенсацию.",
+          facts: [
+            "Удар был достаточно сильным, чтобы оставить заметную вмятину.",
+            "Ответчик вышел из машины и посмотрел на повреждение.",
+            "Свидетель видел лицо водителя.",
+            "Моя машина стояла правильно."
+          ]
+        },
+        defendant: {
+          title: "Ответчик",
+          goal: "Избежать полного признания вины или снизить размер компенсации.",
+          facts: [
+            "В этот вечер я действительно был на этой парковке.",
+            "Я никого не задевал.",
+            "Машина истца стояла слишком близко к выезду.",
+            "После парковки я сразу уехал домой."
+          ]
+        },
+        judge: {
+          title: "Судья",
+          goal: "На основе улик и раскрытых фактов вынести максимально точное решение.",
+          facts: [
+            "Размер заявленного ущерба может быть завышен.",
+            "Камера не показывает сам момент контакта крупным планом.",
+            "Машина истца стояла с нарушением разметки.",
+            "Ответчик действительно был на месте."
+          ]
+        }
+      }
+    },
+    {
+      id: "labor-01",
+      mode: "Трудовой спор",
+      title: "Невыплаченная премия",
+      description: "Истец утверждает, что компания в лице ответчика незаконно лишила его премии. Ответчик говорит, что условия не были выполнены.",
+      truth: "Истец выполнил KPI частично, а работодатель изменил условия премии слишком поздно.",
+      evidence: [
+        "В трудовом договоре указана система премирования.",
+        "Изменение KPI было отправлено сотрудникам за 3 дня до конца месяца.",
+        "Истец закрыл 87% плана."
+      ],
+      roles: {
+        plaintiff: {
+          title: "Истец",
+          goal: "Доказать, что премия была удержана несправедливо.",
+          facts: [
+            "Я выполнил все условия премии.",
+            "Новые KPI мне прислали слишком поздно.",
+            "Начальник обещал, что старые правила останутся в силе.",
+            "Я перевыполнил месячный план."
+          ]
+        },
+        defendant: {
+          title: "Ответчик",
+          goal: "Доказать, что оснований для полной выплаты премии не было.",
+          facts: [
+            "Истец не достиг полного KPI.",
+            "Компания уведомила всех заранее.",
+            "Порядок премии можно менять по внутреннему регламенту.",
+            "Истец систематически нарушал дисциплину."
+          ]
+        },
+        judge: {
+          title: "Судья",
+          goal: "Оценить, были ли условия премии изменены справедливо и законно.",
+          facts: [
+            "Изменение условий в последний момент ослабляет позицию ответчика.",
+            "Истец не выполнил план на 100%.",
+            "В договоре нет точного срока уведомления об изменении KPI.",
+            "Обещание начальника не оформлено письменно."
+          ]
+        }
+      }
+    }
+  ],
+  4: [
+    {
+      id: "criminal-01",
+      mode: "Уголовное дело",
+      title: "Кража телефона в кафе",
+      description: "Потерпевший утверждает, что обвиняемый украл телефон со стола в кафе. Обвиняемый отрицает кражу.",
+      truth: "Обвиняемый действительно взял телефон, но сначала подумал, что это телефон знакомого.",
+      evidence: [
+        "Камера показывает, что обвиняемый взял телефон со стола.",
+        "Через 12 минут телефон отключился.",
+        "Обвиняемый находился в кафе в момент пропажи."
+      ],
+      roles: {
+        plaintiff: {
+          title: "Потерпевший",
+          goal: "Доказать, что телефон был похищен именно обвиняемым.",
+          facts: [
+            "Мой телефон лежал рядом со стаканом.",
+            "Обвиняемый нервничал и оглядывался.",
+            "Я сразу заметил пропажу.",
+            "К телефону знал пароль только я."
+          ]
+        },
+        defendant: {
+          title: "Обвиняемый",
+          goal: "Убедить судью, что умысла на кражу не было или вины недостаточно.",
+          facts: [
+            "Я действительно взял телефон со стола.",
+            "Я думал, что это телефон моего друга.",
+            "Я не выключал телефон.",
+            "Потерпевший сам ушёл, оставив вещь без присмотра."
+          ]
+        },
+        defenseLawyer: {
+          title: "Адвокат ответчика",
+          goal: "Ослабить позицию обвинения и показать отсутствие прямого умысла.",
+          facts: [
+            "Видео не показывает, что обвиняемый прячет телефон намеренно.",
+            "Потерпевший сидел в компании, где у нескольких людей были одинаковые чехлы.",
+            "Телефон отключился уже после выхода из кафе.",
+            "Сотрудники кафе не пытались сразу остановить обвиняемого."
+          ]
+        },
+        judge: {
+          title: "Судья",
+          goal: "Оценить, была ли это кража или ошибка без умысла.",
+          facts: [
+            "Факт изъятия телефона подтверждён камерой.",
+            "Мотив и умысел требуют отдельной оценки.",
+            "Время отключения телефона выглядит подозрительно.",
+            "Ошибка с одинаковыми чехлами выглядит правдоподобно лишь частично."
+          ]
+        }
+      }
+    }
+  ],
+  5: [
+    {
+      id: "criminal-02",
+      mode: "Уголовное дело",
+      title: "Удар у ночного клуба",
+      description: "Потерпевший утверждает, что обвиняемый ударил его возле клуба. Обвиняемый говорит, что только защищался.",
+      truth: "Обвиняемый действительно ударил первым, но до этого потерпевший провоцировал конфликт и толкал его.",
+      evidence: [
+        "На записи видно физический конфликт между сторонами.",
+        "Первый удар рукой нанёс обвиняемый.",
+        "За 20 секунд до удара потерпевший дважды толкнул обвиняемого."
+      ],
+      roles: {
+        plaintiff: {
+          title: "Потерпевший",
+          goal: "Доказать, что нападение было необоснованным.",
+          facts: [
+            "Я не бил обвиняемого.",
+            "Он резко подошёл ко мне после словесного спора.",
+            "После удара я упал.",
+            "Охрана не вмешалась вовремя."
+          ]
+        },
+        defendant: {
+          title: "Обвиняемый",
+          goal: "Показать, что ваши действия были реакцией на провокацию.",
+          facts: [
+            "Потерпевший толкал меня первым.",
+            "Я опасался продолжения нападения.",
+            "Я ударил один раз.",
+            "Я не хотел причинять серьёзный вред."
+          ]
+        },
+        defenseLawyer: {
+          title: "Адвокат",
+          goal: "Снизить тяжесть вины обвиняемого и подчеркнуть провокацию.",
+          facts: [
+            "На видео есть толчки со стороны потерпевшего.",
+            "Конфликт начался словесно, но быстро escalated.",
+            "Охрана подошла только после удара.",
+            "Обвиняемый не продолжал бить после падения потерпевшего."
+          ]
+        },
+        prosecutor: {
+          title: "Прокурор",
+          goal: "Доказать состав правонарушения и убедить судью в виновности обвиняемого.",
+          facts: [
+            "Первый явный удар зафиксирован за обвиняемым.",
+            "Словесная перепалка не оправдывает нападение.",
+            "Потерпевший получил сотрясение.",
+            "Обвиняемый не сообщил охране о конфликте заранее."
+          ]
+        },
+        judge: {
+          title: "Судья",
+          goal: "Определить, была ли это самооборона или превышение допустимого.",
+          facts: [
+            "Толчки потерпевшего доказаны.",
+            "Первый удар нанёс обвиняемый.",
+            "Дальнейшего избиения не последовало.",
+            "Степень вреда здоровью имеет значение для решения."
+          ]
+        }
+      }
+    }
+  ],
+  6: [
+    {
+      id: "company-01",
+      mode: "Суд на компанию",
+      title: "Срыв сроков и убытки по контракту",
+      description: "Истец утверждает, что компания-ответчик сорвала сроки поставки и нанесла убытки бизнесу. Ответчик говорит, что задержка была вызвана изменениями со стороны клиента.",
+      truth: "Ответчик действительно сорвал срок, но часть задержки возникла из-за поздних правок со стороны истца.",
+      evidence: [
+        "В контракте указан срок поставки до 14 мая.",
+        "Истец отправил дополнительный список требований 9 мая.",
+        "Финальная поставка состоялась 21 мая."
+      ],
+      roles: {
+        plaintiff: {
+          title: "Истец",
+          goal: "Доказать, что компания-ответчик нарушила сроки и обязана компенсировать убытки.",
+          facts: [
+            "Первоначальный срок был зафиксирован в договоре.",
+            "Наша компания предупреждала о критичности сроков.",
+            "Ответчик подтвердил, что успевает в дедлайн.",
+            "Изменения 9 мая были несущественными."
+          ]
+        },
+        defendant: {
+          title: "Ответчик",
+          goal: "Показать, что просрочка была вызвана действиями истца или должна уменьшить объём ответственности.",
+          facts: [
+            "Клиент внёс изменения за несколько дней до дедлайна.",
+            "Часть материалов пришлось переделывать.",
+            "Мы предупреждали о риске задержки.",
+            "Без новых правок поставка была бы вовремя."
+          ]
+        },
+        plaintiffLawyer: {
+          title: "Адвокат истца",
+          goal: "Максимально усилить требования истца и связать задержку с прямыми убытками.",
+          facts: [
+            "Контракт не даёт ответчику автоматического права сдвигать дедлайн.",
+            "Подтверждение дедлайна было после части правок.",
+            "Истец понёс реальные финансовые потери.",
+            "Ответчик не предложил официальное допсоглашение о переносе сроков."
+          ]
+        },
+        defenseLawyer: {
+          title: "Адвокат ответчика",
+          goal: "Снизить размер претензий и доказать, что истец сам contributed к просрочке.",
+          facts: [
+            "Новые требования изменили объём работ.",
+            "Истец не подписал перенос сроков, но продолжал требовать правки.",
+            "Часть убытков истца не связана напрямую с просрочкой.",
+            "Ответчик поставил продукт в полном объёме."
+          ]
+        },
+        prosecutor: {
+          title: "Прокурор",
+          goal: "Поддержать общественный интерес и давление на соблюдение договоров, если нарушение очевидно.",
+          facts: [
+            "Формальный срок действительно нарушен.",
+            "Изменения клиента не отменяют договор автоматически.",
+            "Наличие предупреждений о риске важно для оценки вины.",
+            "Нужно отделить сам факт просрочки от размера убытков."
+          ]
+        },
+        judge: {
+          title: "Судья",
+          goal: "Определить долю вины сторон и принять справедливое решение.",
+          facts: [
+            "Срок контракта нарушен.",
+            "Поздние изменения истца тоже повлияли на исполнение.",
+            "Размер убытков подлежит отдельной оценке.",
+            "Возможна частичная вина обеих сторон."
+          ]
+        }
+      }
+    }
+  ]
+};
+
+const stages = [
+  "Подготовка",
+  "Выступление истца / потерпевшего",
+  "Выступление ответчика / обвиняемого",
+  "Допрос и использование карт",
+  "Финальные речи",
+  "Решение судьи"
+];
+
+const roleOrderByCount = {
+  3: ["plaintiff", "defendant", "judge"],
+  4: ["plaintiff", "defendant", "defenseLawyer", "judge"],
+  5: ["plaintiff", "defendant", "defenseLawyer", "prosecutor", "judge"],
+  6: ["plaintiff", "defendant", "plaintiffLawyer", "defenseLawyer", "prosecutor", "judge"]
+};
+
+function randomCode() {
+  return Math.random().toString(36).slice(2, 7).toUpperCase();
+}
+
+function shuffle(array) {
+  return [...array].sort(() => Math.random() - 0.5);
+}
+
+function pickRandom(array, count = 1) {
+  return shuffle(array).slice(0, count);
+}
+
+function buildGame(players) {
+  const count = players.length;
+  const availableCases = cases[count] || cases[3];
+  const selectedCase = pickRandom(availableCases)[0];
+  const roleKeys = shuffle(roleOrderByCount[count]);
+
+  const assignedPlayers = players.map((player, index) => {
+    const roleKey = roleKeys[index];
+    const roleData = selectedCase.roles[roleKey];
+    return {
+      ...player,
+      roleKey,
+      roleTitle: roleData.title,
+      goal: roleData.goal,
+      facts: roleData.facts.map((text, i) => ({
+        id: `${player.id}-fact-${i}`,
+        text,
+        revealed: false
+      })),
+      cards: pickRandom(mechanicPool, 3).map((card, i) => ({
+        ...card,
+        id: `${player.id}-card-${i}`,
+        used: false
+      }))
+    };
+  });
+
+  return {
+    caseData: selectedCase,
+    players: assignedPlayers,
+    stageIndex: 0,
+    revealedFacts: [],
+    usedCards: [],
+    finished: false,
+    verdict: "",
+    verdictEvaluation: ""
+  };
+}
+
+function PlayerCard({ player, isHost }) {
+  return (
+    <Card className="rounded-2xl shadow-sm bg-zinc-900/90 border-zinc-800 text-zinc-100">
+      <CardContent className="p-4 flex items-center justify-between gap-3">
+        <div>
+          <div className="font-semibold text-base">{player.name}</div>
+          <div className="text-sm text-zinc-400">{isHost ? "Ведущий комнаты" : "Игрок"}</div>
+        </div>
+        <Badge className={isHost ? "bg-red-600 text-white border-0" : "bg-zinc-800 text-zinc-100 border border-zinc-700"}>{isHost ? "Host" : "Player"}</Badge>
+      </CardContent>
+    </Card>
+  );
+}
+
+function InfoBlock({ title, icon, children }) {
+  return (
+    <Card className="rounded-2xl shadow-sm h-full bg-zinc-900/90 border-zinc-800 text-zinc-100">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-lg text-zinc-100">
+          {icon}
+          {title}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="text-zinc-100">{children}</CardContent>
+    </Card>
+  );
+}
+
+export default function CourtGameSitePrototype() {
+  const [screen, setScreen] = useState("home");
+  const [playerName, setPlayerName] = useState("Игрок 1");
+  const [roomCode, setRoomCode] = useState("");
+  const [joinCode, setJoinCode] = useState("");
+  const [players, setPlayers] = useState([]);
+  const [hostId, setHostId] = useState(null);
+  const [meId, setMeId] = useState(null);
+  const [game, setGame] = useState(null);
+
+  const meInGame = game?.players.find((p) => p.id === meId);
+  const judgePlayer = game?.players.find((p) => p.roleKey === "judge");
+
+  function createRoom() {
+    const code = randomCode();
+    const id = crypto.randomUUID();
+    const player = { id, name: playerName || "Игрок 1" };
+    setRoomCode(code);
+    setPlayers([player]);
+    setHostId(id);
+    setMeId(id);
+    setScreen("room");
+  }
+
+  function joinRoomLocal() {
+    if (!joinCode.trim()) return;
+    const code = joinCode.trim().toUpperCase();
+    const id = crypto.randomUUID();
+    const player = { id, name: playerName || `Игрок ${players.length + 1}` };
+
+    if (!roomCode || code !== roomCode) {
+      const generatedHostId = crypto.randomUUID();
+      const host = { id: generatedHostId, name: "Ведущий" };
+      setRoomCode(code);
+      setPlayers([host, player]);
+      setHostId(generatedHostId);
+      setMeId(player.id);
+      setScreen("room");
+      return;
+    }
+
+    if (players.length >= 6) return;
+    setPlayers((prev) => [...prev, player]);
+    setMeId(player.id);
+    setScreen("room");
+  }
+
+  function addBotPlayer() {
+    if (players.length >= 6) return;
+    const n = players.length + 1;
+    setPlayers((prev) => [...prev, { id: crypto.randomUUID(), name: `Игрок ${n}` }]);
+  }
+
+  function startGame() {
+    if (players.length < 3 || players.length > 6) return;
+    const built = buildGame(players);
+    setGame(built);
+    setScreen("game");
+  }
+
+  function revealFact(factId) {
+    setGame((prev) => {
+      if (!prev) return prev;
+      const updatedPlayers = prev.players.map((p) => {
+        if (p.id !== meId) return p;
+        return {
+          ...p,
+          facts: p.facts.map((f) => (f.id === factId ? { ...f, revealed: true } : f))
+        };
+      });
+
+      const revealed = updatedPlayers
+        .flatMap((p) => p.facts.map((f) => ({ ...f, owner: p.name, ownerRole: p.roleTitle })))
+        .find((f) => f.id === factId);
+
+      if (!revealed) return prev;
+
+      const alreadyExists = prev.revealedFacts.some((f) => f.id === factId);
+
+      return {
+        ...prev,
+        players: updatedPlayers,
+        revealedFacts: alreadyExists ? prev.revealedFacts : [...prev.revealedFacts, revealed]
+      };
+    });
+  }
+
+  function useCard(cardId) {
+    setGame((prev) => {
+      if (!prev) return prev;
+
+      let usedCardEntry = null;
+
+      const updatedPlayers = prev.players.map((p) => {
+        if (p.id !== meId) return p;
+
+        const selectedCard = p.cards.find((c) => c.id === cardId);
+        if (selectedCard) {
+          usedCardEntry = {
+            id: `${cardId}-used`,
+            owner: p.name,
+            ownerRole: p.roleTitle,
+            name: selectedCard.name,
+            description: selectedCard.description
+          };
+        }
+
+        return {
+          ...p,
+          cards: p.cards.map((c) => (c.id === cardId ? { ...c, used: true } : c))
+        };
+      });
+
+      if (!usedCardEntry) return prev;
+
+      return {
+        ...prev,
+        players: updatedPlayers,
+        usedCards: [...prev.usedCards, usedCardEntry]
+      };
+    });
+  }
+
+  function nextStage() {
+    setGame((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        stageIndex: Math.min(prev.stageIndex + 1, stages.length - 1)
+      };
+    });
+  }
+
+  function setVerdict(verdict) {
+    setGame((prev) => {
+      if (!prev) return prev;
+
+      const truth = prev.caseData.truth.toLowerCase();
+      let expectedVerdict = "Частично виновен";
+
+      if (truth.includes("не винов") || truth.includes("не совершал") || truth.includes("ошибочно обвин")) {
+        expectedVerdict = "Не виновен";
+      } else if (
+        truth.includes("частично") ||
+        truth.includes("обеих сторон") ||
+        truth.includes("завысил") ||
+        truth.includes("но ")
+      ) {
+        expectedVerdict = "Частично виновен";
+      } else {
+        expectedVerdict = "Виновен";
+      }
+
+      const verdictEvaluation = verdict === expectedVerdict
+        ? `Судья вынес правильный вердикт: ${verdict}.`
+        : `Судья ошибся. Правильнее было бы выбрать: ${expectedVerdict}.`;
+
+      return { ...prev, verdict, verdictEvaluation, finished: true };
+    });
+  }
+
+  function resetAll() {
+    setScreen("home");
+    setRoomCode("");
+    setJoinCode("");
+    setPlayers([]);
+    setHostId(null);
+    setMeId(null);
+    setGame(null);
+  }
+
+  if (screen === "home") {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-zinc-100 p-6 md:p-10">
+        <div className="max-w-6xl mx-auto grid lg:grid-cols-2 gap-6 items-stretch">
+          <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }}>
+            <Card className="rounded-[28px] shadow-sm border border-zinc-800 bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950 h-full text-zinc-100">
+              <CardContent className="p-8 md:p-10 h-full flex flex-col justify-between gap-8">
+                <div className="space-y-5">
+                  <Badge className="rounded-full px-3 py-1 text-sm bg-red-600/90 hover:bg-red-600 text-white border-0">Прототип сайта</Badge>
+                  <div className="space-y-3">
+                    <h1 className="text-4xl md:text-5xl font-bold tracking-tight">СУД</h1>
+                    <p className="text-base md:text-lg text-zinc-400 max-w-xl">
+                      Онлайн-посредник для настольной игры про судебные споры. Сайт создаёт комнату, раздаёт роли, факты, улики и карты механик, а сама игра идёт голосом.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <Card className="rounded-2xl bg-zinc-900/90 border-zinc-800 text-zinc-100">
+                    <CardContent className="p-4">
+                      <div className="font-semibold">3–6 игроков</div>
+                      <div className="text-zinc-400 mt-1">Разные роли и режимы</div>
+                    </CardContent>
+                  </Card>
+                  <Card className="rounded-2xl bg-zinc-900/90 border-zinc-800 text-zinc-100">
+                    <CardContent className="p-4">
+                      <div className="font-semibold">Комнаты</div>
+                      <div className="text-zinc-400 mt-1">По коду и с ведущим</div>
+                    </CardContent>
+                  </Card>
+                  <Card className="rounded-2xl bg-zinc-900/90 border-zinc-800 text-zinc-100">
+                    <CardContent className="p-4">
+                      <div className="font-semibold">Улики</div>
+                      <div className="text-zinc-400 mt-1">Объективные и общие</div>
+                    </CardContent>
+                  </Card>
+                  <Card className="rounded-2xl bg-zinc-900/90 border-zinc-800 text-zinc-100">
+                    <CardContent className="p-4">
+                      <div className="font-semibold">Факты</div>
+                      <div className="text-zinc-400 mt-1">Раскрываются по ходу суда</div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}>
+            <Card className="rounded-[28px] shadow-sm h-full bg-zinc-900/95 border-zinc-800 text-zinc-100">
+              <CardContent className="p-8 md:p-10 space-y-8">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Ваше имя</label>
+                  <Input value={playerName} onChange={(e) => setPlayerName(e.target.value)} placeholder="Например: Артём" className="h-12 rounded-xl bg-zinc-100 text-zinc-950 placeholder:text-zinc-400 border-0 focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-0" />
+                </div>
+
+                <div className="grid gap-4">
+                  <Button onClick={createRoom} className="h-12 rounded-xl text-base gap-2 bg-red-600 hover:bg-red-500 text-white border-0">
+                    <UserPlus className="w-4 h-4" />
+                    Создать комнату
+                  </Button>
+
+                  <div className="flex gap-3">
+                    <Input value={joinCode} onChange={(e) => setJoinCode(e.target.value.toUpperCase())} placeholder="Код комнаты" className="h-12 rounded-xl bg-zinc-100 text-zinc-950 placeholder:text-zinc-400 border-0 focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-0" />
+                    <Button onClick={joinRoomLocal} variant="secondary" className="h-12 rounded-xl px-6 bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0">
+                      Войти
+                    </Button>
+                  </div>
+                </div>
+
+                <Separator />
+
+                <div className="space-y-4">
+                  <div className="font-semibold">Что умеет прототип</div>
+                  <div className="grid gap-3 text-sm text-zinc-400">
+                    <div>• создаёт комнату и список игроков</div>
+                    <div>• распределяет роли по числу участников</div>
+                    <div>• случайно выбирает дело</div>
+                    <div>• показывает улики, факты и карты</div>
+                    <div>• позволяет раскрывать факты по ходу дела</div>
+                    <div>• даёт судье вынести решение и раскрыть правду</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </div>
+      </div>
+    );
+  }
+
+  if (screen === "room") {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-zinc-100 p-6 md:p-10">
+        <div className="max-w-6xl mx-auto space-y-6">
+          <Card className="rounded-[28px] shadow-sm bg-zinc-900/95 border-zinc-800 text-zinc-100">
+            <CardContent className="p-8 flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm text-zinc-400">
+                  <Scale className="w-4 h-4" />
+                  Комната создана
+                </div>
+                <div className="text-3xl font-bold tracking-[0.25em] text-red-400">{roomCode}</div>
+                <div className="text-sm text-zinc-400">Поддерживается от 3 до 6 игроков</div>
+              </div>
+
+              <div className="flex flex-wrap gap-3">
+                <Button variant="secondary" className="rounded-xl gap-2 bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0" onClick={() => navigator.clipboard?.writeText(roomCode)}>
+                  <Copy className="w-4 h-4" />
+                  Скопировать код
+                </Button>
+                <Button variant="outline" className="rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100 disabled:bg-zinc-900 disabled:text-zinc-500 disabled:border-zinc-800" onClick={addBotPlayer} disabled={players.length >= 6}>
+                  Добавить игрока
+                </Button>
+                {meId === hostId && (
+                  <Button className="rounded-xl gap-2 bg-red-600 hover:bg-red-500 text-white border-0 disabled:bg-zinc-800 disabled:text-zinc-500" onClick={startGame} disabled={players.length < 3 || players.length > 6}>
+                    <Play className="w-4 h-4" />
+                    Начать игру
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="grid lg:grid-cols-[1.2fr_0.8fr] gap-6">
+            <InfoBlock title="Игроки в комнате" icon={<UserPlus className="w-5 h-5" />}>
+              <div className="grid gap-3">
+                {players.map((player) => (
+                  <PlayerCard key={player.id} player={player} isHost={player.id === hostId} />
+                ))}
+              </div>
+            </InfoBlock>
+
+            <InfoBlock title="Доступные режимы" icon={<Gavel className="w-5 h-5" />}>
+              <div className="space-y-3 text-sm">
+                <div className="flex items-center justify-between"><span>Игроков сейчас</span><Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">{players.length}</Badge></div>
+                <Separator />
+                {players.length === 3 && <div>Гражданский спор, трудовой спор</div>}
+                {players.length === 4 && <div>Гражданский спор, трудовой спор, уголовное дело</div>}
+                {players.length === 5 && <div>Уголовное дело</div>}
+                {players.length >= 6 && <div>Уголовное дело, суд на компанию</div>}
+                <div className="text-zinc-400 pt-2">
+                  Ведущий запускает игру, сайт случайно выбирает подходящее дело и распределяет роли.
+                </div>
+              </div>
+            </InfoBlock>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!game || !meInGame) return null;
+
+  const currentStage = stages[game.stageIndex];
+  const stageProgress = ((game.stageIndex + 1) / stages.length) * 100;
+
+  return (
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 p-6 md:p-10">
+      <div className="max-w-7xl mx-auto space-y-6">
+        <Card className="rounded-[28px] shadow-sm border border-zinc-800 bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950 text-zinc-100">
+          <CardContent className="p-8 space-y-6">
+            <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6">
+              <div className="space-y-2 max-w-3xl">
+                <div className="flex items-center gap-2 text-sm text-zinc-400">
+                  <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">{game.caseData.mode}</Badge>
+                  <span>{game.caseData.title}</span>
+                </div>
+                <h1 className="text-3xl md:text-4xl font-bold">{game.caseData.description}</h1>
+                <p className="text-zinc-400 text-sm md:text-base">
+                  Комната {roomCode}. Сайт раздал роли, факты, улики и механики. Дальше игроки спорят голосом, а здесь раскрывают факты и отмечают карты.
+                </p>
+              </div>
+
+              <div className="min-w-[260px] space-y-3">
+                <div className="text-sm font-medium">Этап дела: {currentStage}</div>
+                <Progress value={stageProgress} className="h-3 bg-zinc-800 [&>div]:bg-red-600" />
+                <div className="flex gap-3">
+                  <Button variant="secondary" className="rounded-xl bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0 disabled:bg-zinc-800 disabled:text-zinc-500" onClick={nextStage} disabled={game.stageIndex >= stages.length - 1 || game.finished}>
+                    Следующий этап
+                  </Button>
+                  <Button variant="outline" className="rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100" onClick={resetAll}>
+                    Выйти
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="grid xl:grid-cols-[1.1fr_1.1fr_0.9fr] gap-6">
+          <InfoBlock title="Ваша роль" icon={<Shield className="w-5 h-5" />}>
+            <div className="space-y-4">
+              <div>
+                <div className="text-2xl font-bold">{meInGame.roleTitle}</div>
+                <div className="text-sm text-zinc-400 mt-1">{meInGame.name}</div>
+              </div>
+              <div>
+                <div className="font-semibold mb-1">Цель</div>
+                <p className="text-sm text-zinc-400">{meInGame.goal}</p>
+              </div>
+            </div>
+          </InfoBlock>
+
+          <InfoBlock title="Улики дела" icon={<Eye className="w-5 h-5" />}>
+            <div className="space-y-3">
+              {game.caseData.evidence.map((item, index) => (
+                <Card key={index} className="rounded-2xl border-dashed border-zinc-700 bg-zinc-900/80 text-zinc-100">
+                  <CardContent className="p-4 text-sm">{item}</CardContent>
+                </Card>
+              ))}
+            </div>
+          </InfoBlock>
+
+          <InfoBlock title="Вердикт" icon={<Gavel className="w-5 h-5" />}>
+            <div className="space-y-3">
+              {!game.finished ? (
+                <>
+                  {meInGame.roleKey === "judge" ? (
+                    <>
+                      <div className="text-sm text-zinc-400">Только судья может вынести итоговое решение по делу.</div>
+                      <Button className="w-full rounded-xl bg-red-600 hover:bg-red-500 text-white border-0 disabled:bg-zinc-800 disabled:text-zinc-500" onClick={() => setVerdict("Виновен")}>Виновен</Button>
+                      <Button className="w-full rounded-xl bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0 disabled:bg-zinc-800 disabled:text-zinc-500" variant="secondary" onClick={() => setVerdict("Не виновен")}>Не виновен</Button>
+                      <Button className="w-full rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100 disabled:bg-zinc-900 disabled:text-zinc-500 disabled:border-zinc-800" variant="outline" onClick={() => setVerdict("Частично виновен")}>Частично виновен</Button>
+                    </>
+                  ) : (
+                    <div className="text-sm text-zinc-400">Вердикт может вынести только игрок с ролью судьи{judgePlayer ? ` — ${judgePlayer.name}` : ""}.</div>
+                  )}
+                </>
+              ) : (
+                <div className="space-y-4">
+                  <Badge className="text-sm bg-red-600 text-white border-0">Решение: {game.verdict}</Badge>
+                  <Card className="rounded-2xl border-dashed border-zinc-700 bg-zinc-900/80 text-zinc-100">
+                    <CardContent className="p-4">
+                      <div className="font-semibold mb-2">Реальная правда дела</div>
+                      <div className="text-sm text-zinc-400">{game.caseData.truth}</div>
+                      <div className="mt-3 text-sm font-medium text-red-400">{game.verdictEvaluation}</div>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+            </div>
+          </InfoBlock>
+        </div>
+
+        <div className="grid xl:grid-cols-[1fr_1fr_1fr_1fr] gap-6">
+          <InfoBlock title="Раскрытые факты" icon={<Eye className="w-5 h-5" />}> 
+            <div className="space-y-3">
+              {game.revealedFacts.length === 0 ? (
+                <div className="text-sm text-zinc-400">Пока никто не раскрыл ни одного факта.</div>
+              ) : (
+                game.revealedFacts.map((fact) => (
+                  <motion.div key={fact.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                    <Card className="rounded-2xl border-dashed border-zinc-700 bg-zinc-900/80 text-zinc-100">
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between gap-3 mb-2">
+                          <div className="font-semibold text-sm">{fact.owner}</div>
+                          <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">{fact.ownerRole}</Badge>
+                        </div>
+                        <div className="text-sm text-zinc-400">{fact.text}</div>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                ))
+              )}
+            </div>
+          </InfoBlock>
+
+          <InfoBlock title="Ваши факты" icon={<AlertCircle className="w-5 h-5" />}>
+            <div className="space-y-3">
+              {meInGame.facts.map((fact) => (
+                <Card key={fact.id} className="rounded-2xl bg-zinc-900/80 border-zinc-800 text-zinc-100">
+                  <CardContent className="p-4 flex flex-col gap-3">
+                    <div className="text-sm">{fact.text}</div>
+                    <div className="flex items-center justify-between gap-3">
+                      <Badge className={fact.revealed ? "bg-red-600 text-white border-0" : "bg-zinc-800 text-zinc-100 border border-zinc-700"}>{fact.revealed ? "Раскрыт" : "Скрыт"}</Badge>
+                      <Button size="sm" className="rounded-xl bg-red-600 hover:bg-red-500 text-white border-0 disabled:bg-zinc-800 disabled:text-zinc-500" onClick={() => revealFact(fact.id)} disabled={fact.revealed || game.finished}>
+                        Раскрыть факт
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </InfoBlock>
+
+          <InfoBlock title="Ваши карты механик" icon={<Scale className="w-5 h-5" />}>
+            <div className="space-y-3">
+              {meInGame.cards.map((card) => (
+                <Card key={card.id} className="rounded-2xl bg-zinc-900/80 border-zinc-800 text-zinc-100">
+                  <CardContent className="p-4 flex flex-col gap-3">
+                    <div>
+                      <div className="font-semibold">{card.name}</div>
+                      <div className="text-sm text-zinc-400 mt-1">{card.description}</div>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <Badge className={card.used ? "border border-zinc-700 bg-zinc-900 text-zinc-300" : "bg-red-600 text-white border-0"}>{card.used ? "Использована" : "Готова"}</Badge>
+                      <Button size="sm" variant="secondary" className="rounded-xl bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0 disabled:bg-zinc-800 disabled:text-zinc-500" onClick={() => useCard(card.id)} disabled={card.used || game.finished}>
+                        Использовать
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </InfoBlock>
+
+          <InfoBlock title="Журнал механик" icon={<Sparkles className="w-5 h-5" />}> 
+            <div className="space-y-3">
+              {game.usedCards.length === 0 ? (
+                <div className="text-sm text-zinc-400">Пока ни одна карта механики не была использована.</div>
+              ) : (
+                game.usedCards.map((entry) => (
+                  <motion.div key={entry.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                    <Card className="rounded-2xl border-dashed border-zinc-700 bg-zinc-900/80 text-zinc-100">
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between gap-3 mb-2">
+                          <div className="font-semibold text-sm">{entry.owner}</div>
+                          <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">{entry.ownerRole}</Badge>
+                        </div>
+                        <div className="font-semibold">{entry.name}</div>
+                        <div className="text-sm text-zinc-400 mt-1">{entry.description}</div>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                ))
+              )}
+            </div>
+          </InfoBlock>
+        </div>
+      </div>
+    </div>
+  );
+}
