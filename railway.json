@@ -1,9 +1,9 @@
 {
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
-    "buildCommand": "npm i -g pnpm && pnpm install"
+    "buildCommand": "npm i -g pnpm && pnpm install && pnpm --dir artifacts/api-server build"
   },
   "deploy": {
-    "startCommand": "npm start"
+    "startCommand": "pnpm --dir artifacts/api-server start"
   }
 }
