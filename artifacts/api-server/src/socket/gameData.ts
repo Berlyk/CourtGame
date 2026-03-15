@@ -1,3 +1,4 @@
+console.log("GAME DATA FILE LOADED");
 export const mechanicPool = [
   {
     name: "Отвечай только ДА!",
