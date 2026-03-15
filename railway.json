@@ -1,0 +1,9 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "buildCommand": "corepack enable && corepack prepare pnpm@10.12.4 --activate && pnpm install"
+  },
+  "deploy": {
+    "startCommand": "npm start"
+  }
+}
