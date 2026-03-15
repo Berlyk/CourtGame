@@ -1,7 +1,6 @@
 import express, { type Express } from "express";
 import cors from "cors";
 import path from "path";
-import { fileURLToPath } from "url";
 import router from "./routes";
 
 const app: Express = express();
@@ -14,17 +13,14 @@ app.use("/api", router);
 
 /* ---------- FRONTEND ---------- */
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 const frontendPath = path.resolve(
-  __dirname,
-  "../../../court-game/dist"
+  process.cwd(),
+  "artifacts/court-game/dist"
 );
 
 app.use(express.static(frontendPath));
 
-app.get("*", (_, res) => {
+app.get(/^(?!\/api).*/, (_, res) => {
   res.sendFile(path.join(frontendPath, "index.html"));
 });
 
