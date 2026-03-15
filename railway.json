@@ -4,6 +4,6 @@
     "buildCommand": "npm i -g pnpm && pnpm install && pnpm --dir artifacts/api-server build"
   },
   "deploy": {
-    "startCommand": "pnpm --dir artifacts/api-server start"
+    "startCommand": "node artifacts/api-server/dist/index.cjs"
   }
 }
