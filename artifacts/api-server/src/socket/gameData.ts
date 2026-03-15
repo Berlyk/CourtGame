@@ -1435,7 +1435,7 @@ export const cases: Record<number, any[]> = {
       ]
     }
   }
-}
+},
     {
   id: "criminal-14",
   mode: "Уголовное дело",
