@@ -4,10 +4,10 @@ let socket: Socket | null = null;
 
 export function getSocket(): Socket {
   if (!socket) {
-    socket = io('https://courtgame.onrender.com', {
-      path: "/api/socket.io",
-      transports: ["websocket", "polling"]
-    });
+    socket = io({
+     path: "/api/socket.io",
+     transports: ["websocket", "polling"]
+   });
   }
   return socket;
 }
