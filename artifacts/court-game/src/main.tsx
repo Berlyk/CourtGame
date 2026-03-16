@@ -1,4 +1,4 @@
-const SITE_VERSION = "2"; // меняй число каждый раз, когда хочешь сбросить старые данные
+const SITE_VERSION = "2.1"; // меняй число каждый раз, когда хочешь сбросить старые данные
 
 const savedVersion = localStorage.getItem("site_version");
 
