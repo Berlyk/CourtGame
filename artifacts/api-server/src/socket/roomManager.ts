@@ -265,9 +265,9 @@ export function setVerdict(code: string, verdict: string): Room | null {
   const truth = room.game.caseData.truth.toLowerCase();
   let expectedVerdict = "Частично виновен";
 
-  if (truth.includes("не винов") || truth.includes("не совершал") || truth.includes("ошибочно обвин")) {
+  if (truth.includes("не виновен") || truth.includes("Не виновен") || truth.includes("не виноват")) {
     expectedVerdict = "Не виновен";
-  } else if (truth.includes("частично") || truth.includes("обеих сторон") || truth.includes("завысил") || truth.includes("но ")) {
+  } else if (truth.includes("частично виновен") || truth.includes("Частично виновен") || truth.includes("слегка виновен") || truth.includes("частично виновенн")) {
     expectedVerdict = "Частично виновен";
   } else {
     expectedVerdict = "Виновен";
