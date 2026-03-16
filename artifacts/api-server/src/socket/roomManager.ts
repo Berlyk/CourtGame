@@ -146,9 +146,7 @@ export function startGame(code: string): Room | null {
   if (room.players.length < 3 || room.players.length > 6) return null;
 
 const count = room.players.length;
-
-// ВРЕМЕННЫЙ ЖЕСТКИЙ ТЕСТ: всегда брать блок на 4 игроков
-const availableCases = cases[4];
+const availableCases = cases[count] || cases[3];
 
 console.log("=== START GAME ===");
 console.log("PLAYER COUNT:", count);
@@ -157,14 +155,7 @@ console.log(
   availableCases.map((c: any) => `${c.id} | ${c.title}`)
 );
 
-// ВРЕМЕННЫЙ ЖЕСТКИЙ ТЕСТ: всегда брать первое дело
-const selectedCase = availableCases[0];
-
-console.log(
-  "SELECTED CASE:",
-  `${selectedCase?.id} | ${selectedCase?.title}`
-);
-
+const selectedCase = pickRandom(availableCases)[0];
 const roleKeys = shuffle(roleOrderByCount[count]);
   
   const assignedPlayers: Player[] = room.players.map((player, index) => {
