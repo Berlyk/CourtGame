@@ -145,10 +145,22 @@ export function startGame(code: string): Room | null {
   if (!room) return null;
   if (room.players.length < 3 || room.players.length > 6) return null;
 
-  const count = room.players.length;
-  const availableCases = cases[count] || cases[3];
-  const selectedCase = pickRandom(availableCases)[0];
-  const roleKeys = shuffle(roleOrderByCount[count]);
+const count = room.players.length;
+const availableCases = cases[count] || cases[3];
+
+console.log("=== START GAME ===");
+console.log("PLAYER COUNT:", count);
+console.log(
+  "AVAILABLE CASES:",
+  availableCases.map((c: any) => `${c.id} | ${c.title}`)
+);
+
+const selectedCase = pickRandom(availableCases)[0];
+
+console.log(
+  "SELECTED CASE:",
+  `${selectedCase?.id} | ${selectedCase?.title}`
+);
 
   const assignedPlayers: Player[] = room.players.map((player, index) => {
     const roleKey = roleKeys[index];
