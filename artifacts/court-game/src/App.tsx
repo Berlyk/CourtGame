@@ -11,6 +11,7 @@ import {
   Gavel,
   Scale,
   UserPlus,
+  UserX,
   Play,
   Eye,
   Shield,
@@ -191,6 +192,16 @@ function PlayerCard({
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {canKick && onKick && (
+              <Button
+                size="sm"
+                className="h-8 rounded-full px-3 gap-1.5 bg-red-600/90 hover:bg-red-500 text-white border-0 shadow-sm shadow-red-900/30"
+                onClick={onKick}
+              >
+                <UserX className="w-3.5 h-3.5" />
+                Kick
+              </Button>
+            )}
             <Badge
               className={
                 isHost
@@ -200,16 +211,6 @@ function PlayerCard({
             >
               {isHost ? "Host" : "Player"}
             </Badge>
-            {canKick && onKick && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="rounded-lg border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-red-600/15 hover:text-red-300 hover:border-red-500/40"
-                onClick={onKick}
-              >
-                Kick
-              </Button>
-            )}
           </div>
         </CardContent>
       </Card>
