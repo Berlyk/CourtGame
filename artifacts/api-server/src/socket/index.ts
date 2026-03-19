@@ -13,7 +13,8 @@ import {
   prevStage,
   setVerdict,
   getRoom,
-  setHostJudge
+  setHostJudge,
+  updatePlayerAvatar
 } from "./roomManager.js";
 
 function randomCode(): string {
@@ -192,6 +193,21 @@ export function setupSocket(httpServer: HttpServer) {
         isHostJudge
       });
     });
+
+    socket.on(
+      "update_avatar",
+      ({ code, playerId, avatar }: { code: string; playerId: string; avatar?: string | null }) => {
+        if (!avatar) return;
+        const room = updatePlayerAvatar(code, playerId, avatar);
+        if (!room || room.game) return;
+
+        io.to(code).emit("room_updated", {
+          players: room.players.map((p: any) => ({ id: p.id, name: p.name, avatar: p.avatar })),
+          hostId: room.hostId,
+          isHostJudge: room.isHostJudge
+        });
+      }
+    );
 
     socket.on(
       "kick_player",
