@@ -310,12 +310,28 @@ export default function App() {
           });
         }
         if (state.type === "room") {
-          setRoom(state as RoomState);
+          const roomState = state as RoomState;
+          setRoom({
+            ...roomState,
+            players: roomState.players.map((p) =>
+              p.id === playerId && avatar ? { ...p, avatar } : p,
+            ),
+          });
           setIsHostJudge(state.isHostJudge ?? false);
           setGame(null);
           setScreen("room");
         } else {
-          setGame(state as GameState);
+          const gameState = state as GameState;
+          setGame({
+            ...gameState,
+            players: gameState.players.map((p) =>
+              p.id === playerId && avatar ? { ...p, avatar } : p,
+            ),
+            me:
+              gameState.me && avatar
+                ? { ...gameState.me, avatar }
+                : gameState.me,
+          });
           setRoom(null);
           setScreen("game");
         }
@@ -325,7 +341,17 @@ export default function App() {
     socket.on(
       "room_updated",
       ({ players, hostId, isHostJudge: hj }: { players: PlayerInfo[]; hostId: string; isHostJudge?: boolean }) => {
-        setRoom((prev) => (prev ? { ...prev, players, hostId } : prev));
+        setRoom((prev) => {
+          if (!prev) return prev;
+          const mergedPlayers = players.map((nextPlayer) => {
+            const prevPlayer = prev.players.find((p) => p.id === nextPlayer.id);
+            return {
+              ...nextPlayer,
+              avatar: nextPlayer.avatar ?? prevPlayer?.avatar,
+            };
+          });
+          return { ...prev, players: mergedPlayers, hostId };
+        });
         if (hj !== undefined) setIsHostJudge(hj);
       },
     );
