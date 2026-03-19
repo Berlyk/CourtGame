@@ -3,6 +3,7 @@ import type { Server as HttpServer } from "http";
 import {
   createRoom,
   joinRoom,
+  joinRunningGameAsWitness,
   rejoinRoom,
   isNameTaken,
   removePlayer,
@@ -24,6 +25,16 @@ function randomCode(): string {
 const PREPARATION_STAGE_INDEX = 0;
 const OPENING_SPEECH_STAGE_INDEX = 1;
 const OPENING_SPEECH_FACT_LIMIT = 2;
+
+function mapGamePlayers(players: any[]) {
+  return players.map((p: any) => ({
+    id: p.id,
+    name: p.name,
+    avatar: p.avatar,
+    roleKey: p.roleKey,
+    roleTitle: p.roleTitle
+  }));
+}
 
 function getRoomState(room: any, playerId: string) {
   if (!room.game) {
@@ -50,13 +61,7 @@ function getRoomState(room: any, playerId: string) {
     finished: room.game.finished,
     verdict: room.game.verdict,
     verdictEvaluation: room.game.verdictEvaluation,
-    players: room.game.players.map((p: any) => ({
-      id: p.id,
-      name: p.name,
-      avatar: p.avatar,
-      roleKey: p.roleKey,
-      roleTitle: p.roleTitle
-    })),
+    players: mapGamePlayers(room.game.players),
     me: myPlayer ? {
       id: myPlayer.id,
       name: myPlayer.name,
@@ -96,38 +101,50 @@ export function setupSocket(httpServer: HttpServer) {
       const trimmedName = (playerName || "").trim();
 
       if (!room) {
-        socket.emit("error", { message: "Комната не найдена. Проверьте код." });
-        return;
-      }
-      if (room.started) {
-        socket.emit("error", { message: "Игра уже началась. Используйте переподключение." });
-        return;
-      }
-      if (room.players.length >= 6) {
-        socket.emit("error", { message: "Комната заполнена (максимум 6 игроков)." });
+        socket.emit("error", { message: "\u041a\u043e\u043c\u043d\u0430\u0442\u0430 \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u0430. \u041f\u0440\u043e\u0432\u0435\u0440\u044c\u0442\u0435 \u043a\u043e\u0434." });
         return;
       }
       if (!trimmedName) {
-        socket.emit("error", { message: "Введите никнейм перед входом." });
+        socket.emit("error", { message: "\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u043d\u0438\u043a\u043d\u0435\u0439\u043c \u043f\u0435\u0440\u0435\u0434 \u0432\u0445\u043e\u0434\u043e\u043c." });
         return;
       }
       if (isNameTaken(roomCode, trimmedName)) {
-        socket.emit("error", { message: `Никнейм «${trimmedName}» уже занят в этой комнате.` });
+        socket.emit("error", { message: `\u041d\u0438\u043a\u043d\u0435\u0439\u043c \u00ab${trimmedName}\u00bb \u0443\u0436\u0435 \u0437\u0430\u043d\u044f\u0442 \u0432 \u044d\u0442\u043e\u0439 \u043a\u043e\u043c\u043d\u0430\u0442\u0435.` });
         return;
       }
 
       const playerId = crypto.randomUUID();
       const player = { id: playerId, name: trimmedName, socketId: socket.id, avatar: avatar || undefined };
-      const updatedRoom = joinRoom(roomCode, player);
 
+      if (room.started) {
+        const updatedRoom = joinRunningGameAsWitness(roomCode, player);
+        if (!updatedRoom?.game) {
+          socket.emit("error", { message: "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0432\u043e\u0439\u0442\u0438 \u0432 \u0443\u0436\u0435 \u0438\u0434\u0443\u0449\u0438\u0439 \u043c\u0430\u0442\u0447." });
+          return;
+        }
+
+        socketToRoom.set(socket.id, { roomCode, playerId });
+        socket.join(roomCode);
+        socket.emit("room_joined", { playerId, state: getRoomState(updatedRoom, playerId) });
+        io.to(roomCode).emit("game_players_updated", {
+          players: mapGamePlayers(updatedRoom.game.players)
+        });
+        return;
+      }
+
+      if (room.players.length >= 6) {
+        socket.emit("error", { message: "\u041a\u043e\u043c\u043d\u0430\u0442\u0430 \u0437\u0430\u043f\u043e\u043b\u043d\u0435\u043d\u0430 (\u043c\u0430\u043a\u0441\u0438\u043c\u0443\u043c 6 \u0438\u0433\u0440\u043e\u043a\u043e\u0432)." });
+        return;
+      }
+
+      const updatedRoom = joinRoom(roomCode, player);
       if (!updatedRoom) {
-        socket.emit("error", { message: "Не удалось войти в комнату." });
+        socket.emit("error", { message: "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0432\u043e\u0439\u0442\u0438 \u0432 \u043a\u043e\u043c\u043d\u0430\u0442\u0443." });
         return;
       }
 
       socketToRoom.set(socket.id, { roomCode, playerId });
       socket.join(roomCode);
-
       socket.emit("room_joined", { playerId, state: getRoomState(updatedRoom, playerId) });
 
       socket.to(roomCode).emit("room_updated", {
@@ -199,7 +216,14 @@ export function setupSocket(httpServer: HttpServer) {
       ({ code, playerId, avatar }: { code: string; playerId: string; avatar?: string | null }) => {
         if (!avatar) return;
         const room = updatePlayerAvatar(code, playerId, avatar);
-        if (!room || room.game) return;
+        if (!room) return;
+
+        if (room.game) {
+          io.to(code).emit("game_players_updated", {
+            players: mapGamePlayers(room.game.players)
+          });
+          return;
+        }
 
         io.to(code).emit("room_updated", {
           players: room.players.map((p: any) => ({ id: p.id, name: p.name, avatar: p.avatar })),
@@ -410,3 +434,4 @@ export function setupSocket(httpServer: HttpServer) {
 
   return io;
 }
+
