@@ -1230,7 +1230,7 @@ export default function App() {
                             transition={{ delay: i * 0.04 }}
                           >
                             <Card className="rounded-2xl border-dashed border-zinc-700 bg-zinc-800/60 text-zinc-100">
-                              <CardContent className="p-4">
+                              <CardContent className="p-4 min-h-[120px]">
                                 <div className="flex items-center justify-between gap-3 mb-2">
                                   <div className="flex items-center gap-2 min-w-0">
                                     <Avatar
@@ -1246,8 +1246,10 @@ export default function App() {
                                     {fact.ownerRole}
                                   </Badge>
                                 </div>
-                                <div className="text-sm text-zinc-400">
-                                  {fact.text}
+                                <div className="min-h-[56px]">
+                                  <div className="text-sm text-zinc-400">
+                                    {fact.text}
+                                  </div>
                                 </div>
                               </CardContent>
                             </Card>
@@ -1607,7 +1609,7 @@ export default function App() {
                               : "rounded-2xl border-dashed border-zinc-700 bg-zinc-900/80 text-zinc-100"
                           }
                         >
-                          <CardContent className="p-4">
+                          <CardContent className="p-4 min-h-[120px]">
                             <div className="flex items-center justify-between gap-3 mb-2">
                               <div className="flex items-center gap-2 min-w-0">
                                 <Avatar
@@ -1629,8 +1631,10 @@ export default function App() {
                                 {fact.ownerRole}
                               </Badge>
                             </div>
-                            <div className="text-sm text-zinc-400">
-                              {fact.text}
+                            <div className="min-h-[56px]">
+                              <div className="text-sm text-zinc-400">
+                                {fact.text}
+                              </div>
                             </div>
                           </CardContent>
                         </Card>
@@ -1832,5 +1836,6 @@ export default function App() {
     </div>
   );
 }
+
 
 
