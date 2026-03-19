@@ -20,6 +20,10 @@ function randomCode(): string {
   return Math.random().toString(36).slice(2, 7).toUpperCase();
 }
 
+const PREPARATION_STAGE_INDEX = 0;
+const OPENING_SPEECH_STAGE_INDEX = 1;
+const OPENING_SPEECH_FACT_LIMIT = 2;
+
 function getRoomState(room: any, playerId: string) {
   if (!room.game) {
     return {
@@ -188,6 +192,24 @@ export function setupSocket(httpServer: HttpServer) {
     });
 
     socket.on("reveal_fact", ({ code, playerId, factId }: { code: string; playerId: string; factId: string }) => {
+      const room = getRoom(code);
+      if (!room?.game) return;
+
+      if (room.game.stageIndex === PREPARATION_STAGE_INDEX) {
+        socket.emit("error", { message: "На этапе «Подготовка» раскрывать факты нельзя." });
+        return;
+      }
+
+      if (room.game.stageIndex === OPENING_SPEECH_STAGE_INDEX) {
+        const openingSpeechRevealedFacts = room.game.revealedFacts.filter(
+          (fact: any) => fact.stageIndex === OPENING_SPEECH_STAGE_INDEX
+        ).length;
+        if (openingSpeechRevealedFacts >= OPENING_SPEECH_FACT_LIMIT) {
+          socket.emit("error", { message: "На этапе «Вступительная речь» можно раскрыть только 2 факта." });
+          return;
+        }
+      }
+
       const updatedRoom = revealFact(code, playerId, factId);
       if (!updatedRoom) return;
 
@@ -203,6 +225,13 @@ export function setupSocket(httpServer: HttpServer) {
     });
 
     socket.on("use_card", ({ code, playerId, cardId }: { code: string; playerId: string; cardId: string }) => {
+      const room = getRoom(code);
+      if (!room?.game) return;
+      if (room.game.stageIndex === PREPARATION_STAGE_INDEX) {
+        socket.emit("error", { message: "На этапе «Подготовка» карты механик использовать нельзя." });
+        return;
+      }
+
       const updatedRoom = useCard(code, playerId, cardId);
       if (!updatedRoom) return;
 
