@@ -172,9 +172,13 @@ function Avatar({
 function PlayerCard({
   player,
   isHost,
+  canKick = false,
+  onKick,
 }: {
   player: PlayerInfo;
   isHost: boolean;
+  canKick?: boolean;
+  onKick?: () => void;
 }) {
   return (
     <motion.div variants={cardVariants} initial="initial" animate="animate">
@@ -186,15 +190,27 @@ function PlayerCard({
               {isHost ? "Ведущий комнаты" : "Игрок"}
             </div>
           </div>
-          <Badge
-            className={
-              isHost
-                ? "bg-red-600 text-white border-0"
-                : "bg-zinc-800 text-zinc-100 border border-zinc-700"
-            }
-          >
-            {isHost ? "Host" : "Player"}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge
+              className={
+                isHost
+                  ? "bg-red-600 text-white border-0"
+                  : "bg-zinc-800 text-zinc-100 border border-zinc-700"
+              }
+            >
+              {isHost ? "Host" : "Player"}
+            </Badge>
+            {canKick && onKick && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="rounded-lg border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-red-600/15 hover:text-red-300 hover:border-red-500/40"
+                onClick={onKick}
+              >
+                Kick
+              </Button>
+            )}
+          </div>
         </CardContent>
       </Card>
     </motion.div>
@@ -238,6 +254,7 @@ export default function App() {
   const [error, setError] = useState("");
   const [disconnectAlert, setDisconnectAlert] = useState("");
   const [rejoinAlert, setRejoinAlert] = useState("");
+  const [kickedAlert, setKickedAlert] = useState("");
   const [hasSession, setHasSession] = useState(false);
 
   const [myId, setMyId] = useState<string | null>(null);
@@ -319,6 +336,23 @@ export default function App() {
       setScreen("home");
     });
 
+    socket.on("kicked", () => {
+      localStorage.removeItem("court_session");
+      setHasSession(false);
+      setRoom(null);
+      setGame(null);
+      setMyId(null);
+      setJoinCode("");
+      setDisconnectAlert("");
+      setRejoinAlert("");
+      setIsHostJudge(false);
+      setScreen("home");
+      setKickedAlert(
+        "\u0412\u044b \u0431\u044b\u043b\u0438 \u043a\u0438\u043a\u043d\u0443\u0442\u044b \u0438\u0437 \u043a\u043e\u043c\u043d\u0430\u0442\u044b.",
+      );
+      setTimeout(() => setKickedAlert(""), 5000);
+    });
+
     socket.on("game_started", ({ state }: { state: any }) => {
       setGame(state as GameState);
       setRoom(null);
@@ -372,6 +406,7 @@ export default function App() {
       socket.off("player_left");
       socket.off("player_rejoined");
       socket.off("rejoin_failed");
+      socket.off("kicked");
       socket.off("game_started");
       socket.off("facts_updated");
       socket.off("my_facts_updated");
@@ -417,6 +452,18 @@ export default function App() {
     socket.emit("set_host_judge", { code: room.code, playerId: myId, isHostJudge: checked });
   }, [socket, room, myId]);
 
+  const kickPlayerFromRoom = useCallback(
+    (targetPlayerId: string) => {
+      if (!room || !myId || myId !== room.hostId) return;
+      socket.emit("kick_player", {
+        code: room.code,
+        playerId: myId,
+        targetPlayerId,
+      });
+    },
+    [socket, room, myId],
+  );
+
   const revealFact = useCallback(
     (factId: string) => {
       if (!game || !myId) return;
@@ -460,6 +507,7 @@ export default function App() {
     setJoinCode("");
     setDisconnectAlert("");
     setRejoinAlert("");
+    setKickedAlert("");
     setIsHostJudge(false);
   }, [socket]);
 
@@ -472,6 +520,7 @@ export default function App() {
     setGame(null);
     setMyId(null);
     setJoinCode("");
+    setKickedAlert("");
   }, [socket]);
 
   const setupNickname = useCallback(() => {
@@ -586,6 +635,19 @@ export default function App() {
         exit="exit"
         className="min-h-screen bg-zinc-950 text-zinc-100 p-6 md:p-10"
       >
+        <AnimatePresence>
+          {kickedAlert && (
+            <motion.div
+              key="kicked"
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              className="max-w-6xl mx-auto mb-4 bg-red-600/20 border border-red-600/40 text-red-300 rounded-xl px-4 py-3 text-sm"
+            >
+              {kickedAlert}
+            </motion.div>
+          )}
+        </AnimatePresence>
         <div className="max-w-6xl mx-auto grid lg:grid-cols-2 gap-6 items-stretch">
           <motion.div
             custom={0}
@@ -894,6 +956,8 @@ export default function App() {
                         key={player.id}
                         player={player}
                         isHost={player.id === room.hostId}
+                        canKick={myId === room.hostId && player.id !== room.hostId}
+                        onKick={() => kickPlayerFromRoom(player.id)}
                       />
                     ))}
                   </AnimatePresence>
