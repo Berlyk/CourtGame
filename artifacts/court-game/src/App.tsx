@@ -876,7 +876,7 @@ export default function App() {
                 action={myId === room.hostId ? (
                   <div className="flex items-center gap-3 px-3 py-1.5 rounded-xl border border-zinc-700 bg-zinc-800/60">
                     <label htmlFor="host-judge" className="text-sm font-medium text-zinc-200 cursor-pointer select-none">
-                      Я — Судья
+                      Я - Судья
                     </label>
                     <Switch
                       id="host-judge"
