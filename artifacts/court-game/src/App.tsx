@@ -1151,7 +1151,7 @@ export default function App() {
     const isObserverRole = isJudge || isWitness;
     const judgePlayer = game.players.find((p) => p.roleKey === "judge");
     const visibleFacts = game.revealedFacts.slice(-4);
-    const visibleCards = game.usedCards.slice(-4);
+    const visibleCards = game.usedCards.slice(-3);
     const latestRevealedFactId =
       game.revealedFacts.length > 0
         ? game.revealedFacts[game.revealedFacts.length - 1].id
