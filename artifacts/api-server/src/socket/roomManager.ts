@@ -64,6 +64,7 @@ export interface Room {
   players: Player[];
   game: GameState | null;
   started: boolean;
+  isHostJudge: boolean;
 }
 
 const rooms = new Map<string, Room>();
@@ -74,9 +75,17 @@ export function createRoom(code: string, player: Player): Room {
     hostId: player.id,
     players: [player],
     game: null,
-    started: false
+    started: false,
+    isHostJudge: false
   };
   rooms.set(code, room);
+  return room;
+}
+
+export function setHostJudge(code: string, isHostJudge: boolean): Room | null {
+  const room = rooms.get(code);
+  if (!room) return null;
+  room.isHostJudge = isHostJudge;
   return room;
 }
 
@@ -157,7 +166,15 @@ console.log(
 
 const selectedCase = pickRandom(availableCases)[0];
 const roleKeys = shuffle(roleOrderByCount[count]);
-  
+
+  if (room.isHostJudge) {
+    const hostIndex = room.players.findIndex(p => p.id === room.hostId);
+    const judgeRoleIndex = roleKeys.indexOf("judge");
+    if (hostIndex !== -1 && judgeRoleIndex !== -1 && hostIndex !== judgeRoleIndex) {
+      [roleKeys[hostIndex], roleKeys[judgeRoleIndex]] = [roleKeys[judgeRoleIndex], roleKeys[hostIndex]];
+    }
+  }
+
   const assignedPlayers: Player[] = room.players.map((player, index) => {
     const roleKey = roleKeys[index];
     const roleData = selectedCase.roles[roleKey];
