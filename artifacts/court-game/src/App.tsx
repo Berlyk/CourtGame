@@ -192,6 +192,15 @@ function PlayerCard({
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Badge
+              className={
+                isHost
+                  ? "bg-red-600 text-white border-0"
+                  : "bg-zinc-800 text-zinc-100 border border-zinc-700"
+              }
+            >
+              {isHost ? "Host" : "Player"}
+            </Badge>
             {canKick && onKick && (
               <Button
                 size="sm"
@@ -202,15 +211,6 @@ function PlayerCard({
                 Kick
               </Button>
             )}
-            <Badge
-              className={
-                isHost
-                  ? "bg-red-600 text-white border-0"
-                  : "bg-zinc-800 text-zinc-100 border border-zinc-700"
-              }
-            >
-              {isHost ? "Host" : "Player"}
-            </Badge>
           </div>
         </CardContent>
       </Card>
