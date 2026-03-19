@@ -140,6 +140,33 @@ export function joinRoom(code: string, player: Player): Room | null {
   return room;
 }
 
+export function joinRunningGameAsWitness(code: string, player: Player): Room | null {
+  const room = rooms.get(code);
+  if (!room?.game) return null;
+
+  const witnessPlayer: Player = {
+    ...player,
+    roleKey: "witness",
+    roleTitle: "\u0421\u0432\u0438\u0434\u0435\u0442\u0435\u043b\u044c",
+    goal: "\u041d\u0430\u0431\u043b\u044e\u0434\u0430\u0442\u044c \u0437\u0430 \u0445\u043e\u0434\u043e\u043c \u0441\u0443\u0434\u0430. \u0412\u044b \u043d\u0435 \u0440\u0430\u0441\u043a\u0440\u044b\u0432\u0430\u0435\u0442\u0435 \u0444\u0430\u043a\u0442\u044b, \u043d\u0435 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u0443\u0435\u0442\u0435 \u043a\u0430\u0440\u0442\u044b \u0438 \u043d\u0435 \u0432\u044b\u043d\u043e\u0441\u0438\u0442\u0435 \u0432\u0435\u0440\u0434\u0438\u043a\u0442.",
+    facts: [],
+    cards: []
+  };
+
+  room.players.push({
+    ...witnessPlayer,
+    facts: [],
+    cards: []
+  });
+  room.game.players.push({
+    ...witnessPlayer,
+    facts: [],
+    cards: []
+  });
+
+  return room;
+}
+
 export function rejoinRoom(
   code: string,
   playerName: string,
