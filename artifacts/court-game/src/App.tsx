@@ -1236,9 +1236,9 @@ export default function App() {
                                     <Avatar
                                       src={ownerPlayer?.avatar ?? null}
                                       name={fact.owner}
-                                      size={30}
+                                      size={34}
                                     />
-                                    <div className="font-semibold text-sm truncate">
+                                    <div className="font-semibold text-base leading-none truncate">
                                       {fact.owner}
                                     </div>
                                   </div>
@@ -1246,8 +1246,8 @@ export default function App() {
                                     {fact.ownerRole}
                                   </Badge>
                                 </div>
-                                <div className="min-h-[56px]">
-                                  <div className="text-sm text-zinc-400">
+                                <div className="min-h-[64px]">
+                                  <div className="text-base text-zinc-300 leading-relaxed">
                                     {fact.text}
                                   </div>
                                 </div>
@@ -1615,9 +1615,9 @@ export default function App() {
                                 <Avatar
                                   src={ownerPlayer?.avatar ?? null}
                                   name={fact.owner}
-                                  size={30}
+                                  size={34}
                                 />
-                                <div className="font-semibold text-sm truncate">
+                                <div className="font-semibold text-base leading-none truncate">
                                   {fact.owner}
                                 </div>
                               </div>
@@ -1631,8 +1631,8 @@ export default function App() {
                                 {fact.ownerRole}
                               </Badge>
                             </div>
-                            <div className="min-h-[56px]">
-                              <div className="text-sm text-zinc-400">
+                            <div className="min-h-[64px]">
+                              <div className="text-base text-zinc-300 leading-relaxed">
                                 {fact.text}
                               </div>
                             </div>
