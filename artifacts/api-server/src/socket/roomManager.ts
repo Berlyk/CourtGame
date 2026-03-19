@@ -37,6 +37,7 @@ export interface RevealedFact {
   text: string;
   owner: string;
   ownerRole: string;
+  stageIndex: number;
 }
 
 export interface UsedCard {
@@ -229,7 +230,8 @@ export function revealFact(code: string, playerId: string, factId: string): Room
       id: factId,
       text: fact.text,
       owner: player.name,
-      ownerRole: player.roleTitle || ""
+      ownerRole: player.roleTitle || "",
+      stageIndex: game.stageIndex
     });
   }
 
