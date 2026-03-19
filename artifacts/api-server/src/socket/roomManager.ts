@@ -25,6 +25,7 @@ export interface Player {
   id: string;
   name: string;
   socketId: string;
+  avatar?: string;
   roleKey?: string;
   roleTitle?: string;
   goal?: string;
@@ -34,6 +35,7 @@ export interface Player {
 
 export interface RevealedFact {
   id: string;
+  ownerId: string;
   text: string;
   owner: string;
   ownerRole: string;
@@ -42,6 +44,7 @@ export interface RevealedFact {
 
 export interface UsedCard {
   id: string;
+  ownerId: string;
   owner: string;
   ownerRole: string;
   name: string;
@@ -112,17 +115,31 @@ export function joinRoom(code: string, player: Player): Room | null {
   return room;
 }
 
-export function rejoinRoom(code: string, playerName: string, newSocketId: string): { room: Room; playerId: string } | null {
+export function rejoinRoom(
+  code: string,
+  playerName: string,
+  newSocketId: string,
+  avatar?: string | null
+): { room: Room; playerId: string } | null {
   const room = rooms.get(code);
   if (!room) return null;
   const lower = playerName.trim().toLowerCase();
+  const normalizedAvatar = avatar || undefined;
 
   if (room.game) {
     const player = room.game.players.find((p: any) => p.name.trim().toLowerCase() === lower);
     if (player) {
       player.socketId = newSocketId;
+      if (avatar !== undefined) {
+        player.avatar = normalizedAvatar;
+      }
       const lobbyPlayer = room.players.find(p => p.id === player.id);
-      if (lobbyPlayer) lobbyPlayer.socketId = newSocketId;
+      if (lobbyPlayer) {
+        lobbyPlayer.socketId = newSocketId;
+        if (avatar !== undefined) {
+          lobbyPlayer.avatar = normalizedAvatar;
+        }
+      }
       return { room, playerId: player.id };
     }
   }
@@ -130,6 +147,9 @@ export function rejoinRoom(code: string, playerName: string, newSocketId: string
   const player = room.players.find(p => p.name.trim().toLowerCase() === lower);
   if (player) {
     player.socketId = newSocketId;
+    if (avatar !== undefined) {
+      player.avatar = normalizedAvatar;
+    }
     return { room, playerId: player.id };
   }
 
@@ -228,6 +248,7 @@ export function revealFact(code: string, playerId: string, factId: string): Room
   if (!alreadyExists) {
     game.revealedFacts.push({
       id: factId,
+      ownerId: player.id,
       text: fact.text,
       owner: player.name,
       ownerRole: player.roleTitle || "",
@@ -252,6 +273,7 @@ export function useCard(code: string, playerId: string, cardId: string): Room | 
   card.used = true;
   game.usedCards.push({
     id: `${cardId}-used-${Date.now()}`,
+    ownerId: player.id,
     owner: player.name,
     ownerRole: player.roleTitle || "",
     name: card.name,
