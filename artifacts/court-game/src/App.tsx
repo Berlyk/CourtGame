@@ -264,6 +264,7 @@ export default function App() {
   const [rejoinAlert, setRejoinAlert] = useState("");
   const [kickedAlert, setKickedAlert] = useState("");
   const [copiedRoomCode, setCopiedRoomCode] = useState(false);
+  const [startGameLoading, setStartGameLoading] = useState(false);
   const [hasSession, setHasSession] = useState(false);
 
   const [myId, setMyId] = useState<string | null>(null);
@@ -302,6 +303,7 @@ export default function App() {
         setMyId(playerId);
         localStorage.setItem("court_session", state.code);
         setHasSession(true);
+        setStartGameLoading(false);
         if (avatar) {
           socket.emit("update_avatar", {
             code: state.code,
@@ -356,6 +358,37 @@ export default function App() {
       },
     );
 
+    socket.on("game_players_updated", ({ players }: { players: PlayerInfo[] }) => {
+      setGame((prev) => {
+        if (!prev) return prev;
+        const mergedPlayers = players.map((nextPlayer) => {
+          const prevPlayer = prev.players.find((p) => p.id === nextPlayer.id);
+          return {
+            ...nextPlayer,
+            avatar: nextPlayer.avatar ?? prevPlayer?.avatar,
+          };
+        });
+
+        if (!prev.me) {
+          return { ...prev, players: mergedPlayers };
+        }
+
+        const updatedSelf = mergedPlayers.find((p) => p.id === prev.me!.id);
+        return {
+          ...prev,
+          players: mergedPlayers,
+          me: updatedSelf
+            ? {
+                ...prev.me,
+                avatar: updatedSelf.avatar ?? prev.me.avatar,
+                roleKey: updatedSelf.roleKey ?? prev.me.roleKey,
+                roleTitle: updatedSelf.roleTitle ?? prev.me.roleTitle,
+              }
+            : prev.me,
+        };
+      });
+    });
+
     socket.on(
       "player_left",
       ({ playerName: name }: { playerId: string; playerName: string }) => {
@@ -389,6 +422,7 @@ export default function App() {
       setRejoinAlert("");
       setCopiedRoomCode(false);
       setIsHostJudge(false);
+      setStartGameLoading(false);
       setScreen("home");
       setKickedAlert(
         "\u0412\u044b \u0431\u044b\u043b\u0438 \u043a\u0438\u043a\u043d\u0443\u0442\u044b \u0438\u0437 \u043a\u043e\u043c\u043d\u0430\u0442\u044b.",
@@ -397,6 +431,7 @@ export default function App() {
     });
 
     socket.on("game_started", ({ state }: { state: any }) => {
+      setStartGameLoading(false);
       setGame(state as GameState);
       setRoom(null);
       setScreen("game");
@@ -439,6 +474,7 @@ export default function App() {
     );
 
     socket.on("error", ({ message }: { message: string }) => {
+      setStartGameLoading(false);
       setError(message);
       setTimeout(() => setError(""), 4000);
     });
@@ -446,6 +482,7 @@ export default function App() {
     return () => {
       socket.off("room_joined");
       socket.off("room_updated");
+      socket.off("game_players_updated");
       socket.off("player_left");
       socket.off("player_rejoined");
       socket.off("rejoin_failed");
@@ -489,6 +526,7 @@ export default function App() {
 
   const startGame = useCallback(() => {
     if (!room || !myId) return;
+    setStartGameLoading(true);
     socket.emit("start_game", { code: room.code, playerId: myId });
   }, [socket, room, myId]);
 
@@ -556,6 +594,7 @@ export default function App() {
     setKickedAlert("");
     setCopiedRoomCode(false);
     setIsHostJudge(false);
+    setStartGameLoading(false);
   }, [socket]);
 
   const finalExit = useCallback(() => {
@@ -569,6 +608,7 @@ export default function App() {
     setJoinCode("");
     setKickedAlert("");
     setCopiedRoomCode(false);
+    setStartGameLoading(false);
   }, [socket]);
 
   const setupNickname = useCallback(() => {
@@ -998,11 +1038,13 @@ export default function App() {
                         className="rounded-xl gap-2 bg-red-600 hover:bg-red-500 text-white border-0 disabled:bg-zinc-800 disabled:text-zinc-500"
                         onClick={startGame}
                         disabled={
-                          room.players.length < 3 || room.players.length > 6
+                          startGameLoading ||
+                          room.players.length < 3 ||
+                          room.players.length > 6
                         }
                       >
                         <Play className="w-4 h-4" />
-                        Начать игру
+                        {startGameLoading ? "\u0417\u0430\u043f\u0443\u0441\u043a..." : "\u041d\u0430\u0447\u0430\u0442\u044c \u0438\u0433\u0440\u0443"}
                       </Button>
                     </motion.div>
                   )}
@@ -1105,6 +1147,8 @@ export default function App() {
     const stageProgress = ((game.stageIndex + 1) / stages.length) * 100;
     const isHost = myId === game.hostId;
     const isJudge = game.me.roleKey === "judge";
+    const isWitness = game.me.roleKey === "witness";
+    const isObserverRole = isJudge || isWitness;
     const judgePlayer = game.players.find((p) => p.roleKey === "judge");
     const visibleFacts = game.revealedFacts.slice(-4);
     const visibleCards = game.usedCards.slice(-4);
@@ -1517,7 +1561,7 @@ export default function App() {
           </div>
 
           <div
-            className={`grid gap-6 ${isJudge ? "xl:grid-cols-2" : "xl:grid-cols-[1fr_1fr_1fr_1fr]"}`}
+            className={`grid gap-6 ${isObserverRole ? "xl:grid-cols-2" : "xl:grid-cols-[1fr_1fr_1fr_1fr]"}`}
           >
             <InfoBlock
               title="Раскрытые факты"
@@ -1598,7 +1642,7 @@ export default function App() {
               </div>
             </InfoBlock>
 
-            {!isJudge && (
+            {!isObserverRole && (
               <InfoBlock
                 title="Ваши факты"
                 icon={<AlertCircle className="w-5 h-5" />}
@@ -1653,7 +1697,7 @@ export default function App() {
               </InfoBlock>
             )}
 
-            {!isJudge && (
+            {!isObserverRole && (
               <InfoBlock
                 title="Ваши карты механик"
                 icon={<Scale className="w-5 h-5" />}
@@ -1788,4 +1832,6 @@ export default function App() {
     </div>
   );
 }
+
+
 
