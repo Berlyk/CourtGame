@@ -190,7 +190,7 @@ function PlayerCard({
       <Card className="rounded-2xl shadow-sm bg-zinc-900/90 border-zinc-800 text-zinc-100">
         <CardContent className="p-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <Avatar src={player.avatar ?? null} name={player.name} size={36} />
+            <Avatar src={player.avatar ?? null} name={player.name} size={52} />
             <div className="min-w-0">
               <div className="font-semibold text-base truncate">{player.name}</div>
               <div className="text-sm text-zinc-400">
@@ -264,6 +264,9 @@ export default function App() {
   const [rejoinAlert, setRejoinAlert] = useState("");
   const [kickedAlert, setKickedAlert] = useState("");
   const [copiedRoomCode, setCopiedRoomCode] = useState(false);
+  const [roomActionLoading, setRoomActionLoading] = useState<
+    "create" | "join" | null
+  >(null);
   const [hasSession, setHasSession] = useState(false);
 
   const [myId, setMyId] = useState<string | null>(null);
@@ -300,6 +303,7 @@ export default function App() {
     socket.on(
       "room_joined",
       ({ playerId, state }: { playerId: string; state: any }) => {
+        setRoomActionLoading(null);
         setMyId(playerId);
         localStorage.setItem("court_session", state.code);
         setHasSession(true);
@@ -341,12 +345,14 @@ export default function App() {
     );
 
     socket.on("rejoin_failed", () => {
+      setRoomActionLoading(null);
       localStorage.removeItem("court_session");
       setHasSession(false);
       setScreen("home");
     });
 
     socket.on("kicked", () => {
+      setRoomActionLoading(null);
       localStorage.removeItem("court_session");
       setHasSession(false);
       setRoom(null);
@@ -407,6 +413,7 @@ export default function App() {
     );
 
     socket.on("error", ({ message }: { message: string }) => {
+      setRoomActionLoading(null);
       setError(message);
       setTimeout(() => setError(""), 4000);
     });
@@ -430,20 +437,24 @@ export default function App() {
   }, [socket]);
 
   const createRoom = useCallback(() => {
+    if (roomActionLoading) return;
     const name = playerName.trim() || "Игрок";
     localStorage.setItem("court_nickname", name);
+    setRoomActionLoading("create");
     socket.emit("create_room", { playerName: name, avatar });
-  }, [socket, playerName, avatar]);
+  }, [socket, playerName, avatar, roomActionLoading]);
 
   const joinRoom = useCallback(() => {
+    if (roomActionLoading) return;
     if (!joinCode.trim()) return;
     const name = playerName.trim() || "Игрок";
+    setRoomActionLoading("join");
     socket.emit("join_room", {
       code: joinCode.trim().toUpperCase(),
       playerName: name,
       avatar,
     });
-  }, [socket, joinCode, playerName, avatar]);
+  }, [socket, joinCode, playerName, avatar, roomActionLoading]);
 
   const reconnect = useCallback(() => {
     const savedName = localStorage.getItem("court_nickname");
@@ -526,6 +537,7 @@ export default function App() {
     setRejoinAlert("");
     setKickedAlert("");
     setCopiedRoomCode(false);
+    setRoomActionLoading(null);
     setIsHostJudge(false);
   }, [socket]);
 
@@ -540,6 +552,7 @@ export default function App() {
     setJoinCode("");
     setKickedAlert("");
     setCopiedRoomCode(false);
+    setRoomActionLoading(null);
   }, [socket]);
 
   const setupNickname = useCallback(() => {
@@ -549,19 +562,48 @@ export default function App() {
     setScreen("home");
   }, [playerName]);
 
+  const compressAvatar = useCallback(
+    (inputDataUrl: string): Promise<string> =>
+      new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          const maxSide = 256;
+          const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+          const width = Math.max(1, Math.round(img.width * scale));
+          const height = Math.max(1, Math.round(img.height * scale));
+
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            resolve(inputDataUrl);
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL("image/jpeg", 0.78));
+        };
+        img.onerror = () => resolve(inputDataUrl);
+        img.src = inputDataUrl;
+      }),
+    [],
+  );
+
   const handleAvatarChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
       const reader = new FileReader();
-      reader.onload = (ev) => {
-        const base64 = ev.target?.result as string;
-        setAvatar(base64);
-        localStorage.setItem("court_avatar", base64);
+      reader.onload = async (ev) => {
+        const dataUrl = ev.target?.result as string;
+        const compactAvatar = await compressAvatar(dataUrl);
+        setAvatar(compactAvatar);
+        localStorage.setItem("court_avatar", compactAvatar);
       };
       reader.readAsDataURL(file);
     },
-    [],
+    [compressAvatar],
   );
 
   const copyCode = useCallback((code: string) => {
@@ -796,10 +838,13 @@ export default function App() {
                   >
                     <Button
                       onClick={createRoom}
+                      disabled={roomActionLoading !== null}
                       className="w-full h-12 rounded-xl text-base gap-2 bg-red-600 hover:bg-red-500 text-white border-0"
                     >
                       <UserPlus className="w-4 h-4" />
-                      Создать комнату
+                      {roomActionLoading === "create"
+                        ? "Создание..."
+                        : "Создать комнату"}
                     </Button>
                   </motion.div>
 
@@ -820,9 +865,12 @@ export default function App() {
                       <Button
                         onClick={joinRoom}
                         variant="secondary"
+                        disabled={
+                          roomActionLoading !== null || !joinCode.trim()
+                        }
                         className="h-12 rounded-xl px-6 bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0"
                       >
-                        Войти
+                        {roomActionLoading === "join" ? "Вход..." : "Войти"}
                       </Button>
                     </motion.div>
                   </div>
@@ -842,6 +890,7 @@ export default function App() {
                           <Button
                             onClick={reconnect}
                             variant="outline"
+                            disabled={roomActionLoading !== null}
                             className="w-full h-12 rounded-xl border-red-600/50 text-red-400 hover:bg-red-600/10 hover:text-red-300 gap-2"
                           >
                             ↩ Переподключиться к игре
@@ -1133,7 +1182,7 @@ export default function App() {
                                     <Avatar
                                       src={ownerPlayer?.avatar ?? null}
                                       name={fact.owner}
-                                      size={22}
+                                      size={30}
                                     />
                                     <div className="font-semibold text-sm truncate">
                                       {fact.owner}
@@ -1354,7 +1403,7 @@ export default function App() {
             <InfoBlock title="Ваша роль" icon={<Shield className="w-5 h-5" />}>
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
-                  <Avatar src={game.me.avatar ?? avatar} name={game.me.name} size={44} />
+                  <Avatar src={game.me.avatar ?? avatar} name={game.me.name} size={56} />
                   <div>
                     <div className="text-2xl font-bold">
                       {game.me.roleTitle}
@@ -1378,7 +1427,7 @@ export default function App() {
                         className="flex items-center justify-between text-sm"
                       >
                         <div className="flex items-center gap-2 min-w-0">
-                          <Avatar src={p.avatar ?? null} name={p.name} size={24} />
+                          <Avatar src={p.avatar ?? null} name={p.name} size={32} />
                           <span className="text-zinc-300 truncate">{p.name}</span>
                         </div>
                         <span className="text-zinc-500">{p.roleTitle}</span>
@@ -1510,7 +1559,7 @@ export default function App() {
                                 <Avatar
                                   src={ownerPlayer?.avatar ?? null}
                                   name={fact.owner}
-                                  size={22}
+                                  size={30}
                                 />
                                 <div className="font-semibold text-sm truncate">
                                   {fact.owner}
@@ -1682,7 +1731,7 @@ export default function App() {
                                 <Avatar
                                   src={ownerPlayer?.avatar ?? null}
                                   name={entry.owner}
-                                  size={22}
+                                  size={30}
                                 />
                                 <div className="font-semibold text-sm truncate">
                                   {entry.owner}
