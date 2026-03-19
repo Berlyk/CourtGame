@@ -30,7 +30,7 @@ function getRoomState(room: any, playerId: string) {
       type: "room",
       code: room.code,
       hostId: room.hostId,
-      players: room.players.map((p: any) => ({ id: p.id, name: p.name })),
+      players: room.players.map((p: any) => ({ id: p.id, name: p.name, avatar: p.avatar })),
       started: room.started,
       isHostJudge: room.isHostJudge
     };
@@ -52,12 +52,14 @@ function getRoomState(room: any, playerId: string) {
     players: room.game.players.map((p: any) => ({
       id: p.id,
       name: p.name,
+      avatar: p.avatar,
       roleKey: p.roleKey,
       roleTitle: p.roleTitle
     })),
     me: myPlayer ? {
       id: myPlayer.id,
       name: myPlayer.name,
+      avatar: myPlayer.avatar,
       roleKey: myPlayer.roleKey,
       roleTitle: myPlayer.roleTitle,
       goal: myPlayer.goal,
@@ -76,10 +78,10 @@ export function setupSocket(httpServer: HttpServer) {
   const socketToRoom = new Map<string, { roomCode: string; playerId: string }>();
 
   io.on("connection", (socket) => {
-    socket.on("create_room", ({ playerName }: { playerName: string }) => {
+    socket.on("create_room", ({ playerName, avatar }: { playerName: string; avatar?: string | null }) => {
       const code = randomCode();
       const playerId = crypto.randomUUID();
-      const player = { id: playerId, name: playerName || "Игрок 1", socketId: socket.id };
+      const player = { id: playerId, name: playerName || "Игрок 1", socketId: socket.id, avatar: avatar || undefined };
       const room = createRoom(code, player);
 
       socketToRoom.set(socket.id, { roomCode: code, playerId });
@@ -87,7 +89,7 @@ export function setupSocket(httpServer: HttpServer) {
       socket.emit("room_joined", { playerId, state: getRoomState(room, playerId) });
     });
 
-    socket.on("join_room", ({ code, playerName }: { code: string; playerName: string }) => {
+    socket.on("join_room", ({ code, playerName, avatar }: { code: string; playerName: string; avatar?: string | null }) => {
       const roomCode = code.trim().toUpperCase();
       const room = getRoom(roomCode);
       const trimmedName = (playerName || "").trim();
@@ -114,7 +116,7 @@ export function setupSocket(httpServer: HttpServer) {
       }
 
       const playerId = crypto.randomUUID();
-      const player = { id: playerId, name: trimmedName, socketId: socket.id };
+      const player = { id: playerId, name: trimmedName, socketId: socket.id, avatar: avatar || undefined };
       const updatedRoom = joinRoom(roomCode, player);
 
       if (!updatedRoom) {
@@ -128,14 +130,14 @@ export function setupSocket(httpServer: HttpServer) {
       socket.emit("room_joined", { playerId, state: getRoomState(updatedRoom, playerId) });
 
       socket.to(roomCode).emit("room_updated", {
-        players: updatedRoom.players.map((p: any) => ({ id: p.id, name: p.name })),
+        players: updatedRoom.players.map((p: any) => ({ id: p.id, name: p.name, avatar: p.avatar })),
         hostId: updatedRoom.hostId
       });
     });
 
-    socket.on("rejoin_room", ({ code, playerName }: { code: string; playerName: string }) => {
+    socket.on("rejoin_room", ({ code, playerName, avatar }: { code: string; playerName: string; avatar?: string | null }) => {
       const roomCode = code.trim().toUpperCase();
-      const result = rejoinRoom(roomCode, playerName, socket.id);
+      const result = rejoinRoom(roomCode, playerName, socket.id, avatar);
 
       if (!result) {
         socket.emit("rejoin_failed", { message: "Комната не найдена или вас нет в ней." });
@@ -185,7 +187,7 @@ export function setupSocket(httpServer: HttpServer) {
       if (!room || room.hostId !== playerId) return;
       setHostJudge(code, isHostJudge);
       socket.to(code).emit("room_updated", {
-        players: room.players.map((p: any) => ({ id: p.id, name: p.name })),
+        players: room.players.map((p: any) => ({ id: p.id, name: p.name, avatar: p.avatar })),
         hostId: room.hostId,
         isHostJudge
       });
@@ -237,7 +239,7 @@ export function setupSocket(httpServer: HttpServer) {
 
         if (updatedRoom) {
           io.to(code).emit("room_updated", {
-            players: updatedRoom.players.map((p: any) => ({ id: p.id, name: p.name })),
+            players: updatedRoom.players.map((p: any) => ({ id: p.id, name: p.name, avatar: p.avatar })),
             hostId: updatedRoom.hostId,
             isHostJudge: updatedRoom.isHostJudge
           });
@@ -374,7 +376,7 @@ export function setupSocket(httpServer: HttpServer) {
         const updatedRoom = removePlayer(info.roomCode, info.playerId);
         if (updatedRoom) {
           socket.to(info.roomCode).emit("room_updated", {
-            players: updatedRoom.players.map((p: any) => ({ id: p.id, name: p.name })),
+            players: updatedRoom.players.map((p: any) => ({ id: p.id, name: p.name, avatar: p.avatar })),
             hostId: updatedRoom.hostId
           });
         }
