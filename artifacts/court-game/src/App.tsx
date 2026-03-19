@@ -22,12 +22,12 @@ import { getSocket } from "@/lib/socket";
 import { Switch } from "@/components/ui/switch";
 
 const stages = [
-  "РџРѕРґРіРѕС‚РѕРІРєР°",
-  "Р’С‹СЃС‚СѓРїР»РµРЅРёРµ РёСЃС‚С†Р° / РїРѕС‚РµСЂРїРµРІС€РµРіРѕ",
-  "Р’С‹СЃС‚СѓРїР»РµРЅРёРµ РѕС‚РІРµС‚С‡РёРєР° / РѕР±РІРёРЅСЏРµРјРѕРіРѕ",
-  "Р”РѕРїСЂРѕСЃ Рё РёСЃРїРѕР»СЊР·РѕРІР°РЅРёРµ РєР°СЂС‚",
-  "Р¤РёРЅР°Р»СЊРЅС‹Рµ СЂРµС‡Рё",
-  "Р РµС€РµРЅРёРµ СЃСѓРґСЊРё",
+  "Подготовка",
+  "Выступление истца / потерпевшего",
+  "Выступление ответчика / обвиняемого",
+  "Допрос и использование карт",
+  "Финальные речи",
+  "Решение судьи",
 ];
 
 const pageVariants = {
@@ -183,7 +183,7 @@ function PlayerCard({
           <div>
             <div className="font-semibold text-base">{player.name}</div>
             <div className="text-sm text-zinc-400">
-              {isHost ? "Р’РµРґСѓС‰РёР№ РєРѕРјРЅР°С‚С‹" : "РРіСЂРѕРє"}
+              {isHost ? "Ведущий комнаты" : "Игрок"}
             </div>
           </div>
           <Badge
@@ -300,7 +300,7 @@ export default function App() {
     socket.on(
       "player_left",
       ({ playerName: name }: { playerId: string; playerName: string }) => {
-        setDisconnectAlert(`вљ пёЏ ${name} РїРѕРєРёРЅСѓР» РёРіСЂСѓ`);
+        setDisconnectAlert(`⚠️ ${name} покинул игру`);
         setTimeout(() => setDisconnectAlert(""), 6000);
       },
     );
@@ -308,7 +308,7 @@ export default function App() {
     socket.on(
       "player_rejoined",
       ({ playerName: name }: { playerName: string }) => {
-        setRejoinAlert(`${name} РІРµСЂРЅСѓР»СЃСЏ РІ РёРіСЂСѓ`);
+        setRejoinAlert(`${name} вернулся в игру`);
         setTimeout(() => setRejoinAlert(""), 4000);
       },
     );
@@ -384,14 +384,14 @@ export default function App() {
   }, [socket]);
 
   const createRoom = useCallback(() => {
-    const name = playerName.trim() || "РРіСЂРѕРє";
+    const name = playerName.trim() || "Игрок";
     localStorage.setItem("court_nickname", name);
     socket.emit("create_room", { playerName: name });
   }, [socket, playerName]);
 
   const joinRoom = useCallback(() => {
     if (!joinCode.trim()) return;
-    const name = playerName.trim() || "РРіСЂРѕРє";
+    const name = playerName.trim() || "Игрок";
     socket.emit("join_room", {
       code: joinCode.trim().toUpperCase(),
       playerName: name,
@@ -515,12 +515,12 @@ export default function App() {
             <CardContent className="p-8 space-y-6">
               <div className="space-y-2 text-center">
                 <Badge className="rounded-full px-3 py-1 text-sm bg-red-600/90 text-white border-0">
-                  РЎРЈР”
+                  СУД
                 </Badge>
-                <h1 className="text-2xl font-bold pt-2">Р”РѕР±СЂРѕ РїРѕР¶Р°Р»РѕРІР°С‚СЊ!</h1>
+                <h1 className="text-2xl font-bold pt-2">Добро пожаловать!</h1>
                 <p className="text-sm text-zinc-400">
-                  РџСЂРёРґСѓРјР°Р№С‚Рµ РЅРёРєРЅРµР№Рј вЂ” РѕРЅ СЃРѕС…СЂР°РЅРёС‚СЃСЏ Рё Р±СѓРґРµС‚ РїСЂРёРІСЏР·Р°РЅ Рє РІР°Рј РІ
-                  РєР°Р¶РґРѕР№ РёРіСЂРµ.
+                  Придумайте никнейм — он сохранится и будет привязан к вам в
+                  каждой игре.
                 </p>
               </div>
 
@@ -535,7 +535,7 @@ export default function App() {
                   </div>
                 </div>
                 <span className="text-xs text-zinc-500">
-                  РќР°Р¶РјРёС‚Рµ, С‡С‚РѕР±С‹ РґРѕР±Р°РІРёС‚СЊ С„РѕС‚Рѕ
+                  Нажмите, чтобы добавить фото
                 </span>
                 <input
                   ref={avatarInputRef}
@@ -547,11 +547,11 @@ export default function App() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">Р’Р°С€ РЅРёРєРЅРµР№Рј</label>
+                <label className="text-sm font-medium">Ваш никнейм</label>
                 <Input
                   value={playerName}
                   onChange={(e) => setPlayerName(e.target.value)}
-                  placeholder="РќР°РїСЂРёРјРµСЂ: РђСЂС‚С‘Рј"
+                  placeholder="Например: Артём"
                   className="h-12 rounded-xl bg-zinc-100 text-zinc-950 placeholder:text-zinc-400 border-0 focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-0"
                   onKeyDown={(e) => e.key === "Enter" && setupNickname()}
                   autoFocus
@@ -566,7 +566,7 @@ export default function App() {
                   disabled={!playerName.trim()}
                   className="w-full h-12 rounded-xl text-base bg-red-600 hover:bg-red-500 text-white border-0 disabled:bg-zinc-700 disabled:text-zinc-500"
                 >
-                  РџСЂРѕРґРѕР»Р¶РёС‚СЊ
+                  Продолжить
                 </Button>
               </motion.div>
             </CardContent>
@@ -601,21 +601,21 @@ export default function App() {
                   </Badge>
                   <div className="space-y-3">
                     <h1 className="text-4xl md:text-5xl font-bold tracking-tight">
-                      РЎРЈР”
+                      СУД
                     </h1>
                     <p className="text-base md:text-lg text-zinc-400 max-w-xl">
-                      Р РѕР»РµРІР°СЏ РЅР°СЃС‚РѕР»СЊРЅР°СЏ РёРіСЂР° Рѕ СЃСѓРґРµР±РЅС‹С… СЂР°Р·Р±РёСЂР°С‚РµР»СЊСЃС‚РІР°С….
-                      РџРѕР»СѓС‡РёС‚Рµ СЂРѕР»СЊ, РёР·СѓС‡РёС‚Рµ С„Р°РєС‚С‹ РґРµР»Р° Рё РїРѕРїСЂРѕР±СѓР№С‚Рµ СѓР±РµРґРёС‚СЊ
-                      СЃСѓРґСЊСЋ РІ СЃРІРѕРµР№ РїСЂР°РІРѕС‚Рµ.
+                      Ролевая настольная игра о судебных разбирательствах.
+                      Получите роль, изучите факты дела и попробуйте убедить
+                      судью в своей правоте.
                     </p>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   {[
-                    { title: "3вЂ“6 РёРіСЂРѕРєРѕРІ", sub: "Р Р°Р·РЅС‹Рµ СЂРѕР»Рё Рё СЂРµР¶РёРјС‹" },
-                    { title: "РљР°СЂС‚С‹ РњРµС…Р°РЅРёРє", sub: "Р”Р°СЋС‚ РѕСЃРѕР±С‹Рµ РІРѕР·РјРѕР¶РЅРѕСЃС‚Рё" },
-                    { title: "РЈР»РёРєРё", sub: "РћР±СЉРµРєС‚РёРІРЅС‹Рµ Рё РѕР±С‰РёРµ" },
-                    { title: "Р¤Р°РєС‚С‹", sub: "Р Р°СЃРєСЂС‹РІР°СЋС‚СЃСЏ РїРѕ С…РѕРґСѓ СЃСѓРґР°" },
+                    { title: "3–6 игроков", sub: "Разные роли и режимы" },
+                    { title: "Карты Механик", sub: "Дают особые возможности" },
+                    { title: "Улики", sub: "Объективные и общие" },
+                    { title: "Факты", sub: "Раскрываются по ходу суда" },
                   ].map((item, i) => (
                     <motion.div
                       key={item.title}
@@ -677,7 +677,7 @@ export default function App() {
                     onChange={handleAvatarChange}
                   />
                   <div className="flex-1 space-y-2">
-                    <label className="text-sm font-medium">Р’Р°С€ РЅРёРєРЅРµР№Рј</label>
+                    <label className="text-sm font-medium">Ваш никнейм</label>
                     <Input
                       value={playerName}
                       onChange={(e) => {
@@ -688,7 +688,7 @@ export default function App() {
                             e.target.value.trim(),
                           );
                       }}
-                      placeholder="РќР°РїСЂРёРјРµСЂ: РђСЂС‚С‘Рј"
+                      placeholder="Например: Артём"
                       className="h-11 rounded-xl bg-zinc-100 text-zinc-950 placeholder:text-zinc-400 border-0 focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-0"
                     />
                   </div>
@@ -704,7 +704,7 @@ export default function App() {
                       className="w-full h-12 rounded-xl text-base gap-2 bg-red-600 hover:bg-red-500 text-white border-0"
                     >
                       <UserPlus className="w-4 h-4" />
-                      РЎРѕР·РґР°С‚СЊ РєРѕРјРЅР°С‚Сѓ
+                      Создать комнату
                     </Button>
                   </motion.div>
 
@@ -714,7 +714,7 @@ export default function App() {
                       onChange={(e) =>
                         setJoinCode(e.target.value.toUpperCase())
                       }
-                      placeholder="РљРѕРґ РєРѕРјРЅР°С‚С‹"
+                      placeholder="Код комнаты"
                       className="h-12 rounded-xl bg-zinc-100 text-zinc-950 placeholder:text-zinc-400 border-0 focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-0"
                       onKeyDown={(e) => e.key === "Enter" && joinRoom()}
                     />
@@ -727,7 +727,7 @@ export default function App() {
                         variant="secondary"
                         className="h-12 rounded-xl px-6 bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0"
                       >
-                        Р’РѕР№С‚Рё
+                        Войти
                       </Button>
                     </motion.div>
                   </div>
@@ -749,7 +749,7 @@ export default function App() {
                             variant="outline"
                             className="w-full h-12 rounded-xl border-red-600/50 text-red-400 hover:bg-red-600/10 hover:text-red-300 gap-2"
                           >
-                            в†© РџРµСЂРµРїРѕРґРєР»СЋС‡РёС‚СЊСЃСЏ Рє РёРіСЂРµ
+                            ↩ Переподключиться к игре
                           </Button>
                         </motion.div>
                       </motion.div>
@@ -760,17 +760,17 @@ export default function App() {
                 <Separator />
 
                 <div className="space-y-3">
-                  <div className="font-semibold">Р¤СѓРЅРєС†РёРѕРЅР°Р»</div>
+                  <div className="font-semibold">Функционал</div>
                   <div className="grid gap-2 text-sm text-zinc-400">
-                    <div>вЂў СЃРѕР·РґР°Р№С‚Рµ РєРѕРјРЅР°С‚Сѓ Рё РїРѕРґРµР»РёС‚РµСЃСЊ РєРѕРґРѕРј СЃ РёРіСЂРѕРєР°РјРё</div>
+                    <div>• создайте комнату и поделитесь кодом с игроками</div>
                     <div>
-                      вЂў РІРµРґСѓС‰РёР№ Р·Р°РїСѓСЃРєР°РµС‚ РёРіСЂСѓ Рё СЂРѕР»Рё СЂР°Р·РґР°СЋС‚СЃСЏ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё
+                      • ведущий запускает игру и роли раздаются автоматически
                     </div>
-                    <div>вЂў РєР°Р¶РґС‹Р№ РІРёРґРёС‚ С‚РѕР»СЊРєРѕ СЃРІРѕРё С„Р°РєС‚С‹ Рё РєР°СЂС‚С‹ РјРµС…Р°РЅРёРє</div>
+                    <div>• каждый видит только свои факты и карты механик</div>
                     <div>
-                      вЂў СЂР°СЃРєСЂС‹С‚С‹Рµ С„Р°РєС‚С‹ Рё РёСЃРїРѕР»СЊР·РѕРІР°РЅРЅС‹Рµ РєР°СЂС‚С‹ РІРёРґСЏС‚ РІСЃРµ
+                      • раскрытые факты и использованные карты видят все
                     </div>
-                    <div>вЂў СЃСѓРґСЊСЏ РјРµРЅСЏРµС‚ СЌС‚Р°РїС‹ Рё РІС‹РЅРѕСЃРёС‚ С„РёРЅР°Р»СЊРЅС‹Р№ РІРµСЂРґРёРєС‚</div>
+                    <div>• судья меняет этапы и выносит финальный вердикт</div>
                   </div>
                 </div>
               </CardContent>
@@ -817,13 +817,13 @@ export default function App() {
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 text-sm text-zinc-400">
                     <Scale className="w-4 h-4" />
-                    РљРѕРґ РєРѕРјРЅР°С‚С‹
+                    Код комнаты
                   </div>
                   <div className="text-3xl font-bold tracking-[0.25em] text-red-400">
                     {room.code}
                   </div>
                   <div className="text-sm text-zinc-400">
-                    РџРѕРґРµР»РёС‚РµСЃСЊ РєРѕРґРѕРј СЃ РґСЂСѓРіРёРјРё РёРіСЂРѕРєР°РјРё вЂў 3вЂ“6 СѓС‡Р°СЃС‚РЅРёРєРѕРІ
+                    Поделитесь кодом с другими игроками • 3–6 участников
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-3">
@@ -833,7 +833,7 @@ export default function App() {
                     onClick={() => copyCode(room.code)}
                   >
                     <Copy className="w-4 h-4" />
-                    РЎРєРѕРїРёСЂРѕРІР°С‚СЊ
+                    Скопировать
                   </Button>
                   {myId === room.hostId && (
                     <motion.div
@@ -848,7 +848,7 @@ export default function App() {
                         }
                       >
                         <Play className="w-4 h-4" />
-                        РќР°С‡Р°С‚СЊ РёРіСЂСѓ
+                        Начать игру
                       </Button>
                     </motion.div>
                   )}
@@ -857,7 +857,7 @@ export default function App() {
                     className="rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
                     onClick={resetAll}
                   >
-                    Р’С‹Р№С‚Рё
+                    Выйти
                   </Button>
                 </div>
               </CardContent>
@@ -872,12 +872,12 @@ export default function App() {
               animate="animate"
             >
               <InfoBlock
-                title="РРіСЂРѕРєРё РІ РєРѕРјРЅР°С‚Рµ"
+                title="Игроки в комнате"
                 icon={<UserPlus className="w-5 h-5" />}
                 action={myId === room.hostId ? (
                   <div className="flex items-center gap-3 px-3 py-1.5 rounded-xl border border-zinc-700 bg-zinc-800/60">
                     <label htmlFor="host-judge" className="text-sm font-medium text-zinc-200 cursor-pointer select-none">
-                      РЇ - РЎСѓРґСЊСЏ
+                      Я - Судья
                     </label>
                     <Switch
                       id="host-judge"
@@ -899,7 +899,7 @@ export default function App() {
                   </AnimatePresence>
                   {room.players.length < 3 && (
                     <div className="text-sm text-zinc-500 mt-2">
-                      РћР¶РёРґР°РЅРёРµ РёРіСЂРѕРєРѕРІ... (РЅСѓР¶РЅРѕ РµС‰С‘ РјРёРЅРёРјСѓРј{" "}
+                      Ожидание игроков... (нужно ещё минимум{" "}
                       {3 - room.players.length})
                     </div>
                   )}
@@ -914,26 +914,26 @@ export default function App() {
               animate="animate"
             >
               <InfoBlock
-                title="Р”РѕСЃС‚СѓРїРЅС‹Рµ СЂРµР¶РёРјС‹"
+                title="Доступные режимы"
                 icon={<Gavel className="w-5 h-5" />}
               >
                 <div className="space-y-3 text-sm">
                   <div className="flex items-center justify-between">
-                    <span>РРіСЂРѕРєРѕРІ СЃРµР№С‡Р°СЃ</span>
+                    <span>Игроков сейчас</span>
                     <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">
                       {room.players.length}
                     </Badge>
                   </div>
                   <Separator />
                   {room.players.length === 3 && (
-                    <div>Р“СЂР°Р¶РґР°РЅСЃРєРёР№ СЃРїРѕСЂ, С‚СЂСѓРґРѕРІРѕР№ СЃРїРѕСЂ</div>
+                    <div>Гражданский спор, трудовой спор</div>
                   )}
-                  {room.players.length === 4 && <div>РЈРіРѕР»РѕРІРЅРѕРµ РґРµР»Рѕ</div>}
-                  {room.players.length === 5 && <div>РЈРіРѕР»РѕРІРЅРѕРµ РґРµР»Рѕ</div>}
-                  {room.players.length >= 6 && <div>РЎСѓРґ РЅР° РєРѕРјРїР°РЅРёСЋ</div>}
+                  {room.players.length === 4 && <div>Уголовное дело</div>}
+                  {room.players.length === 5 && <div>Уголовное дело</div>}
+                  {room.players.length >= 6 && <div>Суд на компанию</div>}
                   <div className="text-zinc-400 pt-2">
-                    Р’РµРґСѓС‰РёР№ Р·Р°РїСѓСЃРєР°РµС‚ РёРіСЂСѓ, СЃР°Р№С‚ СЃР»СѓС‡Р°Р№РЅРѕ РІС‹Р±РёСЂР°РµС‚ РїРѕРґС…РѕРґСЏС‰РµРµ
-                    РґРµР»Рѕ Рё СЂР°СЃРїСЂРµРґРµР»СЏРµС‚ СЂРѕР»Рё.
+                    Ведущий запускает игру, сайт случайно выбирает подходящее
+                    дело и распределяет роли.
                   </div>
                 </div>
               </InfoBlock>
@@ -992,7 +992,7 @@ export default function App() {
                     <CardTitle className="flex items-center justify-between text-lg text-zinc-100">
                       <span className="flex items-center gap-2">
                         <Eye className="w-5 h-5" />
-                        РСЃС‚РѕСЂРёСЏ С„Р°РєС‚РѕРІ
+                        История фактов
                       </span>
                       <Button
                         size="sm"
@@ -1000,14 +1000,14 @@ export default function App() {
                         className="text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 rounded-lg h-8 w-8 p-0"
                         onClick={() => setShowFactHistory(false)}
                       >
-                        вњ•
+                        ✕
                       </Button>
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="overflow-y-auto flex-1 space-y-3 pb-6">
                     {game.revealedFacts.length === 0 ? (
                       <div className="text-sm text-zinc-400">
-                        РџРѕРєР° РЅРёРєС‚Рѕ РЅРµ СЂР°СЃРєСЂС‹Р» РЅРё РѕРґРЅРѕРіРѕ С„Р°РєС‚Р°.
+                        Пока никто не раскрыл ни одного факта.
                       </div>
                     ) : (
                       game.revealedFacts.map((fact, i) => (
@@ -1069,10 +1069,10 @@ export default function App() {
                         transition={{ delay: 0.3, type: "spring" }}
                       >
                         <Badge className="rounded-full px-3 py-1 text-sm bg-red-600/90 text-white border-0">
-                          РРіСЂР° Р·Р°РІРµСЂС€РµРЅР°
+                          Игра завершена
                         </Badge>
                       </motion.div>
-                      <h1 className="text-3xl font-bold pt-2">Р’РµСЂРґРёРєС‚ СЃСѓРґР°</h1>
+                      <h1 className="text-3xl font-bold pt-2">Вердикт суда</h1>
                     </div>
                     <motion.div
                       initial={{ opacity: 0, y: 16 }}
@@ -1080,7 +1080,7 @@ export default function App() {
                       transition={{ delay: 0.25 }}
                       className="bg-zinc-800/60 rounded-2xl p-6 space-y-1"
                     >
-                      <div className="text-sm text-zinc-400">Р РµС€РµРЅРёРµ СЃСѓРґСЊРё</div>
+                      <div className="text-sm text-zinc-400">Решение судьи</div>
                       <div className="text-2xl font-bold text-red-400">
                         {game.verdict}
                       </div>
@@ -1093,7 +1093,7 @@ export default function App() {
                     >
                       <div className="bg-zinc-800/40 rounded-2xl p-4">
                         <div className="text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-2">
-                          Р РµР°Р»СЊРЅР°СЏ РїСЂР°РІРґР° РґРµР»Р°
+                          Реальная правда дела
                         </div>
                         <div className="text-sm text-zinc-300">
                           {game.caseData.truth}
@@ -1116,7 +1116,7 @@ export default function App() {
                         onClick={finalExit}
                         className="w-full h-12 rounded-xl text-base bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0"
                       >
-                        Р’С‹Р№С‚Рё РІ РіР»Р°РІРЅРѕРµ РјРµРЅСЋ
+                        Выйти в главное меню
                       </Button>
                     </motion.div>
                   </CardContent>
@@ -1158,7 +1158,7 @@ export default function App() {
                 exit={{ opacity: 0 }}
                 className="bg-green-500/15 border border-green-500/40 text-green-300 rounded-xl px-4 py-3 text-sm font-medium"
               >
-                вњ“ {rejoinAlert}
+                ✓ {rejoinAlert}
               </motion.div>
             )}
           </AnimatePresence>
@@ -1172,7 +1172,7 @@ export default function App() {
                       {game.caseData.mode}
                     </Badge>
                     <span>{game.caseData.title}</span>
-                    <span className="text-zinc-600">вЂў РљРѕРјРЅР°С‚Р° {game.code}</span>
+                    <span className="text-zinc-600">• Комната {game.code}</span>
                   </div>
                   <h1 className="text-3xl md:text-4xl font-bold">
                     {game.caseData.description}
@@ -1189,7 +1189,7 @@ export default function App() {
                       transition={{ duration: 0.25 }}
                       className="text-sm font-medium"
                     >
-                      Р­С‚Р°Рї: {currentStage}
+                      Этап: {currentStage}
                     </motion.div>
                   </AnimatePresence>
                   <Progress
@@ -1205,7 +1205,7 @@ export default function App() {
                           onClick={retreatStage}
                           disabled={game.stageIndex <= 0 || game.finished}
                         >
-                          в†ђ РџСЂРµРґ.
+                          ← Пред.
                         </Button>
                         <Button
                           variant="secondary"
@@ -1216,7 +1216,7 @@ export default function App() {
                             game.finished
                           }
                         >
-                          РЎР»РµРґ. в†’
+                          След. →
                         </Button>
                       </>
                     )}
@@ -1225,7 +1225,7 @@ export default function App() {
                       className="rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
                       onClick={resetAll}
                     >
-                      Р’С‹Р№С‚Рё
+                      Выйти
                     </Button>
                   </div>
                 </div>
@@ -1234,7 +1234,7 @@ export default function App() {
           </Card>
 
           <div className="grid xl:grid-cols-[1.1fr_1.1fr_0.9fr] gap-6">
-            <InfoBlock title="Р’Р°С€Р° СЂРѕР»СЊ" icon={<Shield className="w-5 h-5" />}>
+            <InfoBlock title="Ваша роль" icon={<Shield className="w-5 h-5" />}>
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
                   <Avatar src={avatar} name={game.me.name} size={44} />
@@ -1246,13 +1246,13 @@ export default function App() {
                   </div>
                 </div>
                 <div>
-                  <div className="font-semibold mb-1">Р¦РµР»СЊ</div>
+                  <div className="font-semibold mb-1">Цель</div>
                   <p className="text-sm text-zinc-400">{game.me.goal}</p>
                 </div>
                 <Separator />
                 <div>
                   <div className="font-semibold mb-2 text-sm">
-                    Р’СЃРµ СѓС‡Р°СЃС‚РЅРёРєРё
+                    Все участники
                   </div>
                   <div className="space-y-1">
                     {game.players.map((p) => (
@@ -1269,7 +1269,7 @@ export default function App() {
               </div>
             </InfoBlock>
 
-            <InfoBlock title="РЈР»РёРєРё РґРµР»Р°" icon={<Eye className="w-5 h-5" />}>
+            <InfoBlock title="Улики дела" icon={<Eye className="w-5 h-5" />}>
               <div className="space-y-3">
                 {game.caseData.evidence.map((item, index) => (
                   <motion.div
@@ -1287,7 +1287,7 @@ export default function App() {
               </div>
             </InfoBlock>
 
-            <InfoBlock title="Р’РµСЂРґРёРєС‚" icon={<Gavel className="w-5 h-5" />}>
+            <InfoBlock title="Вердикт" icon={<Gavel className="w-5 h-5" />}>
               <div className="space-y-3">
                 {isJudge ? (
                   <>
@@ -1295,11 +1295,11 @@ export default function App() {
                       className={`text-sm ${game.stageIndex < stages.length - 1 ? "text-zinc-500" : "text-zinc-400"}`}
                     >
                       {game.stageIndex < stages.length - 1
-                        ? `Р”РѕСЃС‚СѓРїРЅРѕ РЅР° СЌС‚Р°РїРµ В«${stages[stages.length - 1]}В»`
-                        : "Р¤РёРЅР°Р»СЊРЅС‹Р№ СЌС‚Р°Рї. Р’С‹РЅРµСЃРёС‚Рµ СЂРµС€РµРЅРёРµ."}
+                        ? `Доступно на этапе «${stages[stages.length - 1]}»`
+                        : "Финальный этап. Вынесите решение."}
                     </div>
                     {(
-                      ["Р’РёРЅРѕРІРµРЅ", "РќРµ РІРёРЅРѕРІРµРЅ", "Р§Р°СЃС‚РёС‡РЅРѕ РІРёРЅРѕРІРµРЅ"] as const
+                      ["Виновен", "Не виновен", "Частично виновен"] as const
                     ).map((v, i) => (
                       <motion.div
                         key={v}
@@ -1324,11 +1324,11 @@ export default function App() {
                   </>
                 ) : (
                   <div className="text-sm text-zinc-400">
-                    Р’РµСЂРґРёРєС‚ РІС‹РЅРѕСЃРёС‚ СЃСѓРґСЊСЏ
-                    {judgePlayer ? ` вЂ” ${judgePlayer.name}` : ""}.
+                    Вердикт выносит судья
+                    {judgePlayer ? ` — ${judgePlayer.name}` : ""}.
                     {game.stageIndex < stages.length - 1 && (
                       <span className="block mt-1 text-zinc-500">
-                        Р”РѕР¶РґРёС‚РµСЃСЊ РїРѕСЃР»РµРґРЅРµРіРѕ СЌС‚Р°РїР°.
+                        Дождитесь последнего этапа.
                       </span>
                     )}
                   </div>
@@ -1341,7 +1341,7 @@ export default function App() {
             className={`grid gap-6 ${isJudge ? "xl:grid-cols-2" : "xl:grid-cols-[1fr_1fr_1fr_1fr]"}`}
           >
             <InfoBlock
-              title="Р Р°СЃРєСЂС‹С‚С‹Рµ С„Р°РєС‚С‹"
+              title="Раскрытые факты"
               icon={<Eye className="w-5 h-5" />}
               action={
                 game.revealedFacts.length > 0 ? (
@@ -1351,7 +1351,7 @@ export default function App() {
                     className="text-xs text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 rounded-lg h-7 px-2"
                     onClick={() => setShowFactHistory(true)}
                   >
-                    РСЃС‚РѕСЂРёСЏ ({game.revealedFacts.length})
+                    История ({game.revealedFacts.length})
                   </Button>
                 ) : undefined
               }
@@ -1359,7 +1359,7 @@ export default function App() {
               <div className="space-y-3 min-h-[80px]">
                 {visibleFacts.length === 0 ? (
                   <div className="text-sm text-zinc-400">
-                    РџРѕРєР° РЅРёРєС‚Рѕ РЅРµ СЂР°СЃРєСЂС‹Р» РЅРё РѕРґРЅРѕРіРѕ С„Р°РєС‚Р°.
+                    Пока никто не раскрыл ни одного факта.
                   </div>
                 ) : (
                   <AnimatePresence mode="popLayout">
@@ -1396,13 +1396,13 @@ export default function App() {
 
             {!isJudge && (
               <InfoBlock
-                title="Р’Р°С€Рё С„Р°РєС‚С‹"
+                title="Ваши факты"
                 icon={<AlertCircle className="w-5 h-5" />}
               >
                 <div className="space-y-3">
                   {game.me.facts.length === 0 ? (
                     <div className="text-sm text-zinc-400">
-                      РЈ РІР°СЃ РЅРµС‚ С„Р°РєС‚РѕРІ РґР»СЏ СЂР°СЃРєСЂС‹С‚РёСЏ.
+                      У вас нет фактов для раскрытия.
                     </div>
                   ) : (
                     game.me.facts.map((fact) => (
@@ -1420,7 +1420,7 @@ export default function App() {
                                   : "bg-zinc-800 text-zinc-100 border border-zinc-700"
                               }
                             >
-                              {fact.revealed ? "Р Р°СЃРєСЂС‹С‚" : "РЎРєСЂС‹С‚"}
+                              {fact.revealed ? "Раскрыт" : "Скрыт"}
                             </Badge>
                             <motion.div
                               whileHover={{ scale: 1.04 }}
@@ -1437,7 +1437,7 @@ export default function App() {
                                   isOpeningSpeechFactLimitReached
                                 }
                               >
-                                Р Р°СЃРєСЂС‹С‚СЊ
+                                Раскрыть
                               </Button>
                             </motion.div>
                           </div>
@@ -1451,7 +1451,7 @@ export default function App() {
 
             {!isJudge && (
               <InfoBlock
-                title="Р’Р°С€Рё РєР°СЂС‚С‹ РјРµС…Р°РЅРёРє"
+                title="Ваши карты механик"
                 icon={<Scale className="w-5 h-5" />}
               >
                 <div className="space-y-3">
@@ -1475,7 +1475,7 @@ export default function App() {
                                 : "bg-red-600 text-white border-0"
                             }
                           >
-                            {card.used ? "РСЃРїРѕР»СЊР·РѕРІР°РЅР°" : "Р“РѕС‚РѕРІР°"}
+                            {card.used ? "Использована" : "Готова"}
                           </Badge>
                           <motion.div
                             whileHover={{ scale: 1.04 }}
@@ -1488,7 +1488,7 @@ export default function App() {
                               onClick={() => useCard(card.id)}
                               disabled={card.used || game.finished || isPreparationStage}
                             >
-                              РџСЂРёРјРµРЅРёС‚СЊ
+                              Применить
                             </Button>
                           </motion.div>
                         </div>
@@ -1500,13 +1500,13 @@ export default function App() {
             )}
 
             <InfoBlock
-              title="Р–СѓСЂРЅР°Р» РјРµС…Р°РЅРёРє"
+              title="Журнал механик"
               icon={<Sparkles className="w-5 h-5" />}
             >
               <div className="space-y-3 min-h-[80px]">
                 {visibleCards.length === 0 ? (
                   <div className="text-sm text-zinc-400">
-                    РџРѕРєР° РЅРё РѕРґРЅР° РєР°СЂС‚Р° РЅРµ Р±С‹Р»Р° РёСЃРїРѕР»СЊР·РѕРІР°РЅР°.
+                    Пока ни одна карта не была использована.
                   </div>
                 ) : (
                   <AnimatePresence mode="popLayout">
@@ -1554,7 +1554,7 @@ export default function App() {
         transition={{ repeat: Infinity, duration: 1.8 }}
         className="text-zinc-400 text-sm"
       >
-        Р—Р°РіСЂСѓР·РєР°...
+        Загрузка...
       </motion.div>
     </div>
   );
