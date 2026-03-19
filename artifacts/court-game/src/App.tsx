@@ -1017,6 +1017,14 @@ export default function App() {
     const judgePlayer = game.players.find((p) => p.roleKey === "judge");
     const visibleFacts = game.revealedFacts.slice(-4);
     const visibleCards = game.usedCards.slice(-4);
+    const latestRevealedFactId =
+      game.revealedFacts.length > 0
+        ? game.revealedFacts[game.revealedFacts.length - 1].id
+        : null;
+    const latestUsedCardId =
+      game.usedCards.length > 0
+        ? game.usedCards[game.usedCards.length - 1].id
+        : null;
     const isPreparationStage = game.stageIndex === 0;
     const isOpeningSpeechStage = game.stageIndex === 1;
     const openingSpeechRevealedFacts = game.revealedFacts.filter(
@@ -1428,7 +1436,9 @@ export default function App() {
                   </div>
                 ) : (
                   <AnimatePresence mode="popLayout">
-                    {visibleFacts.map((fact) => (
+                    {visibleFacts.map((fact) => {
+                      const isLatestFact = fact.id === latestRevealedFactId;
+                      return (
                       <motion.div
                         key={fact.id}
                         variants={entryVariants}
@@ -1437,7 +1447,13 @@ export default function App() {
                         exit="exit"
                         layout
                       >
-                        <Card className="rounded-2xl border-dashed border-zinc-700 bg-zinc-900/80 text-zinc-100">
+                        <Card
+                          className={
+                            isLatestFact
+                              ? "rounded-2xl border border-red-500/70 bg-red-950/25 text-zinc-100 ring-1 ring-red-500/40 shadow-[0_0_24px_rgba(220,38,38,0.25)] animate-pulse"
+                              : "rounded-2xl border-dashed border-zinc-700 bg-zinc-900/80 text-zinc-100"
+                          }
+                        >
                           <CardContent className="p-4">
                             <div className="flex items-center justify-between gap-3 mb-2">
                               <div className="font-semibold text-sm">
@@ -1453,7 +1469,8 @@ export default function App() {
                           </CardContent>
                         </Card>
                       </motion.div>
-                    ))}
+                      );
+                    })}
                   </AnimatePresence>
                 )}
               </div>
@@ -1575,7 +1592,9 @@ export default function App() {
                   </div>
                 ) : (
                   <AnimatePresence mode="popLayout">
-                    {visibleCards.map((entry) => (
+                    {visibleCards.map((entry) => {
+                      const isLatestCard = entry.id === latestUsedCardId;
+                      return (
                       <motion.div
                         key={entry.id}
                         variants={entryVariants}
@@ -1584,7 +1603,13 @@ export default function App() {
                         exit="exit"
                         layout
                       >
-                        <Card className="rounded-2xl border-dashed border-zinc-700 bg-zinc-900/80 text-zinc-100">
+                        <Card
+                          className={
+                            isLatestCard
+                              ? "rounded-2xl border border-cyan-500/70 bg-cyan-950/20 text-zinc-100 ring-1 ring-cyan-500/40 shadow-[0_0_24px_rgba(34,211,238,0.25)] animate-pulse"
+                              : "rounded-2xl border-dashed border-zinc-700 bg-zinc-900/80 text-zinc-100"
+                          }
+                        >
                           <CardContent className="p-4">
                             <div className="flex items-center justify-between gap-3 mb-2">
                               <div className="font-semibold text-sm">
@@ -1601,7 +1626,8 @@ export default function App() {
                           </CardContent>
                         </Card>
                       </motion.div>
-                    ))}
+                      );
+                    })}
                   </AnimatePresence>
                 )}
               </div>
