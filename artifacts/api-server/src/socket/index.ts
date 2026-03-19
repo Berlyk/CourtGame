@@ -191,6 +191,60 @@ export function setupSocket(httpServer: HttpServer) {
       });
     });
 
+    socket.on(
+      "kick_player",
+      ({ code, playerId, targetPlayerId }: { code: string; playerId: string; targetPlayerId: string }) => {
+        const room = getRoom(code);
+        if (!room) {
+          socket.emit("error", { message: "Room not found." });
+          return;
+        }
+        if (room.hostId !== playerId) {
+          socket.emit("error", { message: "Only host can kick players." });
+          return;
+        }
+        if (room.started || room.game) {
+          socket.emit("error", { message: "Kick is available only in lobby before game starts." });
+          return;
+        }
+        if (targetPlayerId === room.hostId) {
+          socket.emit("error", { message: "Host cannot be kicked." });
+          return;
+        }
+
+        const targetPlayer = room.players.find((p: any) => p.id === targetPlayerId);
+        if (!targetPlayer) {
+          socket.emit("error", { message: "Player not found in room." });
+          return;
+        }
+
+        const targetSocketId = targetPlayer.socketId;
+        const updatedRoom = removePlayer(code, targetPlayerId);
+
+        const mappingEntry = [...socketToRoom.entries()].find(
+          ([, value]) => value.roomCode === code && value.playerId === targetPlayerId
+        );
+        if (mappingEntry) {
+          socketToRoom.delete(mappingEntry[0]);
+        }
+        if (targetSocketId) {
+          socketToRoom.delete(targetSocketId);
+          io.to(targetSocketId).emit("kicked", {
+            message: "You were kicked from the room by the host."
+          });
+          io.in(targetSocketId).socketsLeave(code);
+        }
+
+        if (updatedRoom) {
+          io.to(code).emit("room_updated", {
+            players: updatedRoom.players.map((p: any) => ({ id: p.id, name: p.name })),
+            hostId: updatedRoom.hostId,
+            isHostJudge: updatedRoom.isHostJudge
+          });
+        }
+      }
+    );
+
     socket.on("reveal_fact", ({ code, playerId, factId }: { code: string; playerId: string; factId: string }) => {
       const room = getRoom(code);
       if (!room?.game) return;
