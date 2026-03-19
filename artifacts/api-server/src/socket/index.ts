@@ -12,7 +12,8 @@ import {
   nextStage,
   prevStage,
   setVerdict,
-  getRoom
+  getRoom,
+  setHostJudge
 } from "./roomManager.js";
 
 function randomCode(): string {
@@ -26,7 +27,8 @@ function getRoomState(room: any, playerId: string) {
       code: room.code,
       hostId: room.hostId,
       players: room.players.map((p: any) => ({ id: p.id, name: p.name })),
-      started: room.started
+      started: room.started,
+      isHostJudge: room.isHostJudge
     };
   }
 
@@ -171,6 +173,17 @@ export function setupSocket(httpServer: HttpServer) {
             state: getRoomState(updatedRoom, p.id)
           });
         }
+      });
+    });
+
+    socket.on("set_host_judge", ({ code, playerId, isHostJudge }: { code: string; playerId: string; isHostJudge: boolean }) => {
+      const room = getRoom(code);
+      if (!room || room.hostId !== playerId) return;
+      setHostJudge(code, isHostJudge);
+      socket.to(code).emit("room_updated", {
+        players: room.players.map((p: any) => ({ id: p.id, name: p.name })),
+        hostId: room.hostId,
+        isHostJudge
       });
     });
 
