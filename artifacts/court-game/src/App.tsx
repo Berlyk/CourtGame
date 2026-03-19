@@ -1150,7 +1150,8 @@ export default function App() {
     const isWitness = game.me.roleKey === "witness";
     const isObserverRole = isJudge || isWitness;
     const judgePlayer = game.players.find((p) => p.roleKey === "judge");
-    const visibleFacts = game.revealedFacts.slice(-4);
+    const journalItemsLimit = isObserverRole ? 3 : 4;
+    const visibleFacts = game.revealedFacts.slice(-journalItemsLimit);
     const visibleCards = game.usedCards.slice(-3);
     const latestRevealedFactId =
       game.revealedFacts.length > 0
