@@ -192,10 +192,8 @@ function PlayerCard({
           <div className="flex items-center gap-3 min-w-0">
             <Avatar src={player.avatar ?? null} name={player.name} size={52} />
             <div className="min-w-0">
-              <div className="font-semibold text-xl md:text-2xl leading-tight truncate">
-                {player.name}
-              </div>
-              <div className="text-base md:text-lg text-zinc-300 leading-tight mt-1">
+              <div className="font-semibold text-base truncate">{player.name}</div>
+              <div className="text-sm text-zinc-400">
                 {isHost ? "Ведущий комнаты" : "Игрок"}
               </div>
             </div>
