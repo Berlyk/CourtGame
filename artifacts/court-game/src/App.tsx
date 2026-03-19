@@ -264,9 +264,6 @@ export default function App() {
   const [rejoinAlert, setRejoinAlert] = useState("");
   const [kickedAlert, setKickedAlert] = useState("");
   const [copiedRoomCode, setCopiedRoomCode] = useState(false);
-  const [roomActionLoading, setRoomActionLoading] = useState<
-    "create" | "join" | null
-  >(null);
   const [hasSession, setHasSession] = useState(false);
 
   const [myId, setMyId] = useState<string | null>(null);
@@ -291,7 +288,6 @@ export default function App() {
         socket.emit("rejoin_room", {
           code: sessionCode,
           playerName: savedName,
-          avatar: savedAvatar,
         });
       }
     } else {
@@ -303,10 +299,16 @@ export default function App() {
     socket.on(
       "room_joined",
       ({ playerId, state }: { playerId: string; state: any }) => {
-        setRoomActionLoading(null);
         setMyId(playerId);
         localStorage.setItem("court_session", state.code);
         setHasSession(true);
+        if (avatar) {
+          socket.emit("update_avatar", {
+            code: state.code,
+            playerId,
+            avatar,
+          });
+        }
         if (state.type === "room") {
           setRoom(state as RoomState);
           setIsHostJudge(state.isHostJudge ?? false);
@@ -345,14 +347,12 @@ export default function App() {
     );
 
     socket.on("rejoin_failed", () => {
-      setRoomActionLoading(null);
       localStorage.removeItem("court_session");
       setHasSession(false);
       setScreen("home");
     });
 
     socket.on("kicked", () => {
-      setRoomActionLoading(null);
       localStorage.removeItem("court_session");
       setHasSession(false);
       setRoom(null);
@@ -413,7 +413,6 @@ export default function App() {
     );
 
     socket.on("error", ({ message }: { message: string }) => {
-      setRoomActionLoading(null);
       setError(message);
       setTimeout(() => setError(""), 4000);
     });
@@ -434,37 +433,30 @@ export default function App() {
       socket.off("verdict_set");
       socket.off("error");
     };
-  }, [socket]);
+  }, [socket, avatar]);
 
   const createRoom = useCallback(() => {
-    if (roomActionLoading) return;
     const name = playerName.trim() || "Игрок";
     localStorage.setItem("court_nickname", name);
-    setRoomActionLoading("create");
-    socket.emit("create_room", { playerName: name, avatar });
-  }, [socket, playerName, avatar, roomActionLoading]);
+    socket.emit("create_room", { playerName: name });
+  }, [socket, playerName]);
 
   const joinRoom = useCallback(() => {
-    if (roomActionLoading) return;
     if (!joinCode.trim()) return;
     const name = playerName.trim() || "Игрок";
-    setRoomActionLoading("join");
     socket.emit("join_room", {
       code: joinCode.trim().toUpperCase(),
       playerName: name,
-      avatar,
     });
-  }, [socket, joinCode, playerName, avatar, roomActionLoading]);
+  }, [socket, joinCode, playerName]);
 
   const reconnect = useCallback(() => {
     const savedName = localStorage.getItem("court_nickname");
     const sessionCode = localStorage.getItem("court_session");
-    const savedAvatar = localStorage.getItem("court_avatar");
     if (savedName && sessionCode) {
       socket.emit("rejoin_room", {
         code: sessionCode,
         playerName: savedName,
-        avatar: savedAvatar,
       });
     }
   }, [socket]);
@@ -537,7 +529,6 @@ export default function App() {
     setRejoinAlert("");
     setKickedAlert("");
     setCopiedRoomCode(false);
-    setRoomActionLoading(null);
     setIsHostJudge(false);
   }, [socket]);
 
@@ -552,7 +543,6 @@ export default function App() {
     setJoinCode("");
     setKickedAlert("");
     setCopiedRoomCode(false);
-    setRoomActionLoading(null);
   }, [socket]);
 
   const setupNickname = useCallback(() => {
@@ -838,13 +828,10 @@ export default function App() {
                   >
                     <Button
                       onClick={createRoom}
-                      disabled={roomActionLoading !== null}
                       className="w-full h-12 rounded-xl text-base gap-2 bg-red-600 hover:bg-red-500 text-white border-0"
                     >
                       <UserPlus className="w-4 h-4" />
-                      {roomActionLoading === "create"
-                        ? "Создание..."
-                        : "Создать комнату"}
+                      Создать комнату
                     </Button>
                   </motion.div>
 
@@ -865,12 +852,10 @@ export default function App() {
                       <Button
                         onClick={joinRoom}
                         variant="secondary"
-                        disabled={
-                          roomActionLoading !== null || !joinCode.trim()
-                        }
+                        disabled={!joinCode.trim()}
                         className="h-12 rounded-xl px-6 bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0"
                       >
-                        {roomActionLoading === "join" ? "Вход..." : "Войти"}
+                        Войти
                       </Button>
                     </motion.div>
                   </div>
@@ -890,7 +875,6 @@ export default function App() {
                           <Button
                             onClick={reconnect}
                             variant="outline"
-                            disabled={roomActionLoading !== null}
                             className="w-full h-12 rounded-xl border-red-600/50 text-red-400 hover:bg-red-600/10 hover:text-red-300 gap-2"
                           >
                             ↩ Переподключиться к игре
