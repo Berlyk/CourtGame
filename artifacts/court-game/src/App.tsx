@@ -1450,7 +1450,7 @@ export default function App() {
                         <Card
                           className={
                             isLatestFact
-                              ? "rounded-2xl border border-red-500/70 bg-red-950/25 text-zinc-100 ring-1 ring-red-500/40 shadow-[0_0_24px_rgba(220,38,38,0.25)] animate-pulse"
+                              ? "rounded-2xl border border-red-500/35 bg-red-950/15 text-zinc-100 ring-1 ring-red-500/20 shadow-[0_0_10px_rgba(220,38,38,0.12)]"
                               : "rounded-2xl border-dashed border-zinc-700 bg-zinc-900/80 text-zinc-100"
                           }
                         >
@@ -1459,7 +1459,13 @@ export default function App() {
                               <div className="font-semibold text-sm">
                                 {fact.owner}
                               </div>
-                              <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">
+                              <Badge
+                                className={
+                                  isLatestFact
+                                    ? "bg-red-600/20 text-red-100 border border-red-500/30"
+                                    : "bg-zinc-800 text-zinc-100 border border-zinc-700"
+                                }
+                              >
                                 {fact.ownerRole}
                               </Badge>
                             </div>
@@ -1606,7 +1612,7 @@ export default function App() {
                         <Card
                           className={
                             isLatestCard
-                              ? "rounded-2xl border border-cyan-500/70 bg-cyan-950/20 text-zinc-100 ring-1 ring-cyan-500/40 shadow-[0_0_24px_rgba(34,211,238,0.25)] animate-pulse"
+                              ? "rounded-2xl border border-red-500/35 bg-red-950/15 text-zinc-100 ring-1 ring-red-500/20 shadow-[0_0_10px_rgba(220,38,38,0.12)]"
                               : "rounded-2xl border-dashed border-zinc-700 bg-zinc-900/80 text-zinc-100"
                           }
                         >
@@ -1615,7 +1621,13 @@ export default function App() {
                               <div className="font-semibold text-sm">
                                 {entry.owner}
                               </div>
-                              <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">
+                              <Badge
+                                className={
+                                  isLatestCard
+                                    ? "bg-red-600/20 text-red-100 border border-red-500/30"
+                                    : "bg-zinc-800 text-zinc-100 border border-zinc-700"
+                                }
+                              >
                                 {entry.ownerRole}
                               </Badge>
                             </div>
