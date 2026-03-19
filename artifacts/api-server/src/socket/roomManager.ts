@@ -97,6 +97,31 @@ export function getRoom(code: string): Room | undefined {
   return rooms.get(code);
 }
 
+export function updatePlayerAvatar(
+  code: string,
+  playerId: string,
+  avatar?: string
+): Room | null {
+  const room = rooms.get(code);
+  if (!room) return null;
+
+  const normalizedAvatar = avatar || undefined;
+
+  const lobbyPlayer = room.players.find((p) => p.id === playerId);
+  if (lobbyPlayer) {
+    lobbyPlayer.avatar = normalizedAvatar;
+  }
+
+  if (room.game) {
+    const gamePlayer = room.game.players.find((p) => p.id === playerId);
+    if (gamePlayer) {
+      gamePlayer.avatar = normalizedAvatar;
+    }
+  }
+
+  return room;
+}
+
 export function isNameTaken(code: string, name: string): boolean {
   const room = rooms.get(code);
   if (!room) return false;
