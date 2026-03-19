@@ -69,6 +69,7 @@ const entryVariants = {
 interface PlayerInfo {
   id: string;
   name: string;
+  avatar?: string;
   roleKey?: string;
   roleTitle?: string;
 }
@@ -88,6 +89,7 @@ interface Card_ {
 
 interface RevealedFact {
   id: string;
+  ownerId?: string;
   text: string;
   owner: string;
   ownerRole: string;
@@ -96,6 +98,7 @@ interface RevealedFact {
 
 interface UsedCard {
   id: string;
+  ownerId?: string;
   owner: string;
   ownerRole: string;
   name: string;
@@ -105,6 +108,7 @@ interface UsedCard {
 interface MyPlayer {
   id: string;
   name: string;
+  avatar?: string;
   roleKey: string;
   roleTitle: string;
   goal: string;
@@ -185,10 +189,13 @@ function PlayerCard({
     <motion.div variants={cardVariants} initial="initial" animate="animate">
       <Card className="rounded-2xl shadow-sm bg-zinc-900/90 border-zinc-800 text-zinc-100">
         <CardContent className="p-4 flex items-center justify-between gap-3">
-          <div>
-            <div className="font-semibold text-base">{player.name}</div>
-            <div className="text-sm text-zinc-400">
-              {isHost ? "Ведущий комнаты" : "Игрок"}
+          <div className="flex items-center gap-3 min-w-0">
+            <Avatar src={player.avatar ?? null} name={player.name} size={36} />
+            <div className="min-w-0">
+              <div className="font-semibold text-base truncate">{player.name}</div>
+              <div className="text-sm text-zinc-400">
+                {isHost ? "Ведущий комнаты" : "Игрок"}
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -256,6 +263,7 @@ export default function App() {
   const [disconnectAlert, setDisconnectAlert] = useState("");
   const [rejoinAlert, setRejoinAlert] = useState("");
   const [kickedAlert, setKickedAlert] = useState("");
+  const [copiedRoomCode, setCopiedRoomCode] = useState(false);
   const [hasSession, setHasSession] = useState(false);
 
   const [myId, setMyId] = useState<string | null>(null);
@@ -280,6 +288,7 @@ export default function App() {
         socket.emit("rejoin_room", {
           code: sessionCode,
           playerName: savedName,
+          avatar: savedAvatar,
         });
       }
     } else {
@@ -346,6 +355,7 @@ export default function App() {
       setJoinCode("");
       setDisconnectAlert("");
       setRejoinAlert("");
+      setCopiedRoomCode(false);
       setIsHostJudge(false);
       setScreen("home");
       setKickedAlert(
@@ -422,8 +432,8 @@ export default function App() {
   const createRoom = useCallback(() => {
     const name = playerName.trim() || "Игрок";
     localStorage.setItem("court_nickname", name);
-    socket.emit("create_room", { playerName: name });
-  }, [socket, playerName]);
+    socket.emit("create_room", { playerName: name, avatar });
+  }, [socket, playerName, avatar]);
 
   const joinRoom = useCallback(() => {
     if (!joinCode.trim()) return;
@@ -431,14 +441,20 @@ export default function App() {
     socket.emit("join_room", {
       code: joinCode.trim().toUpperCase(),
       playerName: name,
+      avatar,
     });
-  }, [socket, joinCode, playerName]);
+  }, [socket, joinCode, playerName, avatar]);
 
   const reconnect = useCallback(() => {
     const savedName = localStorage.getItem("court_nickname");
     const sessionCode = localStorage.getItem("court_session");
+    const savedAvatar = localStorage.getItem("court_avatar");
     if (savedName && sessionCode) {
-      socket.emit("rejoin_room", { code: sessionCode, playerName: savedName });
+      socket.emit("rejoin_room", {
+        code: sessionCode,
+        playerName: savedName,
+        avatar: savedAvatar,
+      });
     }
   }, [socket]);
 
@@ -509,6 +525,7 @@ export default function App() {
     setDisconnectAlert("");
     setRejoinAlert("");
     setKickedAlert("");
+    setCopiedRoomCode(false);
     setIsHostJudge(false);
   }, [socket]);
 
@@ -522,6 +539,7 @@ export default function App() {
     setMyId(null);
     setJoinCode("");
     setKickedAlert("");
+    setCopiedRoomCode(false);
   }, [socket]);
 
   const setupNickname = useCallback(() => {
@@ -547,7 +565,21 @@ export default function App() {
   );
 
   const copyCode = useCallback((code: string) => {
-    navigator.clipboard?.writeText(code);
+    if (!navigator.clipboard) {
+      setError("Не удалось скопировать код комнаты.");
+      setTimeout(() => setError(""), 4000);
+      return;
+    }
+    navigator.clipboard
+      .writeText(code)
+      .then(() => {
+        setCopiedRoomCode(true);
+        setTimeout(() => setCopiedRoomCode(false), 2000);
+      })
+      .catch(() => {
+        setError("Не удалось скопировать код комнаты.");
+        setTimeout(() => setError(""), 4000);
+      });
   }, []);
 
   if (screen === "setup") {
@@ -896,7 +928,7 @@ export default function App() {
                     onClick={() => copyCode(room.code)}
                   >
                     <Copy className="w-4 h-4" />
-                    Скопировать
+                    {copiedRoomCode ? "Скопировано" : "Скопировать"}
                   </Button>
                   {myId === room.hostId && (
                     <motion.div
@@ -1083,30 +1115,42 @@ export default function App() {
                         Пока никто не раскрыл ни одного факта.
                       </div>
                     ) : (
-                      game.revealedFacts.map((fact, i) => (
-                        <motion.div
-                          key={fact.id}
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: i * 0.04 }}
-                        >
-                          <Card className="rounded-2xl border-dashed border-zinc-700 bg-zinc-800/60 text-zinc-100">
-                            <CardContent className="p-4">
-                              <div className="flex items-center justify-between gap-3 mb-2">
-                                <div className="font-semibold text-sm">
-                                  {fact.owner}
+                      game.revealedFacts.map((fact, i) => {
+                        const ownerPlayer = game.players.find(
+                          (p) => p.id === fact.ownerId,
+                        );
+                        return (
+                          <motion.div
+                            key={fact.id}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: i * 0.04 }}
+                          >
+                            <Card className="rounded-2xl border-dashed border-zinc-700 bg-zinc-800/60 text-zinc-100">
+                              <CardContent className="p-4">
+                                <div className="flex items-center justify-between gap-3 mb-2">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <Avatar
+                                      src={ownerPlayer?.avatar ?? null}
+                                      name={fact.owner}
+                                      size={22}
+                                    />
+                                    <div className="font-semibold text-sm truncate">
+                                      {fact.owner}
+                                    </div>
+                                  </div>
+                                  <Badge className="bg-zinc-700 text-zinc-100 border border-zinc-600">
+                                    {fact.ownerRole}
+                                  </Badge>
                                 </div>
-                                <Badge className="bg-zinc-700 text-zinc-100 border border-zinc-600">
-                                  {fact.ownerRole}
-                                </Badge>
-                              </div>
-                              <div className="text-sm text-zinc-400">
-                                {fact.text}
-                              </div>
-                            </CardContent>
-                          </Card>
-                        </motion.div>
-                      ))
+                                <div className="text-sm text-zinc-400">
+                                  {fact.text}
+                                </div>
+                              </CardContent>
+                            </Card>
+                          </motion.div>
+                        );
+                      })
                     )}
                   </CardContent>
                 </Card>
@@ -1310,7 +1354,7 @@ export default function App() {
             <InfoBlock title="Ваша роль" icon={<Shield className="w-5 h-5" />}>
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
-                  <Avatar src={avatar} name={game.me.name} size={44} />
+                  <Avatar src={game.me.avatar ?? avatar} name={game.me.name} size={44} />
                   <div>
                     <div className="text-2xl font-bold">
                       {game.me.roleTitle}
@@ -1333,7 +1377,10 @@ export default function App() {
                         key={p.id}
                         className="flex items-center justify-between text-sm"
                       >
-                        <span className="text-zinc-300">{p.name}</span>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Avatar src={p.avatar ?? null} name={p.name} size={24} />
+                          <span className="text-zinc-300 truncate">{p.name}</span>
+                        </div>
                         <span className="text-zinc-500">{p.roleTitle}</span>
                       </div>
                     ))}
@@ -1438,6 +1485,9 @@ export default function App() {
                   <AnimatePresence mode="popLayout">
                     {visibleFacts.map((fact) => {
                       const isLatestFact = fact.id === latestRevealedFactId;
+                      const ownerPlayer = game.players.find(
+                        (p) => p.id === fact.ownerId,
+                      );
                       return (
                       <motion.div
                         key={fact.id}
@@ -1456,8 +1506,15 @@ export default function App() {
                         >
                           <CardContent className="p-4">
                             <div className="flex items-center justify-between gap-3 mb-2">
-                              <div className="font-semibold text-sm">
-                                {fact.owner}
+                              <div className="flex items-center gap-2 min-w-0">
+                                <Avatar
+                                  src={ownerPlayer?.avatar ?? null}
+                                  name={fact.owner}
+                                  size={22}
+                                />
+                                <div className="font-semibold text-sm truncate">
+                                  {fact.owner}
+                                </div>
                               </div>
                               <Badge
                                 className={
@@ -1600,6 +1657,9 @@ export default function App() {
                   <AnimatePresence mode="popLayout">
                     {visibleCards.map((entry) => {
                       const isLatestCard = entry.id === latestUsedCardId;
+                      const ownerPlayer = game.players.find(
+                        (p) => p.id === entry.ownerId,
+                      );
                       return (
                       <motion.div
                         key={entry.id}
@@ -1618,8 +1678,15 @@ export default function App() {
                         >
                           <CardContent className="p-4">
                             <div className="flex items-center justify-between gap-3 mb-2">
-                              <div className="font-semibold text-sm">
-                                {entry.owner}
+                              <div className="flex items-center gap-2 min-w-0">
+                                <Avatar
+                                  src={ownerPlayer?.avatar ?? null}
+                                  name={entry.owner}
+                                  size={22}
+                                />
+                                <div className="font-semibold text-sm truncate">
+                                  {entry.owner}
+                                </div>
                               </div>
                               <Badge
                                 className={
