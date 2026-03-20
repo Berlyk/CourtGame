@@ -108,6 +108,46 @@ function canRoleRevealFactsAtStage(roleKey: string | undefined, stageName: strin
   if (isCrossExaminationStage(stageName)) return true;
   return isRoleSpeechStage(roleKey, stageName);
 }
+
+function canPlayerRevealFactNow(room: any, playerId: string): boolean {
+  if (!room?.game) return false;
+
+  const currentStageName = getCurrentStageName(
+    room.game.stages,
+    room.game.stageIndex,
+  );
+  if (isPreparationStage(currentStageName)) return false;
+
+  const currentPlayer = room.game.players.find((p: any) => p.id === playerId);
+  if (!currentPlayer) return false;
+
+  if (!canRoleRevealFactsAtStage(currentPlayer.roleKey, currentStageName)) {
+    return false;
+  }
+
+  const isCurrentPlayerOpeningSpeech = isRoleOpeningSpeechStage(
+    currentPlayer.roleKey,
+    currentStageName,
+  );
+  if (!isCurrentPlayerOpeningSpeech) return true;
+
+  const revealedFactsOnThisOpeningStage = room.game.revealedFacts.filter(
+    (fact: any) =>
+      fact.ownerId === playerId && fact.stageIndex === room.game.stageIndex,
+  ).length;
+  return revealedFactsOnThisOpeningStage < 2;
+}
+
+function emitFactRevealPermissions(io: SocketIOServer, room: any) {
+  if (!room?.game) return;
+
+  room.game.players.forEach((player: any) => {
+    if (!player.socketId) return;
+    io.to(player.socketId).emit("fact_reveal_permission", {
+      canRevealFactsNow: canPlayerRevealFactNow(room, player.id),
+    });
+  });
+}
 function mapGamePlayers(players: any[]) {
   return players.map((p: any) => ({
     id: p.id,
@@ -153,7 +193,8 @@ function getRoomState(room: any, playerId: string) {
       roleTitle: myPlayer.roleTitle,
       goal: myPlayer.goal,
       facts: myPlayer.facts,
-      cards: myPlayer.cards
+      cards: myPlayer.cards,
+      canRevealFactsNow: canPlayerRevealFactNow(room, playerId),
     } : null
   };
 }
@@ -427,6 +468,7 @@ export function setupSocket(httpServer: HttpServer) {
       if (myPlayer) {
         io.to(myPlayer.socketId).emit("my_facts_updated", { facts: myPlayer.facts });
       }
+      emitFactRevealPermissions(io, updatedRoom);
     });
 
     socket.on("use_card", ({ code, playerId, cardId }: { code: string; playerId: string; cardId: string }) => {
@@ -468,6 +510,7 @@ export function setupSocket(httpServer: HttpServer) {
       if (!updatedRoom) return;
 
       io.to(code).emit("stage_updated", { stageIndex: updatedRoom.game!.stageIndex });
+      emitFactRevealPermissions(io, updatedRoom);
     });
 
     socket.on("prev_stage", ({ code, playerId }: { code: string; playerId: string }) => {
@@ -484,6 +527,7 @@ export function setupSocket(httpServer: HttpServer) {
       if (!updatedRoom) return;
 
       io.to(code).emit("stage_updated", { stageIndex: updatedRoom.game!.stageIndex });
+      emitFactRevealPermissions(io, updatedRoom);
     });
 
     socket.on("set_verdict", ({ code, playerId, verdict }: { code: string; playerId: string; verdict: string }) => {
@@ -547,3 +591,4 @@ export function setupSocket(httpServer: HttpServer) {
 
   return io;
 }
+
