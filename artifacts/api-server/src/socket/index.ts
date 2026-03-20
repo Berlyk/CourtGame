@@ -26,13 +26,12 @@ const PREPARATION_STAGE_MARKER = "подготов";
 const CROSS_EXAMINATION_STAGE_MARKERS = ["перекрест", "допрос"];
 const OPENING_STAGE_MARKERS = ["выступлен", "вступительн"];
 const CLOSING_STAGE_MARKERS = ["финальн", "заключительн"];
-const ROLE_STAGE_MARKERS: Record<string, string[]> = {
-  plaintiff: ["истц"],
-  defendant: ["ответчик"],
-  plaintiffLawyer: ["адвокат", "истц"],
-  defenseLawyer: ["адвокат", "ответчик"],
-  prosecutor: ["прокурор"],
-};
+type SpeechOwnerRole =
+  | "plaintiff"
+  | "defendant"
+  | "plaintiffLawyer"
+  | "defenseLawyer"
+  | "prosecutor";
 
 function normalizeStageName(stageName: string): string {
   return stageName.toLowerCase().replace(/ё/g, "е").trim();
@@ -71,31 +70,38 @@ function isClosingSpeechStage(stageName: string): boolean {
   );
 }
 
+function resolveSpeechOwnerRole(stageName: string): SpeechOwnerRole | null {
+  const normalizedStageName = normalizeStageName(stageName);
+  if (!normalizedStageName) return null;
+  const hasLawyer = normalizedStageName.includes("адвокат");
+  const hasPlaintiff = normalizedStageName.includes("истц");
+  const hasDefendant = normalizedStageName.includes("ответчик");
+  const hasProsecutor = normalizedStageName.includes("прокурор");
+
+  if (hasLawyer && hasPlaintiff) return "plaintiffLawyer";
+  if (hasLawyer && hasDefendant) return "defenseLawyer";
+  if (hasProsecutor) return "prosecutor";
+  if (hasPlaintiff) return "plaintiff";
+  if (hasDefendant) return "defendant";
+
+  return null;
+}
+
 function isRoleSpeechStage(roleKey: string | undefined, stageName: string): boolean {
   if (!roleKey || !stageName) return false;
 
-  const normalizedStageName = normalizeStageName(stageName);
-  const roleMarkers = ROLE_STAGE_MARKERS[roleKey];
-  if (!roleMarkers || !stageIncludesAll(normalizedStageName, roleMarkers)) {
-    return false;
-  }
+  const speechOwnerRole = resolveSpeechOwnerRole(stageName);
+  if (!speechOwnerRole || speechOwnerRole !== roleKey) return false;
 
   const isOpeningStage = isOpeningSpeechStage(stageName);
   const isClosingStage = isClosingSpeechStage(stageName);
-
   return isOpeningStage || isClosingStage;
 }
 
 function isRoleOpeningSpeechStage(roleKey: string | undefined, stageName: string): boolean {
   if (!roleKey || !stageName) return false;
-
-  const normalizedStageName = normalizeStageName(stageName);
-  const roleMarkers = ROLE_STAGE_MARKERS[roleKey];
-  if (!roleMarkers || !stageIncludesAll(normalizedStageName, roleMarkers)) {
-    return false;
-  }
-
-  return isOpeningSpeechStage(stageName);
+  const speechOwnerRole = resolveSpeechOwnerRole(stageName);
+  return !!speechOwnerRole && speechOwnerRole === roleKey && isOpeningSpeechStage(stageName);
 }
 
 function canRoleRevealFactsAtStage(roleKey: string | undefined, stageName: string): boolean {
