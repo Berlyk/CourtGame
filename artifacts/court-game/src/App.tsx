@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,9 +18,26 @@ import {
   AlertCircle,
   Sparkles,
   Camera,
+  CircleHelp,
+  Gamepad2,
+  Search,
+  Wrench,
 } from "lucide-react";
 import { getSocket } from "@/lib/socket";
 import { Switch } from "@/components/ui/switch";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 const stages = [
   "Подготовка",
@@ -65,6 +82,285 @@ const entryVariants = {
     transition: { duration: 0.22, ease: "easeIn" },
   },
 };
+
+interface DevLogEntry {
+  date: string;
+  version: string;
+  title: string;
+  changes: string[];
+}
+
+const DEVLOG_ENTRIES: DevLogEntry[] = [
+  {
+    date: "19.03.2026",
+    version: "Beta 0.2",
+    title: "Стабилизация лобби и расширение игровых механик",
+    changes: [
+      "Добавлены аватарки игроков с отображением в лобби и во время матча.",
+      "Добавлен переключатель «Я — Судья» для ведущего в лобби.",
+      "Добавлена роль наблюдателя «Свидетель» для подключения в уже идущий матч.",
+      "Ведущий может кикать игроков из лобби с уведомлением о кике.",
+      "Добавлена подсветка последнего раскрытого факта и последней механики.",
+      "Во вступительной речи ограничение: можно раскрыть не более 2 фактов.",
+      "На этапе «Подготовка» отключено раскрытие фактов и применение механик.",
+    ],
+  },
+];
+
+interface HelpTopic {
+  id: string;
+  category: string;
+  title: string;
+  content: string;
+  keywords: string[];
+}
+
+const HELP_TOPICS: HelpTopic[] = [
+  {
+    id: "role-judge",
+    category: "Роли",
+    title: "Судья",
+    content:
+      "Ведет процесс, контролирует этапы и выносит финальный вердикт.",
+    keywords: ["судья", "вердикт", "этапы", "роль"],
+  },
+  {
+    id: "role-prosecutor",
+    category: "Роли",
+    title: "Прокурор",
+    content:
+      "Строит линию обвинения, раскрывает факты и усиливает позицию своей стороны.",
+    keywords: ["прокурор", "обвинение", "роль"],
+  },
+  {
+    id: "role-plaintiff",
+    category: "Роли",
+    title: "Истец",
+    content:
+      "Формулирует требования и доказывает, почему позиция истца обоснована.",
+    keywords: ["истец", "требования", "роль"],
+  },
+  {
+    id: "role-defendant",
+    category: "Роли",
+    title: "Ответчик",
+    content:
+      "Защищает позицию, опровергает претензии и раскрывает выгодные факты.",
+    keywords: ["ответчик", "защита", "роль"],
+  },
+  {
+    id: "role-plaintiff-lawyer",
+    category: "Роли",
+    title: "Адвокат истца",
+    content:
+      "Поддерживает истца и выстраивает аргументацию в пользу его требований.",
+    keywords: ["адвокат истца", "истец", "роль"],
+  },
+  {
+    id: "role-defendant-lawyer",
+    category: "Роли",
+    title: "Адвокат ответчика",
+    content:
+      "Поддерживает ответчика и ищет слабые места в позиции оппонента.",
+    keywords: ["адвокат ответчика", "ответчик", "роль"],
+  },
+  {
+    id: "cards-what",
+    category: "Карты механик",
+    title: "Что это",
+    content:
+      "Карты механик — специальные эффекты, которые временно меняют правила реплики.",
+    keywords: ["карты механик", "что это", "механики"],
+  },
+  {
+    id: "cards-how",
+    category: "Карты механик",
+    title: "Как используются",
+    content:
+      "Нажмите «Применить» у карты. После применения она становится использованной.",
+    keywords: ["карты механик", "применить", "использование"],
+  },
+  {
+    id: "cards-when",
+    category: "Карты механик",
+    title: "Когда применяются",
+    content:
+      "На «Подготовке» карты недоступны. В остальных этапах — по ситуации и таймингу.",
+    keywords: ["карты механик", "когда", "подготовка"],
+  },
+  {
+    id: "facts-what",
+    category: "Факты",
+    title: "Что это",
+    content:
+      "Факты — это закрытая информация роли, которая раскрывается по ходу процесса.",
+    keywords: ["факты", "что это"],
+  },
+  {
+    id: "facts-reveal",
+    category: "Факты",
+    title: "Как раскрываются",
+    content:
+      "Факты раскрываются кнопкой «Раскрыть». На «Подготовке» запрещено раскрытие.",
+    keywords: ["факты", "раскрыть", "подготовка"],
+  },
+  {
+    id: "facts-impact",
+    category: "Факты",
+    title: "Как влияют",
+    content:
+      "Раскрытые факты видят все участники. Они напрямую влияют на оценку судьи.",
+    keywords: ["факты", "влияние", "судья"],
+  },
+  {
+    id: "court-flow",
+    category: "Как проходит суд",
+    title: "Этапы игры",
+    content:
+      "Подготовка → вступительная речь → прения/допрос/карты → заключительная речь → решение судьи.",
+    keywords: ["этапы", "порядок матча", "как проходит суд"],
+  },
+  {
+    id: "opening",
+    category: "Как проходит суд",
+    title: "Вступительная речь",
+    content:
+      "Стороны обозначают позиции. На этом этапе доступно не более 2 раскрытых фактов.",
+    keywords: ["вступительная речь", "этап"],
+  },
+  {
+    id: "arguments",
+    category: "Как проходит суд",
+    title: "Прения сторон",
+    content:
+      "Основной обмен аргументами. Важно сочетать факты и карты механик.",
+    keywords: ["прения сторон", "аргументы"],
+  },
+  {
+    id: "closing",
+    category: "Как проходит суд",
+    title: "Заключительная речь",
+    content:
+      "Финальное краткое резюме позиций сторон перед вынесением решения.",
+    keywords: ["заключительная речь", "финал"],
+  },
+  {
+    id: "protests",
+    category: "Как проходит суд",
+    title: "Протесты",
+    content:
+      "Если сторона считает действие оппонента некорректным, заявляется протест, решение принимает судья.",
+    keywords: ["протесты", "правила", "судья"],
+  },
+];
+
+const HELP_CATEGORY_ORDER = [
+  "Роли",
+  "Карты механик",
+  "Факты",
+  "Как проходит суд",
+];
+
+function normalizeHelpText(text: string): string {
+  return text.toLowerCase().trim();
+}
+
+function isHelpTopicMatch(topic: HelpTopic, query: string): boolean {
+  if (!query.trim()) return true;
+  const normalized = normalizeHelpText(query);
+  const fullText = normalizeHelpText(
+    `${topic.title} ${topic.content} ${topic.keywords.join(" ")}`,
+  );
+  return fullText.includes(normalized);
+}
+
+function HelpCenter({
+  query,
+  onQueryChange,
+  compact = false,
+}: {
+  query: string;
+  onQueryChange: (value: string) => void;
+  compact?: boolean;
+}) {
+  const filteredTopics = useMemo(
+    () => HELP_TOPICS.filter((topic) => isHelpTopicMatch(topic, query)),
+    [query],
+  );
+
+  const groupedTopics = useMemo(
+    () =>
+      HELP_CATEGORY_ORDER.map((category) => ({
+        category,
+        items: filteredTopics.filter((item) => item.category === category),
+      })).filter((group) => group.items.length > 0),
+    [filteredTopics],
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+        <Input
+          value={query}
+          onChange={(e) => onQueryChange(e.target.value)}
+          placeholder="Поиск по помощи..."
+          className={`pl-10 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-red-500 ${
+            compact ? "h-10" : "h-11"
+          }`}
+        />
+      </div>
+
+      {filteredTopics.length === 0 ? (
+        <Card className="rounded-2xl border-zinc-800 bg-zinc-900/80 text-zinc-100">
+          <CardContent className="p-5 text-sm text-zinc-400">
+            Ничего не найдено. Попробуйте другой запрос.
+          </CardContent>
+        </Card>
+      ) : (
+        groupedTopics.map((group) => (
+          <Card
+            key={group.category}
+            className="rounded-2xl border-zinc-800 bg-zinc-900/80 text-zinc-100"
+          >
+            <CardHeader className={compact ? "pb-2 pt-4" : "pb-2"}>
+              <CardTitle className={compact ? "text-base" : "text-lg"}>
+                <span className="flex items-center gap-2">
+                  {group.category}
+                  <Badge className="bg-zinc-800 text-zinc-300 border border-zinc-700">
+                    {group.items.length}
+                  </Badge>
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className={compact ? "pt-0 pb-4" : "pt-0"}>
+              <Accordion
+                type="multiple"
+                className="w-full"
+                defaultValue={group.items.map((item) => item.id)}
+              >
+                {group.items.map((item) => (
+                  <AccordionItem
+                    key={item.id}
+                    value={item.id}
+                    className="border-zinc-800"
+                  >
+                    <AccordionTrigger className="text-zinc-100 hover:no-underline">
+                      {item.title}
+                    </AccordionTrigger>
+                    <AccordionContent className="text-zinc-400 leading-relaxed">
+                      {item.content}
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
+            </CardContent>
+          </Card>
+        ))
+      )}
+    </div>
+  );
+}
 
 interface PlayerInfo {
   id: string;
@@ -252,10 +548,54 @@ function InfoBlock({
   );
 }
 
+type HomeTab = "play" | "development" | "help";
+
+function ContextHelp({
+  open,
+  onOpenChange,
+  query,
+  onQueryChange,
+}: {
+  open: boolean;
+  onOpenChange: (value: boolean) => void;
+  query: string;
+  onQueryChange: (value: string) => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogTrigger asChild>
+        <Button
+          type="button"
+          className="fixed right-6 bottom-6 z-40 h-11 rounded-full px-4 gap-2 bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0 shadow-lg shadow-black/30"
+        >
+          <CircleHelp className="w-4 h-4" />
+          Помощь
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-3xl p-0 border-zinc-800 bg-zinc-950 text-zinc-100">
+        <DialogHeader className="px-6 pt-6 pb-2">
+          <DialogTitle className="text-zinc-100">Помощь по игре</DialogTitle>
+        </DialogHeader>
+        <div className="px-6 pb-6 max-h-[75vh] overflow-y-auto">
+          <HelpCenter
+            query={query}
+            onQueryChange={onQueryChange}
+            compact
+          />
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function App() {
   const [screen, setScreen] = useState<"setup" | "home" | "room" | "game">(
     "home",
   );
+  const [homeTab, setHomeTab] = useState<HomeTab>("play");
+  const [mainHelpQuery, setMainHelpQuery] = useState("");
+  const [contextHelpOpen, setContextHelpOpen] = useState(false);
+  const [contextHelpQuery, setContextHelpQuery] = useState("");
   const [playerName, setPlayerName] = useState("");
   const [avatar, setAvatar] = useState<string | null>(null);
   const [joinCode, setJoinCode] = useState("");
@@ -423,6 +763,7 @@ export default function App() {
       setCopiedRoomCode(false);
       setIsHostJudge(false);
       setStartGameLoading(false);
+      setContextHelpOpen(false);
       setScreen("home");
       setKickedAlert(
         "\u0412\u044b \u0431\u044b\u043b\u0438 \u043a\u0438\u043a\u043d\u0443\u0442\u044b \u0438\u0437 \u043a\u043e\u043c\u043d\u0430\u0442\u044b.",
@@ -595,6 +936,7 @@ export default function App() {
     setCopiedRoomCode(false);
     setIsHostJudge(false);
     setStartGameLoading(false);
+    setContextHelpOpen(false);
   }, [socket]);
 
   const finalExit = useCallback(() => {
@@ -609,6 +951,7 @@ export default function App() {
     setKickedAlert("");
     setCopiedRoomCode(false);
     setStartGameLoading(false);
+    setContextHelpOpen(false);
   }, [socket]);
 
   const setupNickname = useCallback(() => {
@@ -779,6 +1122,49 @@ export default function App() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        <div className="max-w-6xl mx-auto mb-6 flex justify-center">
+          <div className="inline-flex items-center gap-1 rounded-full border border-zinc-800 bg-zinc-900/90 p-1.5 shadow-sm shadow-black/30">
+            <Button
+              variant="ghost"
+              onClick={() => setHomeTab("play")}
+              className={`h-9 rounded-full px-4 gap-2 ${
+                homeTab === "play"
+                  ? "bg-red-600 text-white hover:bg-red-500"
+                  : "text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800"
+              }`}
+            >
+              <Gamepad2 className="w-4 h-4" />
+              Играть
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => setHomeTab("development")}
+              className={`h-9 rounded-full px-4 gap-2 ${
+                homeTab === "development"
+                  ? "bg-red-600 text-white hover:bg-red-500"
+                  : "text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800"
+              }`}
+            >
+              <Wrench className="w-4 h-4" />
+              Разработка
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => setHomeTab("help")}
+              className={`h-9 rounded-full px-4 gap-2 ${
+                homeTab === "help"
+                  ? "bg-red-600 text-white hover:bg-red-500"
+                  : "text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800"
+              }`}
+            >
+              <CircleHelp className="w-4 h-4" />
+              Помощь
+            </Button>
+          </div>
+        </div>
+
+        {homeTab === "play" && (
         <div className="max-w-6xl mx-auto grid lg:grid-cols-2 gap-6 items-stretch">
           <motion.div
             custom={0}
@@ -971,6 +1357,65 @@ export default function App() {
             </Card>
           </motion.div>
         </div>
+        )}
+
+        {homeTab === "development" && (
+          <div className="max-w-6xl mx-auto">
+            <Card className="rounded-[28px] border-zinc-800 bg-zinc-900/95 text-zinc-100">
+              <CardContent className="p-8 md:p-10 space-y-6">
+                <div className="text-center">
+                  <Badge className="bg-red-600 text-white border-0 px-4 py-1.5 rounded-full text-sm">
+                    Beta 0.2
+                  </Badge>
+                </div>
+
+                <div className="space-y-4">
+                  {DEVLOG_ENTRIES.map((entry, index) => (
+                    <motion.div
+                      key={`${entry.date}-${entry.title}`}
+                      custom={index}
+                      variants={cardVariants}
+                      initial="initial"
+                      animate="animate"
+                    >
+                      <Card className="rounded-2xl border-zinc-800 bg-zinc-900 text-zinc-100">
+                        <CardContent className="p-5 space-y-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="font-semibold">{entry.title}</div>
+                            <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">
+                              {entry.date}
+                            </Badge>
+                          </div>
+                          <div className="text-sm text-zinc-400">
+                            Версия: {entry.version}
+                          </div>
+                          <div className="space-y-2 text-sm text-zinc-300">
+                            {entry.changes.map((change) => (
+                              <div key={change}>• {change}</div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </motion.div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {homeTab === "help" && (
+          <div className="max-w-6xl mx-auto">
+            <Card className="rounded-[28px] border-zinc-800 bg-zinc-900/95 text-zinc-100">
+              <CardContent className="p-8 md:p-10">
+                <HelpCenter
+                  query={mainHelpQuery}
+                  onQueryChange={setMainHelpQuery}
+                />
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </motion.div>
     );
   }
@@ -1137,6 +1582,12 @@ export default function App() {
               </InfoBlock>
             </motion.div>
           </div>
+          <ContextHelp
+            open={contextHelpOpen}
+            onOpenChange={setContextHelpOpen}
+            query={contextHelpQuery}
+            onQueryChange={setContextHelpQuery}
+          />
         </div>
       </motion.div>
     );
@@ -1819,6 +2270,12 @@ export default function App() {
               </div>
             </InfoBlock>
           </div>
+          <ContextHelp
+            open={contextHelpOpen}
+            onOpenChange={setContextHelpOpen}
+            query={contextHelpQuery}
+            onQueryChange={setContextHelpQuery}
+          />
         </div>
       </motion.div>
     );
