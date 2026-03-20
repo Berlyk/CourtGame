@@ -40,12 +40,12 @@ import {
 } from "@/components/ui/dialog";
 
 const stages = [
-  "Подготовка",
-  "Выступление истца / потерпевшего",
-  "Выступление ответчика / обвиняемого",
-  "Допрос и использование карт",
-  "Финальные речи",
-  "Решение судьи",
+  "РџРѕРґРіРѕС‚РѕРІРєР°",
+  "Р’С‹СЃС‚СѓРїР»РµРЅРёРµ РёСЃС‚С†Р° / РїРѕС‚РµСЂРїРµРІС€РµРіРѕ",
+  "Р’С‹СЃС‚СѓРїР»РµРЅРёРµ РѕС‚РІРµС‚С‡РёРєР° / РѕР±РІРёРЅСЏРµРјРѕРіРѕ",
+  "Р”РѕРїСЂРѕСЃ Рё РёСЃРїРѕР»СЊР·РѕРІР°РЅРёРµ РєР°СЂС‚",
+  "Р¤РёРЅР°Р»СЊРЅС‹Рµ СЂРµС‡Рё",
+  "Р РµС€РµРЅРёРµ СЃСѓРґСЊРё",
 ];
 
 const pageVariants = {
@@ -83,6 +83,22 @@ const entryVariants = {
   },
 };
 
+const floatingHelpButtonVariants = {
+  hidden: { opacity: 0, y: 20, scale: 0.92 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: { type: "spring", stiffness: 420, damping: 28, mass: 0.7 },
+  },
+  exit: {
+    opacity: 0,
+    y: 16,
+    scale: 0.95,
+    transition: { duration: 0.18, ease: "easeInOut" },
+  },
+};
+
 interface DevLogEntry {
   date: string;
   version: string;
@@ -90,19 +106,21 @@ interface DevLogEntry {
   changes: string[];
 }
 
+const CURRENT_VERSION = "Beta 0.2";
+
 const DEVLOG_ENTRIES: DevLogEntry[] = [
   {
     date: "19.03.2026",
-    version: "Beta 0.2",
-    title: "Стабилизация лобби и расширение игровых механик",
+    version: CURRENT_VERSION,
+    title: "РЎС‚Р°Р±РёР»РёР·Р°С†РёСЏ Р»РѕР±Р±Рё Рё СЂР°СЃС€РёСЂРµРЅРёРµ РёРіСЂРѕРІС‹С… РјРµС…Р°РЅРёРє",
     changes: [
-      "Добавлены аватарки игроков с отображением в лобби и во время матча.",
-      "Добавлен переключатель «Я — Судья» для ведущего в лобби.",
-      "Добавлена роль наблюдателя «Свидетель» для подключения в уже идущий матч.",
-      "Ведущий может кикать игроков из лобби с уведомлением о кике.",
-      "Добавлена подсветка последнего раскрытого факта и последней механики.",
-      "Во вступительной речи ограничение: можно раскрыть не более 2 фактов.",
-      "На этапе «Подготовка» отключено раскрытие фактов и применение механик.",
+      "Р”РѕР±Р°РІР»РµРЅС‹ Р°РІР°С‚Р°СЂРєРё РёРіСЂРѕРєРѕРІ СЃ РѕС‚РѕР±СЂР°Р¶РµРЅРёРµРј РІ Р»РѕР±Р±Рё Рё РІРѕ РІСЂРµРјСЏ РјР°С‚С‡Р°.",
+      "Р”РѕР±Р°РІР»РµРЅ РїРµСЂРµРєР»СЋС‡Р°С‚РµР»СЊ В«РЇ вЂ” РЎСѓРґСЊСЏВ» РґР»СЏ РІРµРґСѓС‰РµРіРѕ РІ Р»РѕР±Р±Рё.",
+      "Р”РѕР±Р°РІР»РµРЅР° СЂРѕР»СЊ РЅР°Р±Р»СЋРґР°С‚РµР»СЏ В«РЎРІРёРґРµС‚РµР»СЊВ» РґР»СЏ РїРѕРґРєР»СЋС‡РµРЅРёСЏ РІ СѓР¶Рµ РёРґСѓС‰РёР№ РјР°С‚С‡.",
+      "Р’РµРґСѓС‰РёР№ РјРѕР¶РµС‚ РєРёРєР°С‚СЊ РёРіСЂРѕРєРѕРІ РёР· Р»РѕР±Р±Рё СЃ СѓРІРµРґРѕРјР»РµРЅРёРµРј Рѕ РєРёРєРµ.",
+      "Р”РѕР±Р°РІР»РµРЅР° РїРѕРґСЃРІРµС‚РєР° РїРѕСЃР»РµРґРЅРµРіРѕ СЂР°СЃРєСЂС‹С‚РѕРіРѕ С„Р°РєС‚Р° Рё РїРѕСЃР»РµРґРЅРµР№ РјРµС…Р°РЅРёРєРё.",
+      "Р’Рѕ РІСЃС‚СѓРїРёС‚РµР»СЊРЅРѕР№ СЂРµС‡Рё РѕРіСЂР°РЅРёС‡РµРЅРёРµ: РјРѕР¶РЅРѕ СЂР°СЃРєСЂС‹С‚СЊ РЅРµ Р±РѕР»РµРµ 2 С„Р°РєС‚РѕРІ.",
+      "РќР° СЌС‚Р°РїРµ В«РџРѕРґРіРѕС‚РѕРІРєР°В» РѕС‚РєР»СЋС‡РµРЅРѕ СЂР°СЃРєСЂС‹С‚РёРµ С„Р°РєС‚РѕРІ Рё РїСЂРёРјРµРЅРµРЅРёРµ РјРµС…Р°РЅРёРє.",
     ],
   },
 ];
@@ -115,151 +133,188 @@ interface HelpTopic {
   keywords: string[];
 }
 
-const HELP_TOPICS: HelpTopic[] = [
+interface HelpTopicDraft {
+  id?: string;
+  category: string;
+  title: string;
+  content: string | string[];
+  keywords?: string[] | string;
+}
+
+// How to add new help data quickly:
+// 1) Add an object in HELP_TOPICS_SOURCE with category/title/content.
+// 2) "id" and "keywords" are optional and will be generated automatically.
+const HELP_TOPICS_SOURCE: HelpTopicDraft[] = [
   {
     id: "role-judge",
-    category: "Роли",
-    title: "Судья",
+    category: "Р РѕР»Рё",
+    title: "РЎСѓРґСЊСЏ",
     content:
-      "Ведет процесс, контролирует этапы и выносит финальный вердикт.",
-    keywords: ["судья", "вердикт", "этапы", "роль"],
+      "Р’РµРґРµС‚ РїСЂРѕС†РµСЃСЃ, РєРѕРЅС‚СЂРѕР»РёСЂСѓРµС‚ СЌС‚Р°РїС‹ Рё РІС‹РЅРѕСЃРёС‚ С„РёРЅР°Р»СЊРЅС‹Р№ РІРµСЂРґРёРєС‚.",
+    keywords: ["СЃСѓРґСЊСЏ", "РІРµСЂРґРёРєС‚", "СЌС‚Р°РїС‹", "СЂРѕР»СЊ"],
   },
   {
     id: "role-prosecutor",
-    category: "Роли",
-    title: "Прокурор",
+    category: "Р РѕР»Рё",
+    title: "РџСЂРѕРєСѓСЂРѕСЂ",
     content:
-      "Строит линию обвинения, раскрывает факты и усиливает позицию своей стороны.",
-    keywords: ["прокурор", "обвинение", "роль"],
+      "РЎС‚СЂРѕРёС‚ Р»РёРЅРёСЋ РѕР±РІРёРЅРµРЅРёСЏ, СЂР°СЃРєСЂС‹РІР°РµС‚ С„Р°РєС‚С‹ Рё СѓСЃРёР»РёРІР°РµС‚ РїРѕР·РёС†РёСЋ СЃРІРѕРµР№ СЃС‚РѕСЂРѕРЅС‹.",
+    keywords: ["РїСЂРѕРєСѓСЂРѕСЂ", "РѕР±РІРёРЅРµРЅРёРµ", "СЂРѕР»СЊ"],
   },
   {
     id: "role-plaintiff",
-    category: "Роли",
-    title: "Истец",
+    category: "Р РѕР»Рё",
+    title: "РСЃС‚РµС†",
     content:
-      "Формулирует требования и доказывает, почему позиция истца обоснована.",
-    keywords: ["истец", "требования", "роль"],
+      "Р¤РѕСЂРјСѓР»РёСЂСѓРµС‚ С‚СЂРµР±РѕРІР°РЅРёСЏ Рё РґРѕРєР°Р·С‹РІР°РµС‚, РїРѕС‡РµРјСѓ РїРѕР·РёС†РёСЏ РёСЃС‚С†Р° РѕР±РѕСЃРЅРѕРІР°РЅР°.",
+    keywords: ["РёСЃС‚РµС†", "С‚СЂРµР±РѕРІР°РЅРёСЏ", "СЂРѕР»СЊ"],
   },
   {
     id: "role-defendant",
-    category: "Роли",
-    title: "Ответчик",
+    category: "Р РѕР»Рё",
+    title: "РћС‚РІРµС‚С‡РёРє",
     content:
-      "Защищает позицию, опровергает претензии и раскрывает выгодные факты.",
-    keywords: ["ответчик", "защита", "роль"],
+      "Р—Р°С‰РёС‰Р°РµС‚ РїРѕР·РёС†РёСЋ, РѕРїСЂРѕРІРµСЂРіР°РµС‚ РїСЂРµС‚РµРЅР·РёРё Рё СЂР°СЃРєСЂС‹РІР°РµС‚ РІС‹РіРѕРґРЅС‹Рµ С„Р°РєС‚С‹.",
+    keywords: ["РѕС‚РІРµС‚С‡РёРє", "Р·Р°С‰РёС‚Р°", "СЂРѕР»СЊ"],
   },
   {
     id: "role-plaintiff-lawyer",
-    category: "Роли",
-    title: "Адвокат истца",
+    category: "Р РѕР»Рё",
+    title: "РђРґРІРѕРєР°С‚ РёСЃС‚С†Р°",
     content:
-      "Поддерживает истца и выстраивает аргументацию в пользу его требований.",
-    keywords: ["адвокат истца", "истец", "роль"],
+      "РџРѕРґРґРµСЂР¶РёРІР°РµС‚ РёСЃС‚С†Р° Рё РІС‹СЃС‚СЂР°РёРІР°РµС‚ Р°СЂРіСѓРјРµРЅС‚Р°С†РёСЋ РІ РїРѕР»СЊР·Сѓ РµРіРѕ С‚СЂРµР±РѕРІР°РЅРёР№.",
+    keywords: ["Р°РґРІРѕРєР°С‚ РёСЃС‚С†Р°", "РёСЃС‚РµС†", "СЂРѕР»СЊ"],
   },
   {
     id: "role-defendant-lawyer",
-    category: "Роли",
-    title: "Адвокат ответчика",
+    category: "Р РѕР»Рё",
+    title: "РђРґРІРѕРєР°С‚ РѕС‚РІРµС‚С‡РёРєР°",
     content:
-      "Поддерживает ответчика и ищет слабые места в позиции оппонента.",
-    keywords: ["адвокат ответчика", "ответчик", "роль"],
+      "РџРѕРґРґРµСЂР¶РёРІР°РµС‚ РѕС‚РІРµС‚С‡РёРєР° Рё РёС‰РµС‚ СЃР»Р°Р±С‹Рµ РјРµСЃС‚Р° РІ РїРѕР·РёС†РёРё РѕРїРїРѕРЅРµРЅС‚Р°.",
+    keywords: ["Р°РґРІРѕРєР°С‚ РѕС‚РІРµС‚С‡РёРєР°", "РѕС‚РІРµС‚С‡РёРє", "СЂРѕР»СЊ"],
   },
   {
     id: "cards-what",
-    category: "Карты механик",
-    title: "Что это",
+    category: "РљР°СЂС‚С‹ РјРµС…Р°РЅРёРє",
+    title: "Р§С‚Рѕ СЌС‚Рѕ",
     content:
-      "Карты механик — специальные эффекты, которые временно меняют правила реплики.",
-    keywords: ["карты механик", "что это", "механики"],
+      "РљР°СЂС‚С‹ РјРµС…Р°РЅРёРє вЂ” СЃРїРµС†РёР°Р»СЊРЅС‹Рµ СЌС„С„РµРєС‚С‹, РєРѕС‚РѕСЂС‹Рµ РІСЂРµРјРµРЅРЅРѕ РјРµРЅСЏСЋС‚ РїСЂР°РІРёР»Р° СЂРµРїР»РёРєРё.",
+    keywords: ["РєР°СЂС‚С‹ РјРµС…Р°РЅРёРє", "С‡С‚Рѕ СЌС‚Рѕ", "РјРµС…Р°РЅРёРєРё"],
   },
   {
     id: "cards-how",
-    category: "Карты механик",
-    title: "Как используются",
+    category: "РљР°СЂС‚С‹ РјРµС…Р°РЅРёРє",
+    title: "РљР°Рє РёСЃРїРѕР»СЊР·СѓСЋС‚СЃСЏ",
     content:
-      "Нажмите «Применить» у карты. После применения она становится использованной.",
-    keywords: ["карты механик", "применить", "использование"],
+      "РќР°Р¶РјРёС‚Рµ В«РџСЂРёРјРµРЅРёС‚СЊВ» Сѓ РєР°СЂС‚С‹. РџРѕСЃР»Рµ РїСЂРёРјРµРЅРµРЅРёСЏ РѕРЅР° СЃС‚Р°РЅРѕРІРёС‚СЃСЏ РёСЃРїРѕР»СЊР·РѕРІР°РЅРЅРѕР№.",
+    keywords: ["РєР°СЂС‚С‹ РјРµС…Р°РЅРёРє", "РїСЂРёРјРµРЅРёС‚СЊ", "РёСЃРїРѕР»СЊР·РѕРІР°РЅРёРµ"],
   },
   {
     id: "cards-when",
-    category: "Карты механик",
-    title: "Когда применяются",
+    category: "РљР°СЂС‚С‹ РјРµС…Р°РЅРёРє",
+    title: "РљРѕРіРґР° РїСЂРёРјРµРЅСЏСЋС‚СЃСЏ",
     content:
-      "На «Подготовке» карты недоступны. В остальных этапах — по ситуации и таймингу.",
-    keywords: ["карты механик", "когда", "подготовка"],
+      "РќР° В«РџРѕРґРіРѕС‚РѕРІРєРµВ» РєР°СЂС‚С‹ РЅРµРґРѕСЃС‚СѓРїРЅС‹. Р’ РѕСЃС‚Р°Р»СЊРЅС‹С… СЌС‚Р°РїР°С… вЂ” РїРѕ СЃРёС‚СѓР°С†РёРё Рё С‚Р°Р№РјРёРЅРіСѓ.",
+    keywords: ["РєР°СЂС‚С‹ РјРµС…Р°РЅРёРє", "РєРѕРіРґР°", "РїРѕРґРіРѕС‚РѕРІРєР°"],
   },
   {
     id: "facts-what",
-    category: "Факты",
-    title: "Что это",
+    category: "Р¤Р°РєС‚С‹",
+    title: "Р§С‚Рѕ СЌС‚Рѕ",
     content:
-      "Факты — это закрытая информация роли, которая раскрывается по ходу процесса.",
-    keywords: ["факты", "что это"],
+      "Р¤Р°РєС‚С‹ вЂ” СЌС‚Рѕ Р·Р°РєСЂС‹С‚Р°СЏ РёРЅС„РѕСЂРјР°С†РёСЏ СЂРѕР»Рё, РєРѕС‚РѕСЂР°СЏ СЂР°СЃРєСЂС‹РІР°РµС‚СЃСЏ РїРѕ С…РѕРґСѓ РїСЂРѕС†РµСЃСЃР°.",
+    keywords: ["С„Р°РєС‚С‹", "С‡С‚Рѕ СЌС‚Рѕ"],
   },
   {
     id: "facts-reveal",
-    category: "Факты",
-    title: "Как раскрываются",
+    category: "Р¤Р°РєС‚С‹",
+    title: "РљР°Рє СЂР°СЃРєСЂС‹РІР°СЋС‚СЃСЏ",
     content:
-      "Факты раскрываются кнопкой «Раскрыть». На «Подготовке» запрещено раскрытие.",
-    keywords: ["факты", "раскрыть", "подготовка"],
+      "Р¤Р°РєС‚С‹ СЂР°СЃРєСЂС‹РІР°СЋС‚СЃСЏ РєРЅРѕРїРєРѕР№ В«Р Р°СЃРєСЂС‹С‚СЊВ». РќР° В«РџРѕРґРіРѕС‚РѕРІРєРµВ» Р·Р°РїСЂРµС‰РµРЅРѕ СЂР°СЃРєСЂС‹С‚РёРµ.",
+    keywords: ["С„Р°РєС‚С‹", "СЂР°СЃРєСЂС‹С‚СЊ", "РїРѕРґРіРѕС‚РѕРІРєР°"],
   },
   {
     id: "facts-impact",
-    category: "Факты",
-    title: "Как влияют",
+    category: "Р¤Р°РєС‚С‹",
+    title: "РљР°Рє РІР»РёСЏСЋС‚",
     content:
-      "Раскрытые факты видят все участники. Они напрямую влияют на оценку судьи.",
-    keywords: ["факты", "влияние", "судья"],
+      "Р Р°СЃРєСЂС‹С‚С‹Рµ С„Р°РєС‚С‹ РІРёРґСЏС‚ РІСЃРµ СѓС‡Р°СЃС‚РЅРёРєРё. РћРЅРё РЅР°РїСЂСЏРјСѓСЋ РІР»РёСЏСЋС‚ РЅР° РѕС†РµРЅРєСѓ СЃСѓРґСЊРё.",
+    keywords: ["С„Р°РєС‚С‹", "РІР»РёСЏРЅРёРµ", "СЃСѓРґСЊСЏ"],
   },
   {
     id: "court-flow",
-    category: "Как проходит суд",
-    title: "Этапы игры",
+    category: "РљР°Рє РїСЂРѕС…РѕРґРёС‚ СЃСѓРґ",
+    title: "Р­С‚Р°РїС‹ РёРіСЂС‹",
     content:
-      "Подготовка → вступительная речь → прения/допрос/карты → заключительная речь → решение судьи.",
-    keywords: ["этапы", "порядок матча", "как проходит суд"],
+      "РџРѕРґРіРѕС‚РѕРІРєР° в†’ РІСЃС‚СѓРїРёС‚РµР»СЊРЅР°СЏ СЂРµС‡СЊ в†’ РїСЂРµРЅРёСЏ/РґРѕРїСЂРѕСЃ/РєР°СЂС‚С‹ в†’ Р·Р°РєР»СЋС‡РёС‚РµР»СЊРЅР°СЏ СЂРµС‡СЊ в†’ СЂРµС€РµРЅРёРµ СЃСѓРґСЊРё.",
+    keywords: ["СЌС‚Р°РїС‹", "РїРѕСЂСЏРґРѕРє РјР°С‚С‡Р°", "РєР°Рє РїСЂРѕС…РѕРґРёС‚ СЃСѓРґ"],
   },
   {
     id: "opening",
-    category: "Как проходит суд",
-    title: "Вступительная речь",
+    category: "РљР°Рє РїСЂРѕС…РѕРґРёС‚ СЃСѓРґ",
+    title: "Р’СЃС‚СѓРїРёС‚РµР»СЊРЅР°СЏ СЂРµС‡СЊ",
     content:
-      "Стороны обозначают позиции. На этом этапе доступно не более 2 раскрытых фактов.",
-    keywords: ["вступительная речь", "этап"],
+      "РЎС‚РѕСЂРѕРЅС‹ РѕР±РѕР·РЅР°С‡Р°СЋС‚ РїРѕР·РёС†РёРё. РќР° СЌС‚РѕРј СЌС‚Р°РїРµ РґРѕСЃС‚СѓРїРЅРѕ РЅРµ Р±РѕР»РµРµ 2 СЂР°СЃРєСЂС‹С‚С‹С… С„Р°РєС‚РѕРІ.",
+    keywords: ["РІСЃС‚СѓРїРёС‚РµР»СЊРЅР°СЏ СЂРµС‡СЊ", "СЌС‚Р°Рї"],
   },
   {
     id: "arguments",
-    category: "Как проходит суд",
-    title: "Прения сторон",
+    category: "РљР°Рє РїСЂРѕС…РѕРґРёС‚ СЃСѓРґ",
+    title: "РџСЂРµРЅРёСЏ СЃС‚РѕСЂРѕРЅ",
     content:
-      "Основной обмен аргументами. Важно сочетать факты и карты механик.",
-    keywords: ["прения сторон", "аргументы"],
+      "РћСЃРЅРѕРІРЅРѕР№ РѕР±РјРµРЅ Р°СЂРіСѓРјРµРЅС‚Р°РјРё. Р’Р°Р¶РЅРѕ СЃРѕС‡РµС‚Р°С‚СЊ С„Р°РєС‚С‹ Рё РєР°СЂС‚С‹ РјРµС…Р°РЅРёРє.",
+    keywords: ["РїСЂРµРЅРёСЏ СЃС‚РѕСЂРѕРЅ", "Р°СЂРіСѓРјРµРЅС‚С‹"],
   },
   {
     id: "closing",
-    category: "Как проходит суд",
-    title: "Заключительная речь",
+    category: "РљР°Рє РїСЂРѕС…РѕРґРёС‚ СЃСѓРґ",
+    title: "Р—Р°РєР»СЋС‡РёС‚РµР»СЊРЅР°СЏ СЂРµС‡СЊ",
     content:
-      "Финальное краткое резюме позиций сторон перед вынесением решения.",
-    keywords: ["заключительная речь", "финал"],
+      "Р¤РёРЅР°Р»СЊРЅРѕРµ РєСЂР°С‚РєРѕРµ СЂРµР·СЋРјРµ РїРѕР·РёС†РёР№ СЃС‚РѕСЂРѕРЅ РїРµСЂРµРґ РІС‹РЅРµСЃРµРЅРёРµРј СЂРµС€РµРЅРёСЏ.",
+    keywords: ["Р·Р°РєР»СЋС‡РёС‚РµР»СЊРЅР°СЏ СЂРµС‡СЊ", "С„РёРЅР°Р»"],
   },
   {
     id: "protests",
-    category: "Как проходит суд",
-    title: "Протесты",
+    category: "РљР°Рє РїСЂРѕС…РѕРґРёС‚ СЃСѓРґ",
+    title: "РџСЂРѕС‚РµСЃС‚С‹",
     content:
-      "Если сторона считает действие оппонента некорректным, заявляется протест, решение принимает судья.",
-    keywords: ["протесты", "правила", "судья"],
+      "Р•СЃР»Рё СЃС‚РѕСЂРѕРЅР° СЃС‡РёС‚Р°РµС‚ РґРµР№СЃС‚РІРёРµ РѕРїРїРѕРЅРµРЅС‚Р° РЅРµРєРѕСЂСЂРµРєС‚РЅС‹Рј, Р·Р°СЏРІР»СЏРµС‚СЃСЏ РїСЂРѕС‚РµСЃС‚, СЂРµС€РµРЅРёРµ РїСЂРёРЅРёРјР°РµС‚ СЃСѓРґСЊСЏ.",
+    keywords: ["РїСЂРѕС‚РµСЃС‚С‹", "РїСЂР°РІРёР»Р°", "СЃСѓРґСЊСЏ"],
   },
 ];
 
-const HELP_CATEGORY_ORDER = [
-  "Роли",
-  "Карты механик",
-  "Факты",
-  "Как проходит суд",
-];
+function normalizeHelpContent(content: string | string[]): string {
+  return Array.isArray(content)
+    ? content.map((line) => line.trim()).filter(Boolean).join("\n\n")
+    : content;
+}
+
+function normalizeHelpKeywords(
+  keywords: string[] | string | undefined,
+): string[] {
+  if (!keywords) return [];
+  if (Array.isArray(keywords)) return keywords;
+  return keywords
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function buildHelpTopicId(topic: HelpTopicDraft, index: number): string {
+  return topic.id ?? `help-topic-${index + 1}`;
+}
+
+const HELP_TOPICS: HelpTopic[] = HELP_TOPICS_SOURCE.map((topic, index) => ({
+  id: buildHelpTopicId(topic, index),
+  category: topic.category,
+  title: topic.title,
+  content: normalizeHelpContent(topic.content),
+  keywords: normalizeHelpKeywords(topic.keywords),
+}));
+
+const HELP_CATEGORY_ORDER = Array.from(
+  new Set(HELP_TOPICS.map((topic) => topic.category)),
+);
 
 function normalizeHelpText(text: string): string {
   return text.toLowerCase().trim();
@@ -304,7 +359,7 @@ function HelpCenter({
         <Input
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
-          placeholder="Поиск по помощи..."
+          placeholder="РџРѕРёСЃРє РїРѕ РїРѕРјРѕС‰Рё..."
           className={`pl-10 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-red-500 ${
             compact ? "h-10" : "h-11"
           }`}
@@ -314,7 +369,7 @@ function HelpCenter({
       {filteredTopics.length === 0 ? (
         <Card className="rounded-2xl border-zinc-800 bg-zinc-900/80 text-zinc-100">
           <CardContent className="p-5 text-sm text-zinc-400">
-            Ничего не найдено. Попробуйте другой запрос.
+            РќРёС‡РµРіРѕ РЅРµ РЅР°Р№РґРµРЅРѕ. РџРѕРїСЂРѕР±СѓР№С‚Рµ РґСЂСѓРіРѕР№ Р·Р°РїСЂРѕСЃ.
           </CardContent>
         </Card>
       ) : (
@@ -348,7 +403,7 @@ function HelpCenter({
                     <AccordionTrigger className="text-zinc-100 hover:no-underline">
                       {item.title}
                     </AccordionTrigger>
-                    <AccordionContent className="text-zinc-400 leading-relaxed">
+                    <AccordionContent className="text-zinc-400 leading-relaxed whitespace-pre-line">
                       {item.content}
                     </AccordionContent>
                   </AccordionItem>
@@ -490,7 +545,7 @@ function PlayerCard({
             <div className="min-w-0">
               <div className="font-semibold text-base truncate">{player.name}</div>
               <div className="text-sm text-zinc-400">
-                {isHost ? "Ведущий комнаты" : "Игрок"}
+                {isHost ? "Р’РµРґСѓС‰РёР№ РєРѕРјРЅР°С‚С‹" : "РРіСЂРѕРє"}
               </div>
             </div>
           </div>
@@ -564,17 +619,29 @@ function ContextHelp({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
-        <Button
+        <motion.button
           type="button"
-          className="fixed right-6 bottom-6 z-40 h-11 rounded-full px-4 gap-2 bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0 shadow-lg shadow-black/30"
+          variants={floatingHelpButtonVariants}
+          initial="hidden"
+          animate="visible"
+          exit="exit"
+          whileHover={{ y: -2, scale: 1.02 }}
+          whileTap={{ scale: 0.97 }}
+          className={`fixed right-5 bottom-5 left-auto z-40 h-11 rounded-2xl px-3.5 inline-flex items-center gap-2 border backdrop-blur-md shadow-[0_12px_30px_rgba(0,0,0,0.45)] transition-colors ${
+            open
+              ? "border-red-500/55 bg-red-950/75 text-red-100"
+              : "border-zinc-700 bg-zinc-900/90 text-zinc-100 hover:bg-zinc-900 hover:border-zinc-500"
+          }`}
         >
-          <CircleHelp className="w-4 h-4" />
-          Помощь
-        </Button>
+          <span className="inline-flex h-6 w-6 items-center justify-center rounded-lg bg-red-600 text-white shadow-sm shadow-red-900/50">
+            <CircleHelp className="w-3.5 h-3.5" />
+          </span>
+          РџРѕРјРѕС‰СЊ
+        </motion.button>
       </DialogTrigger>
-      <DialogContent className="max-w-3xl p-0 border-zinc-800 bg-zinc-950 text-zinc-100">
+      <DialogContent className="max-w-3xl p-0 border-zinc-800 bg-zinc-950 text-zinc-100 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95 data-[state=open]:slide-in-from-bottom-4 data-[state=closed]:slide-out-to-bottom-2 duration-200">
         <DialogHeader className="px-6 pt-6 pb-2">
-          <DialogTitle className="text-zinc-100">Помощь по игре</DialogTitle>
+          <DialogTitle className="text-zinc-100">РџРѕРјРѕС‰СЊ РїРѕ РёРіСЂРµ</DialogTitle>
         </DialogHeader>
         <div className="px-6 pb-6 max-h-[75vh] overflow-y-auto">
           <HelpCenter
@@ -732,7 +799,7 @@ export default function App() {
     socket.on(
       "player_left",
       ({ playerName: name }: { playerId: string; playerName: string }) => {
-        setDisconnectAlert(`⚠️ ${name} покинул игру`);
+        setDisconnectAlert(`вљ пёЏ ${name} РїРѕРєРёРЅСѓР» РёРіСЂСѓ`);
         setTimeout(() => setDisconnectAlert(""), 6000);
       },
     );
@@ -740,7 +807,7 @@ export default function App() {
     socket.on(
       "player_rejoined",
       ({ playerName: name }: { playerName: string }) => {
-        setRejoinAlert(`${name} вернулся в игру`);
+        setRejoinAlert(`${name} РІРµСЂРЅСѓР»СЃСЏ РІ РёРіСЂСѓ`);
         setTimeout(() => setRejoinAlert(""), 4000);
       },
     );
@@ -840,14 +907,14 @@ export default function App() {
   }, [socket, avatar]);
 
   const createRoom = useCallback(() => {
-    const name = playerName.trim() || "Игрок";
+    const name = playerName.trim() || "РРіСЂРѕРє";
     localStorage.setItem("court_nickname", name);
     socket.emit("create_room", { playerName: name });
   }, [socket, playerName]);
 
   const joinRoom = useCallback(() => {
     if (!joinCode.trim()) return;
-    const name = playerName.trim() || "Игрок";
+    const name = playerName.trim() || "РРіСЂРѕРє";
     socket.emit("join_room", {
       code: joinCode.trim().toUpperCase(),
       playerName: name,
@@ -1007,7 +1074,7 @@ export default function App() {
 
   const copyCode = useCallback((code: string) => {
     if (!navigator.clipboard) {
-      setError("Не удалось скопировать код комнаты.");
+      setError("РќРµ СѓРґР°Р»РѕСЃСЊ СЃРєРѕРїРёСЂРѕРІР°С‚СЊ РєРѕРґ РєРѕРјРЅР°С‚С‹.");
       setTimeout(() => setError(""), 4000);
       return;
     }
@@ -1018,7 +1085,7 @@ export default function App() {
         setTimeout(() => setCopiedRoomCode(false), 2000);
       })
       .catch(() => {
-        setError("Не удалось скопировать код комнаты.");
+        setError("РќРµ СѓРґР°Р»РѕСЃСЊ СЃРєРѕРїРёСЂРѕРІР°С‚СЊ РєРѕРґ РєРѕРјРЅР°С‚С‹.");
         setTimeout(() => setError(""), 4000);
       });
   }, []);
@@ -1038,12 +1105,12 @@ export default function App() {
             <CardContent className="p-8 space-y-6">
               <div className="space-y-2 text-center">
                 <Badge className="rounded-full px-3 py-1 text-sm bg-red-600/90 text-white border-0">
-                  СУД
+                  РЎРЈР”
                 </Badge>
-                <h1 className="text-2xl font-bold pt-2">Добро пожаловать!</h1>
+                <h1 className="text-2xl font-bold pt-2">Р”РѕР±СЂРѕ РїРѕР¶Р°Р»РѕРІР°С‚СЊ!</h1>
                 <p className="text-sm text-zinc-400">
-                  Придумайте никнейм — он сохранится и будет привязан к вам в
-                  каждой игре.
+                  РџСЂРёРґСѓРјР°Р№С‚Рµ РЅРёРєРЅРµР№Рј вЂ” РѕРЅ СЃРѕС…СЂР°РЅРёС‚СЃСЏ Рё Р±СѓРґРµС‚ РїСЂРёРІСЏР·Р°РЅ Рє РІР°Рј РІ
+                  РєР°Р¶РґРѕР№ РёРіСЂРµ.
                 </p>
               </div>
 
@@ -1058,7 +1125,7 @@ export default function App() {
                   </div>
                 </div>
                 <span className="text-xs text-zinc-500">
-                  Нажмите, чтобы добавить фото
+                  РќР°Р¶РјРёС‚Рµ, С‡С‚РѕР±С‹ РґРѕР±Р°РІРёС‚СЊ С„РѕС‚Рѕ
                 </span>
                 <input
                   ref={avatarInputRef}
@@ -1070,11 +1137,11 @@ export default function App() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">Ваш никнейм</label>
+                <label className="text-sm font-medium">Р’Р°С€ РЅРёРєРЅРµР№Рј</label>
                 <Input
                   value={playerName}
                   onChange={(e) => setPlayerName(e.target.value)}
-                  placeholder="Например: Артём"
+                  placeholder="РќР°РїСЂРёРјРµСЂ: РђСЂС‚С‘Рј"
                   className="h-12 rounded-xl bg-zinc-100 text-zinc-950 placeholder:text-zinc-400 border-0 focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-0"
                   onKeyDown={(e) => e.key === "Enter" && setupNickname()}
                   autoFocus
@@ -1089,7 +1156,7 @@ export default function App() {
                   disabled={!playerName.trim()}
                   className="w-full h-12 rounded-xl text-base bg-red-600 hover:bg-red-500 text-white border-0 disabled:bg-zinc-700 disabled:text-zinc-500"
                 >
-                  Продолжить
+                  РџСЂРѕРґРѕР»Р¶РёС‚СЊ
                 </Button>
               </motion.div>
             </CardContent>
@@ -1135,7 +1202,7 @@ export default function App() {
               }`}
             >
               <Gamepad2 className="w-4 h-4" />
-              Играть
+              РРіСЂР°С‚СЊ
             </Button>
             <Button
               variant="ghost"
@@ -1147,7 +1214,7 @@ export default function App() {
               }`}
             >
               <Wrench className="w-4 h-4" />
-              Разработка
+              Р Р°Р·СЂР°Р±РѕС‚РєР°
             </Button>
             <Button
               variant="ghost"
@@ -1159,7 +1226,7 @@ export default function App() {
               }`}
             >
               <CircleHelp className="w-4 h-4" />
-              Помощь
+              РџРѕРјРѕС‰СЊ
             </Button>
           </div>
         </div>
@@ -1180,21 +1247,21 @@ export default function App() {
                   </Badge>
                   <div className="space-y-3">
                     <h1 className="text-4xl md:text-5xl font-bold tracking-tight">
-                      СУД
+                      РЎРЈР”
                     </h1>
                     <p className="text-base md:text-lg text-zinc-400 max-w-xl">
-                      Ролевая настольная игра о судебных разбирательствах.
-                      Получите роль, изучите факты дела и попробуйте убедить
-                      судью в своей правоте.
+                      Р РѕР»РµРІР°СЏ РЅР°СЃС‚РѕР»СЊРЅР°СЏ РёРіСЂР° Рѕ СЃСѓРґРµР±РЅС‹С… СЂР°Р·Р±РёСЂР°С‚РµР»СЊСЃС‚РІР°С….
+                      РџРѕР»СѓС‡РёС‚Рµ СЂРѕР»СЊ, РёР·СѓС‡РёС‚Рµ С„Р°РєС‚С‹ РґРµР»Р° Рё РїРѕРїСЂРѕР±СѓР№С‚Рµ СѓР±РµРґРёС‚СЊ
+                      СЃСѓРґСЊСЋ РІ СЃРІРѕРµР№ РїСЂР°РІРѕС‚Рµ.
                     </p>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   {[
-                    { title: "3–6 игроков", sub: "Разные роли и режимы" },
-                    { title: "Карты Механик", sub: "Дают особые возможности" },
-                    { title: "Улики", sub: "Объективные и общие" },
-                    { title: "Факты", sub: "Раскрываются по ходу суда" },
+                    { title: "3вЂ“6 РёРіСЂРѕРєРѕРІ", sub: "Р Р°Р·РЅС‹Рµ СЂРѕР»Рё Рё СЂРµР¶РёРјС‹" },
+                    { title: "РљР°СЂС‚С‹ РњРµС…Р°РЅРёРє", sub: "Р”Р°СЋС‚ РѕСЃРѕР±С‹Рµ РІРѕР·РјРѕР¶РЅРѕСЃС‚Рё" },
+                    { title: "РЈР»РёРєРё", sub: "РћР±СЉРµРєС‚РёРІРЅС‹Рµ Рё РѕР±С‰РёРµ" },
+                    { title: "Р¤Р°РєС‚С‹", sub: "Р Р°СЃРєСЂС‹РІР°СЋС‚СЃСЏ РїРѕ С…РѕРґСѓ СЃСѓРґР°" },
                   ].map((item, i) => (
                     <motion.div
                       key={item.title}
@@ -1256,7 +1323,7 @@ export default function App() {
                     onChange={handleAvatarChange}
                   />
                   <div className="flex-1 space-y-2">
-                    <label className="text-sm font-medium">Ваш никнейм</label>
+                    <label className="text-sm font-medium">Р’Р°С€ РЅРёРєРЅРµР№Рј</label>
                     <Input
                       value={playerName}
                       onChange={(e) => {
@@ -1267,7 +1334,7 @@ export default function App() {
                             e.target.value.trim(),
                           );
                       }}
-                      placeholder="Например: Артём"
+                      placeholder="РќР°РїСЂРёРјРµСЂ: РђСЂС‚С‘Рј"
                       className="h-11 rounded-xl bg-zinc-100 text-zinc-950 placeholder:text-zinc-400 border-0 focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-0"
                     />
                   </div>
@@ -1283,7 +1350,7 @@ export default function App() {
                       className="w-full h-12 rounded-xl text-base gap-2 bg-red-600 hover:bg-red-500 text-white border-0"
                     >
                       <UserPlus className="w-4 h-4" />
-                      Создать комнату
+                      РЎРѕР·РґР°С‚СЊ РєРѕРјРЅР°С‚Сѓ
                     </Button>
                   </motion.div>
 
@@ -1293,7 +1360,7 @@ export default function App() {
                       onChange={(e) =>
                         setJoinCode(e.target.value.toUpperCase())
                       }
-                      placeholder="Код комнаты"
+                      placeholder="РљРѕРґ РєРѕРјРЅР°С‚С‹"
                       className="h-12 rounded-xl bg-zinc-100 text-zinc-950 placeholder:text-zinc-400 border-0 focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-0"
                       onKeyDown={(e) => e.key === "Enter" && joinRoom()}
                     />
@@ -1307,7 +1374,7 @@ export default function App() {
                         disabled={!joinCode.trim()}
                         className="h-12 rounded-xl px-6 bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0"
                       >
-                        Войти
+                        Р’РѕР№С‚Рё
                       </Button>
                     </motion.div>
                   </div>
@@ -1329,7 +1396,7 @@ export default function App() {
                             variant="outline"
                             className="w-full h-12 rounded-xl border-red-600/50 text-red-400 hover:bg-red-600/10 hover:text-red-300 gap-2"
                           >
-                            ↩ Переподключиться к игре
+                            в†© РџРµСЂРµРїРѕРґРєР»СЋС‡РёС‚СЊСЃСЏ Рє РёРіСЂРµ
                           </Button>
                         </motion.div>
                       </motion.div>
@@ -1340,17 +1407,17 @@ export default function App() {
                 <Separator />
 
                 <div className="space-y-3">
-                  <div className="font-semibold">Функционал</div>
+                  <div className="font-semibold">Р¤СѓРЅРєС†РёРѕРЅР°Р»</div>
                   <div className="grid gap-2 text-sm text-zinc-400">
-                    <div>• создайте комнату и поделитесь кодом с игроками</div>
+                    <div>вЂў СЃРѕР·РґР°Р№С‚Рµ РєРѕРјРЅР°С‚Сѓ Рё РїРѕРґРµР»РёС‚РµСЃСЊ РєРѕРґРѕРј СЃ РёРіСЂРѕРєР°РјРё</div>
                     <div>
-                      • ведущий запускает игру и роли раздаются автоматически
+                      вЂў РІРµРґСѓС‰РёР№ Р·Р°РїСѓСЃРєР°РµС‚ РёРіСЂСѓ Рё СЂРѕР»Рё СЂР°Р·РґР°СЋС‚СЃСЏ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё
                     </div>
-                    <div>• каждый видит только свои факты и карты механик</div>
+                    <div>вЂў РєР°Р¶РґС‹Р№ РІРёРґРёС‚ С‚РѕР»СЊРєРѕ СЃРІРѕРё С„Р°РєС‚С‹ Рё РєР°СЂС‚С‹ РјРµС…Р°РЅРёРє</div>
                     <div>
-                      • раскрытые факты и использованные карты видят все
+                      вЂў СЂР°СЃРєСЂС‹С‚С‹Рµ С„Р°РєС‚С‹ Рё РёСЃРїРѕР»СЊР·РѕРІР°РЅРЅС‹Рµ РєР°СЂС‚С‹ РІРёРґСЏС‚ РІСЃРµ
                     </div>
-                    <div>• судья меняет этапы и выносит финальный вердикт</div>
+                    <div>вЂў СЃСѓРґСЊСЏ РјРµРЅСЏРµС‚ СЌС‚Р°РїС‹ Рё РІС‹РЅРѕСЃРёС‚ С„РёРЅР°Р»СЊРЅС‹Р№ РІРµСЂРґРёРєС‚</div>
                   </div>
                 </div>
               </CardContent>
@@ -1363,10 +1430,15 @@ export default function App() {
           <div className="max-w-6xl mx-auto">
             <Card className="rounded-[28px] border-zinc-800 bg-zinc-900/95 text-zinc-100">
               <CardContent className="p-8 md:p-10 space-y-6">
-                <div className="text-center">
-                  <Badge className="bg-red-600 text-white border-0 px-4 py-1.5 rounded-full text-sm">
-                    Beta 0.2
-                  </Badge>
+                <div className="flex justify-center">
+                  <div className="w-full max-w-md rounded-3xl border border-red-500/35 bg-gradient-to-br from-red-950/50 via-zinc-900 to-zinc-900 px-6 py-5 text-center shadow-[0_16px_40px_rgba(185,28,28,0.25)]">
+                    <div className="text-[11px] uppercase tracking-[0.22em] text-red-300/80">
+                      Build
+                    </div>
+                    <div className="mt-2 text-3xl md:text-4xl font-semibold text-red-100">
+                      {CURRENT_VERSION}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="space-y-4">
@@ -1387,11 +1459,11 @@ export default function App() {
                             </Badge>
                           </div>
                           <div className="text-sm text-zinc-400">
-                            Версия: {entry.version}
+                            Р’РµСЂСЃРёСЏ: {entry.version}
                           </div>
                           <div className="space-y-2 text-sm text-zinc-300">
                             {entry.changes.map((change) => (
-                              <div key={change}>• {change}</div>
+                              <div key={change}>вЂў {change}</div>
                             ))}
                           </div>
                         </CardContent>
@@ -1456,13 +1528,13 @@ export default function App() {
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 text-sm text-zinc-400">
                     <Scale className="w-4 h-4" />
-                    Код комнаты
+                    РљРѕРґ РєРѕРјРЅР°С‚С‹
                   </div>
                   <div className="text-3xl font-bold tracking-[0.25em] text-red-400">
                     {room.code}
                   </div>
                   <div className="text-sm text-zinc-400">
-                    Поделитесь кодом с другими игроками • 3–6 участников
+                    РџРѕРґРµР»РёС‚РµСЃСЊ РєРѕРґРѕРј СЃ РґСЂСѓРіРёРјРё РёРіСЂРѕРєР°РјРё вЂў 3вЂ“6 СѓС‡Р°СЃС‚РЅРёРєРѕРІ
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-3">
@@ -1472,7 +1544,7 @@ export default function App() {
                     onClick={() => copyCode(room.code)}
                   >
                     <Copy className="w-4 h-4" />
-                    {copiedRoomCode ? "Скопировано" : "Скопировать"}
+                    {copiedRoomCode ? "РЎРєРѕРїРёСЂРѕРІР°РЅРѕ" : "РЎРєРѕРїРёСЂРѕРІР°С‚СЊ"}
                   </Button>
                   {myId === room.hostId && (
                     <motion.div
@@ -1498,7 +1570,7 @@ export default function App() {
                     className="rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
                     onClick={resetAll}
                   >
-                    Выйти
+                    Р’С‹Р№С‚Рё
                   </Button>
                 </div>
               </CardContent>
@@ -1513,12 +1585,12 @@ export default function App() {
               animate="animate"
             >
               <InfoBlock
-                title="Игроки в комнате"
+                title="РРіСЂРѕРєРё РІ РєРѕРјРЅР°С‚Рµ"
                 icon={<UserPlus className="w-5 h-5" />}
                 action={myId === room.hostId ? (
                   <div className="flex items-center gap-3 px-3 py-1.5 rounded-xl border border-zinc-700 bg-zinc-800/60">
                     <label htmlFor="host-judge" className="text-sm font-medium text-zinc-200 cursor-pointer select-none">
-                      Я - Судья
+                      РЇ - РЎСѓРґСЊСЏ
                     </label>
                     <Switch
                       id="host-judge"
@@ -1542,7 +1614,7 @@ export default function App() {
                   </AnimatePresence>
                   {room.players.length < 3 && (
                     <div className="text-sm text-zinc-500 mt-2">
-                      Ожидание игроков... (нужно ещё минимум{" "}
+                      РћР¶РёРґР°РЅРёРµ РёРіСЂРѕРєРѕРІ... (РЅСѓР¶РЅРѕ РµС‰С‘ РјРёРЅРёРјСѓРј{" "}
                       {3 - room.players.length})
                     </div>
                   )}
@@ -1557,26 +1629,26 @@ export default function App() {
               animate="animate"
             >
               <InfoBlock
-                title="Доступные режимы"
+                title="Р”РѕСЃС‚СѓРїРЅС‹Рµ СЂРµР¶РёРјС‹"
                 icon={<Gavel className="w-5 h-5" />}
               >
                 <div className="space-y-3 text-sm">
                   <div className="flex items-center justify-between">
-                    <span>Игроков сейчас</span>
+                    <span>РРіСЂРѕРєРѕРІ СЃРµР№С‡Р°СЃ</span>
                     <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">
                       {room.players.length}
                     </Badge>
                   </div>
                   <Separator />
                   {room.players.length === 3 && (
-                    <div>Гражданский спор, трудовой спор</div>
+                    <div>Р“СЂР°Р¶РґР°РЅСЃРєРёР№ СЃРїРѕСЂ, С‚СЂСѓРґРѕРІРѕР№ СЃРїРѕСЂ</div>
                   )}
-                  {room.players.length === 4 && <div>Уголовное дело</div>}
-                  {room.players.length === 5 && <div>Уголовное дело</div>}
-                  {room.players.length >= 6 && <div>Суд на компанию</div>}
+                  {room.players.length === 4 && <div>РЈРіРѕР»РѕРІРЅРѕРµ РґРµР»Рѕ</div>}
+                  {room.players.length === 5 && <div>РЈРіРѕР»РѕРІРЅРѕРµ РґРµР»Рѕ</div>}
+                  {room.players.length >= 6 && <div>РЎСѓРґ РЅР° РєРѕРјРїР°РЅРёСЋ</div>}
                   <div className="text-zinc-400 pt-2">
-                    Ведущий запускает игру, сайт случайно выбирает подходящее
-                    дело и распределяет роли.
+                    Р’РµРґСѓС‰РёР№ Р·Р°РїСѓСЃРєР°РµС‚ РёРіСЂСѓ, СЃР°Р№С‚ СЃР»СѓС‡Р°Р№РЅРѕ РІС‹Р±РёСЂР°РµС‚ РїРѕРґС…РѕРґСЏС‰РµРµ
+                    РґРµР»Рѕ Рё СЂР°СЃРїСЂРµРґРµР»СЏРµС‚ СЂРѕР»Рё.
                   </div>
                 </div>
               </InfoBlock>
@@ -1651,7 +1723,7 @@ export default function App() {
                     <CardTitle className="flex items-center justify-between text-lg text-zinc-100">
                       <span className="flex items-center gap-2">
                         <Eye className="w-5 h-5" />
-                        История фактов
+                        РСЃС‚РѕСЂРёСЏ С„Р°РєС‚РѕРІ
                       </span>
                       <Button
                         size="sm"
@@ -1659,14 +1731,14 @@ export default function App() {
                         className="text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 rounded-lg h-8 w-8 p-0"
                         onClick={() => setShowFactHistory(false)}
                       >
-                        ✕
+                        вњ•
                       </Button>
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="overflow-y-auto flex-1 space-y-3 pb-6">
                     {game.revealedFacts.length === 0 ? (
                       <div className="text-sm text-zinc-400">
-                        Пока никто не раскрыл ни одного факта.
+                        РџРѕРєР° РЅРёРєС‚Рѕ РЅРµ СЂР°СЃРєСЂС‹Р» РЅРё РѕРґРЅРѕРіРѕ С„Р°РєС‚Р°.
                       </div>
                     ) : (
                       game.revealedFacts.map((fact, i) => {
@@ -1742,10 +1814,10 @@ export default function App() {
                         transition={{ delay: 0.3, type: "spring" }}
                       >
                         <Badge className="rounded-full px-3 py-1 text-sm bg-red-600/90 text-white border-0">
-                          Игра завершена
+                          РРіСЂР° Р·Р°РІРµСЂС€РµРЅР°
                         </Badge>
                       </motion.div>
-                      <h1 className="text-3xl font-bold pt-2">Вердикт суда</h1>
+                      <h1 className="text-3xl font-bold pt-2">Р’РµСЂРґРёРєС‚ СЃСѓРґР°</h1>
                     </div>
                     <motion.div
                       initial={{ opacity: 0, y: 16 }}
@@ -1753,7 +1825,7 @@ export default function App() {
                       transition={{ delay: 0.25 }}
                       className="bg-zinc-800/60 rounded-2xl p-6 space-y-1"
                     >
-                      <div className="text-sm text-zinc-400">Решение судьи</div>
+                      <div className="text-sm text-zinc-400">Р РµС€РµРЅРёРµ СЃСѓРґСЊРё</div>
                       <div className="text-2xl font-bold text-red-400">
                         {game.verdict}
                       </div>
@@ -1766,7 +1838,7 @@ export default function App() {
                     >
                       <div className="bg-zinc-800/40 rounded-2xl p-4">
                         <div className="text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-2">
-                          Реальная правда дела
+                          Р РµР°Р»СЊРЅР°СЏ РїСЂР°РІРґР° РґРµР»Р°
                         </div>
                         <div className="text-sm text-zinc-300">
                           {game.caseData.truth}
@@ -1789,7 +1861,7 @@ export default function App() {
                         onClick={finalExit}
                         className="w-full h-12 rounded-xl text-base bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0"
                       >
-                        Выйти в главное меню
+                        Р’С‹Р№С‚Рё РІ РіР»Р°РІРЅРѕРµ РјРµРЅСЋ
                       </Button>
                     </motion.div>
                   </CardContent>
@@ -1831,7 +1903,7 @@ export default function App() {
                 exit={{ opacity: 0 }}
                 className="bg-green-500/15 border border-green-500/40 text-green-300 rounded-xl px-4 py-3 text-sm font-medium"
               >
-                ✓ {rejoinAlert}
+                вњ“ {rejoinAlert}
               </motion.div>
             )}
           </AnimatePresence>
@@ -1845,7 +1917,7 @@ export default function App() {
                       {game.caseData.mode}
                     </Badge>
                     <span>{game.caseData.title}</span>
-                    <span className="text-zinc-600">• Комната {game.code}</span>
+                    <span className="text-zinc-600">вЂў РљРѕРјРЅР°С‚Р° {game.code}</span>
                   </div>
                   <h1 className="text-3xl md:text-4xl font-bold">
                     {game.caseData.description}
@@ -1862,7 +1934,7 @@ export default function App() {
                       transition={{ duration: 0.25 }}
                       className="text-sm font-medium"
                     >
-                      Этап: {currentStage}
+                      Р­С‚Р°Рї: {currentStage}
                     </motion.div>
                   </AnimatePresence>
                   <Progress
@@ -1878,7 +1950,7 @@ export default function App() {
                           onClick={retreatStage}
                           disabled={game.stageIndex <= 0 || game.finished}
                         >
-                          ← Пред.
+                          в†ђ РџСЂРµРґ.
                         </Button>
                         <Button
                           variant="secondary"
@@ -1889,7 +1961,7 @@ export default function App() {
                             game.finished
                           }
                         >
-                          След. →
+                          РЎР»РµРґ. в†’
                         </Button>
                       </>
                     )}
@@ -1898,7 +1970,7 @@ export default function App() {
                       className="rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
                       onClick={resetAll}
                     >
-                      Выйти
+                      Р’С‹Р№С‚Рё
                     </Button>
                   </div>
                 </div>
@@ -1907,7 +1979,7 @@ export default function App() {
           </Card>
 
           <div className="grid xl:grid-cols-[1.1fr_1.1fr_0.9fr] gap-6">
-            <InfoBlock title="Ваша роль" icon={<Shield className="w-5 h-5" />}>
+            <InfoBlock title="Р’Р°С€Р° СЂРѕР»СЊ" icon={<Shield className="w-5 h-5" />}>
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
                   <Avatar src={game.me.avatar ?? avatar} name={game.me.name} size={56} />
@@ -1919,13 +1991,13 @@ export default function App() {
                   </div>
                 </div>
                 <div>
-                  <div className="font-semibold mb-1">Цель</div>
+                  <div className="font-semibold mb-1">Р¦РµР»СЊ</div>
                   <p className="text-sm text-zinc-400">{game.me.goal}</p>
                 </div>
                 <Separator />
                 <div>
                   <div className="font-semibold mb-2 text-sm">
-                    Все участники
+                    Р’СЃРµ СѓС‡Р°СЃС‚РЅРёРєРё
                   </div>
                   <div className="space-y-1">
                     {game.players.map((p) => (
@@ -1945,7 +2017,7 @@ export default function App() {
               </div>
             </InfoBlock>
 
-            <InfoBlock title="Улики дела" icon={<Eye className="w-5 h-5" />}>
+            <InfoBlock title="РЈР»РёРєРё РґРµР»Р°" icon={<Eye className="w-5 h-5" />}>
               <div className="space-y-3">
                 {game.caseData.evidence.map((item, index) => (
                   <motion.div
@@ -1963,7 +2035,7 @@ export default function App() {
               </div>
             </InfoBlock>
 
-            <InfoBlock title="Вердикт" icon={<Gavel className="w-5 h-5" />}>
+            <InfoBlock title="Р’РµСЂРґРёРєС‚" icon={<Gavel className="w-5 h-5" />}>
               <div className="space-y-3">
                 {isJudge ? (
                   <>
@@ -1971,11 +2043,11 @@ export default function App() {
                       className={`text-sm ${game.stageIndex < stages.length - 1 ? "text-zinc-500" : "text-zinc-400"}`}
                     >
                       {game.stageIndex < stages.length - 1
-                        ? `Доступно на этапе «${stages[stages.length - 1]}»`
-                        : "Финальный этап. Вынесите решение."}
+                        ? `Р”РѕСЃС‚СѓРїРЅРѕ РЅР° СЌС‚Р°РїРµ В«${stages[stages.length - 1]}В»`
+                        : "Р¤РёРЅР°Р»СЊРЅС‹Р№ СЌС‚Р°Рї. Р’С‹РЅРµСЃРёС‚Рµ СЂРµС€РµРЅРёРµ."}
                     </div>
                     {(
-                      ["Виновен", "Не виновен", "Частично виновен"] as const
+                      ["Р’РёРЅРѕРІРµРЅ", "РќРµ РІРёРЅРѕРІРµРЅ", "Р§Р°СЃС‚РёС‡РЅРѕ РІРёРЅРѕРІРµРЅ"] as const
                     ).map((v, i) => (
                       <motion.div
                         key={v}
@@ -2000,11 +2072,11 @@ export default function App() {
                   </>
                 ) : (
                   <div className="text-sm text-zinc-400">
-                    Вердикт выносит судья
-                    {judgePlayer ? ` — ${judgePlayer.name}` : ""}.
+                    Р’РµСЂРґРёРєС‚ РІС‹РЅРѕСЃРёС‚ СЃСѓРґСЊСЏ
+                    {judgePlayer ? ` вЂ” ${judgePlayer.name}` : ""}.
                     {game.stageIndex < stages.length - 1 && (
                       <span className="block mt-1 text-zinc-500">
-                        Дождитесь последнего этапа.
+                        Р”РѕР¶РґРёС‚РµСЃСЊ РїРѕСЃР»РµРґРЅРµРіРѕ СЌС‚Р°РїР°.
                       </span>
                     )}
                   </div>
@@ -2017,7 +2089,7 @@ export default function App() {
             className={`grid gap-6 ${isObserverRole ? "xl:grid-cols-2" : "xl:grid-cols-[1fr_1fr_1fr_1fr]"}`}
           >
             <InfoBlock
-              title="Раскрытые факты"
+              title="Р Р°СЃРєСЂС‹С‚С‹Рµ С„Р°РєС‚С‹"
               icon={<Eye className="w-5 h-5" />}
               action={
                 game.revealedFacts.length > 0 ? (
@@ -2027,7 +2099,7 @@ export default function App() {
                     className="text-xs text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 rounded-lg h-7 px-2"
                     onClick={() => setShowFactHistory(true)}
                   >
-                    История ({game.revealedFacts.length})
+                    РСЃС‚РѕСЂРёСЏ ({game.revealedFacts.length})
                   </Button>
                 ) : undefined
               }
@@ -2035,7 +2107,7 @@ export default function App() {
               <div className="space-y-3 min-h-[80px]">
                 {visibleFacts.length === 0 ? (
                   <div className="text-sm text-zinc-400">
-                    Пока никто не раскрыл ни одного факта.
+                    РџРѕРєР° РЅРёРєС‚Рѕ РЅРµ СЂР°СЃРєСЂС‹Р» РЅРё РѕРґРЅРѕРіРѕ С„Р°РєС‚Р°.
                   </div>
                 ) : (
                   <AnimatePresence mode="popLayout">
@@ -2099,13 +2171,13 @@ export default function App() {
 
             {!isObserverRole && (
               <InfoBlock
-                title="Ваши факты"
+                title="Р’Р°С€Рё С„Р°РєС‚С‹"
                 icon={<AlertCircle className="w-5 h-5" />}
               >
                 <div className="space-y-3">
                   {game.me.facts.length === 0 ? (
                     <div className="text-sm text-zinc-400">
-                      У вас нет фактов для раскрытия.
+                      РЈ РІР°СЃ РЅРµС‚ С„Р°РєС‚РѕРІ РґР»СЏ СЂР°СЃРєСЂС‹С‚РёСЏ.
                     </div>
                   ) : (
                     game.me.facts.map((fact) => (
@@ -2123,7 +2195,7 @@ export default function App() {
                                   : "bg-zinc-800 text-zinc-100 border border-zinc-700"
                               }
                             >
-                              {fact.revealed ? "Раскрыт" : "Скрыт"}
+                              {fact.revealed ? "Р Р°СЃРєСЂС‹С‚" : "РЎРєСЂС‹С‚"}
                             </Badge>
                             <motion.div
                               whileHover={{ scale: 1.04 }}
@@ -2140,7 +2212,7 @@ export default function App() {
                                   isOpeningSpeechFactLimitReached
                                 }
                               >
-                                Раскрыть
+                                Р Р°СЃРєСЂС‹С‚СЊ
                               </Button>
                             </motion.div>
                           </div>
@@ -2154,7 +2226,7 @@ export default function App() {
 
             {!isObserverRole && (
               <InfoBlock
-                title="Ваши карты механик"
+                title="Р’Р°С€Рё РєР°СЂС‚С‹ РјРµС…Р°РЅРёРє"
                 icon={<Scale className="w-5 h-5" />}
               >
                 <div className="space-y-3">
@@ -2178,7 +2250,7 @@ export default function App() {
                                 : "bg-red-600 text-white border-0"
                             }
                           >
-                            {card.used ? "Использована" : "Готова"}
+                            {card.used ? "РСЃРїРѕР»СЊР·РѕРІР°РЅР°" : "Р“РѕС‚РѕРІР°"}
                           </Badge>
                           <motion.div
                             whileHover={{ scale: 1.04 }}
@@ -2191,7 +2263,7 @@ export default function App() {
                               onClick={() => useCard(card.id)}
                               disabled={card.used || game.finished || isPreparationStage}
                             >
-                              Применить
+                              РџСЂРёРјРµРЅРёС‚СЊ
                             </Button>
                           </motion.div>
                         </div>
@@ -2203,13 +2275,13 @@ export default function App() {
             )}
 
             <InfoBlock
-              title="Журнал механик"
+              title="Р–СѓСЂРЅР°Р» РјРµС…Р°РЅРёРє"
               icon={<Sparkles className="w-5 h-5" />}
             >
               <div className="space-y-3 min-h-[80px]">
                 {visibleCards.length === 0 ? (
                   <div className="text-sm text-zinc-400">
-                    Пока ни одна карта не была использована.
+                    РџРѕРєР° РЅРё РѕРґРЅР° РєР°СЂС‚Р° РЅРµ Р±С‹Р»Р° РёСЃРїРѕР»СЊР·РѕРІР°РЅР°.
                   </div>
                 ) : (
                   <AnimatePresence mode="popLayout">
@@ -2288,11 +2360,12 @@ export default function App() {
         transition={{ repeat: Infinity, duration: 1.8 }}
         className="text-zinc-400 text-sm"
       >
-        Загрузка...
+        Р—Р°РіСЂСѓР·РєР°...
       </motion.div>
     </div>
   );
 }
+
 
 
 
