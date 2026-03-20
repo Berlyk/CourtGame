@@ -1,4 +1,8 @@
-import { mechanicPool, cases, stages, roleOrderByCount } from "./gameData.js";
+import {
+  mechanicPool,
+  cases,
+  roleOrderByCount,
+} from "./gameData.js";
 
 function shuffle<T>(array: T[]): T[] {
   return [...array].sort(() => Math.random() - 0.5);
@@ -6,6 +10,64 @@ function shuffle<T>(array: T[]): T[] {
 
 function pickRandom<T>(array: T[], count = 1): T[] {
   return shuffle(array).slice(0, count);
+}
+
+function buildStagesByPlayerCount(playerCount: number): string[] {
+  switch (playerCount) {
+    case 4:
+      return [
+        "Подготовка",
+        "Выступление истца",
+        "Выступление ответчика",
+        "Выступление адвоката ответчика",
+        "Перекрестный допрос",
+        "Финальная речь истца",
+        "Финальная речь ответчика",
+        "Финальная речь адвоката ответчика",
+        "Решение судьи",
+      ];
+    case 5:
+      return [
+        "Подготовка",
+        "Выступление прокурора",
+        "Выступление истца",
+        "Выступление ответчика",
+        "Выступление адвоката ответчика",
+        "Перекрестный допрос",
+        "Финальная речь прокурора",
+        "Финальная речь истца",
+        "Финальная речь ответчика",
+        "Финальная речь адвоката ответчика",
+        "Решение судьи",
+      ];
+    case 6:
+      return [
+        "Подготовка",
+        "Выступление прокурора",
+        "Выступление истца",
+        "Выступление адвоката истца",
+        "Выступление ответчика",
+        "Выступление адвоката ответчика",
+        "Перекрестный допрос",
+        "Финальная речь прокурора",
+        "Финальная речь истца",
+        "Финальная речь адвоката истца",
+        "Финальная речь ответчика",
+        "Финальная речь адвоката ответчика",
+        "Решение судьи",
+      ];
+    case 3:
+    default:
+      return [
+        "Подготовка",
+        "Выступление истца",
+        "Выступление ответчика",
+        "Перекрестный допрос",
+        "Финальная речь истца",
+        "Финальная речь ответчика",
+        "Решение судьи",
+      ];
+  }
 }
 
 export interface PlayerCard {
@@ -54,6 +116,7 @@ export interface UsedCard {
 export interface GameState {
   caseData: any;
   players: Player[];
+  stages: string[];
   stageIndex: number;
   revealedFacts: RevealedFact[];
   usedCards: UsedCard[];
@@ -239,6 +302,7 @@ console.log(
 
 const selectedCase = pickRandom(availableCases)[0];
 const roleKeys = shuffle(roleOrderByCount[count]);
+const stages = buildStagesByPlayerCount(count);
 
   if (room.isHostJudge) {
     const hostIndex = room.players.findIndex(p => p.id === room.hostId);
@@ -272,6 +336,7 @@ const roleKeys = shuffle(roleOrderByCount[count]);
   room.game = {
     caseData: selectedCase,
     players: assignedPlayers,
+    stages,
     stageIndex: 0,
     revealedFacts: [],
     usedCards: [],
@@ -339,7 +404,10 @@ export function nextStage(code: string): Room | null {
   const room = rooms.get(code);
   if (!room?.game) return null;
 
-  room.game.stageIndex = Math.min(room.game.stageIndex + 1, stages.length - 1);
+  room.game.stageIndex = Math.min(
+    room.game.stageIndex + 1,
+    room.game.stages.length - 1,
+  );
   return room;
 }
 
