@@ -22,9 +22,21 @@ function randomCode(): string {
   return Math.random().toString(36).slice(2, 7).toUpperCase();
 }
 
-const PREPARATION_STAGE_INDEX = 0;
-const OPENING_SPEECH_STAGE_INDEX = 1;
+const DEFAULT_PREPARATION_STAGE_INDEX = 0;
+const DEFAULT_OPENING_SPEECH_STAGE_INDEX = 1;
+const PREPARATION_STAGE_NAME = "Подготовка";
+const OPENING_SPEECH_STAGE_NAME = "Выступление истца";
 const OPENING_SPEECH_FACT_LIMIT = 2;
+
+function resolveStageIndex(
+  stages: string[] | undefined,
+  stageName: string,
+  fallbackIndex: number,
+): number {
+  if (!stages || stages.length === 0) return fallbackIndex;
+  const stageIndex = stages.indexOf(stageName);
+  return stageIndex >= 0 ? stageIndex : fallbackIndex;
+}
 
 function mapGamePlayers(players: any[]) {
   return players.map((p: any) => ({
@@ -55,6 +67,7 @@ function getRoomState(room: any, playerId: string) {
     code: room.code,
     hostId: room.hostId,
     caseData: room.game.caseData,
+    stages: room.game.stages,
     stageIndex: room.game.stageIndex,
     revealedFacts: room.game.revealedFacts,
     usedCards: room.game.usedCards,
@@ -290,15 +303,25 @@ export function setupSocket(httpServer: HttpServer) {
     socket.on("reveal_fact", ({ code, playerId, factId }: { code: string; playerId: string; factId: string }) => {
       const room = getRoom(code);
       if (!room?.game) return;
+      const preparationStageIndex = resolveStageIndex(
+        room.game.stages,
+        PREPARATION_STAGE_NAME,
+        DEFAULT_PREPARATION_STAGE_INDEX,
+      );
+      const openingSpeechStageIndex = resolveStageIndex(
+        room.game.stages,
+        OPENING_SPEECH_STAGE_NAME,
+        DEFAULT_OPENING_SPEECH_STAGE_INDEX,
+      );
 
-      if (room.game.stageIndex === PREPARATION_STAGE_INDEX) {
+      if (room.game.stageIndex === preparationStageIndex) {
         socket.emit("error", { message: "На этапе «Подготовка» раскрывать факты нельзя." });
         return;
       }
 
-      if (room.game.stageIndex === OPENING_SPEECH_STAGE_INDEX) {
+      if (room.game.stageIndex === openingSpeechStageIndex) {
         const openingSpeechRevealedFacts = room.game.revealedFacts.filter(
-          (fact: any) => fact.stageIndex === OPENING_SPEECH_STAGE_INDEX
+          (fact: any) => fact.stageIndex === openingSpeechStageIndex
         ).length;
         if (openingSpeechRevealedFacts >= OPENING_SPEECH_FACT_LIMIT) {
           socket.emit("error", { message: "На этапе «Вступительная речь» можно раскрыть только 2 факта." });
@@ -323,7 +346,12 @@ export function setupSocket(httpServer: HttpServer) {
     socket.on("use_card", ({ code, playerId, cardId }: { code: string; playerId: string; cardId: string }) => {
       const room = getRoom(code);
       if (!room?.game) return;
-      if (room.game.stageIndex === PREPARATION_STAGE_INDEX) {
+      const preparationStageIndex = resolveStageIndex(
+        room.game.stages,
+        PREPARATION_STAGE_NAME,
+        DEFAULT_PREPARATION_STAGE_INDEX,
+      );
+      if (room.game.stageIndex === preparationStageIndex) {
         socket.emit("error", { message: "На этапе «Подготовка» карты механик использовать нельзя." });
         return;
       }
