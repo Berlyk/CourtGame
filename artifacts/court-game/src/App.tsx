@@ -34,6 +34,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -642,6 +643,9 @@ function ContextHelp({
       <DialogContent className="max-w-3xl p-0 border-zinc-800 bg-zinc-950 text-zinc-100 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95 data-[state=open]:slide-in-from-bottom-4 data-[state=closed]:slide-out-to-bottom-2 duration-200">
         <DialogHeader className="px-6 pt-6 pb-2">
           <DialogTitle className="text-zinc-100">Помощь по игре</DialogTitle>
+          <DialogDescription className="sr-only">
+            Справочная информация по ролям, этапам и механикам игры.
+          </DialogDescription>
         </DialogHeader>
         <div className="px-6 pb-6 max-h-[75vh] overflow-y-auto">
           <HelpCenter
