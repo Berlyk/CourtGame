@@ -57,6 +57,20 @@ function isCrossExaminationStage(stageName: string): boolean {
   return stageIncludesAll(normalizedStageName, CROSS_EXAMINATION_STAGE_MARKERS);
 }
 
+function isOpeningSpeechStage(stageName: string): boolean {
+  const normalizedStageName = normalizeStageName(stageName);
+  return OPENING_STAGE_MARKERS.some((marker) =>
+    normalizedStageName.includes(marker),
+  );
+}
+
+function isClosingSpeechStage(stageName: string): boolean {
+  const normalizedStageName = normalizeStageName(stageName);
+  return CLOSING_STAGE_MARKERS.some((marker) =>
+    normalizedStageName.includes(marker),
+  );
+}
+
 function isRoleSpeechStage(roleKey: string | undefined, stageName: string): boolean {
   if (!roleKey || !stageName) return false;
 
@@ -66,14 +80,22 @@ function isRoleSpeechStage(roleKey: string | undefined, stageName: string): bool
     return false;
   }
 
-  const isOpeningStage = OPENING_STAGE_MARKERS.some((marker) =>
-    normalizedStageName.includes(marker),
-  );
-  const isClosingStage = CLOSING_STAGE_MARKERS.some((marker) =>
-    normalizedStageName.includes(marker),
-  );
+  const isOpeningStage = isOpeningSpeechStage(stageName);
+  const isClosingStage = isClosingSpeechStage(stageName);
 
   return isOpeningStage || isClosingStage;
+}
+
+function isRoleOpeningSpeechStage(roleKey: string | undefined, stageName: string): boolean {
+  if (!roleKey || !stageName) return false;
+
+  const normalizedStageName = normalizeStageName(stageName);
+  const roleMarkers = ROLE_STAGE_MARKERS[roleKey];
+  if (!roleMarkers || !stageIncludesAll(normalizedStageName, roleMarkers)) {
+    return false;
+  }
+
+  return isOpeningSpeechStage(stageName);
 }
 
 function canRoleRevealFactsAtStage(roleKey: string | undefined, stageName: string): boolean {
@@ -366,6 +388,25 @@ export function setupSocket(httpServer: HttpServer) {
             "Сейчас вы не можете раскрывать факты. Можно на своем этапе и на этапе «Перекрестный допрос».",
         });
         return;
+      }
+
+      const isCurrentPlayerOpeningSpeech = isRoleOpeningSpeechStage(
+        currentPlayer.roleKey,
+        currentStageName,
+      );
+      if (isCurrentPlayerOpeningSpeech) {
+        const revealedFactsOnThisOpeningStage = room.game.revealedFacts.filter(
+          (fact: any) =>
+            fact.ownerId === playerId && fact.stageIndex === room.game!.stageIndex,
+        ).length;
+
+        if (revealedFactsOnThisOpeningStage >= 2) {
+          socket.emit("error", {
+            message:
+              "На своем вступительном этапе можно раскрыть максимум 2 факта.",
+          });
+          return;
+        }
       }
 
       const updatedRoom = revealFact(code, playerId, factId);
