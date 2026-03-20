@@ -356,6 +356,31 @@ function HelpCenter({
     [filteredTopics],
   );
 
+  const hasSearchQuery = query.trim().length > 0;
+  const [openCategoryValues, setOpenCategoryValues] = useState<string[]>([]);
+  const [openTopicValuesByCategory, setOpenTopicValuesByCategory] = useState<
+    Record<string, string[]>
+  >({});
+
+  useEffect(() => {
+    if (!hasSearchQuery) {
+      setOpenCategoryValues([]);
+      setOpenTopicValuesByCategory({});
+      return;
+    }
+
+    const nextCategories = groupedTopics.map((group) => group.category);
+    const nextOpenTopics = Object.fromEntries(
+      groupedTopics.map((group) => [
+        group.category,
+        group.items.map((item) => item.id),
+      ]),
+    ) as Record<string, string[]>;
+
+    setOpenCategoryValues(nextCategories);
+    setOpenTopicValuesByCategory(nextOpenTopics);
+  }, [hasSearchQuery, groupedTopics]);
+
   return (
     <div className="space-y-4">
       <div className="relative">
@@ -377,7 +402,12 @@ function HelpCenter({
           </CardContent>
         </Card>
       ) : (
-        <Accordion type="multiple" className="space-y-3">
+        <Accordion
+          type="multiple"
+          className="space-y-3"
+          value={openCategoryValues}
+          onValueChange={setOpenCategoryValues}
+        >
           {groupedTopics.map((group) => (
             <AccordionItem
               key={group.category}
@@ -385,21 +415,33 @@ function HelpCenter({
               className="border-0"
             >
               <Card className="rounded-2xl border-zinc-800 bg-zinc-900/80 text-zinc-100">
-                <CardHeader className={compact ? "pb-2 pt-4" : "pb-2"}>
-                  <AccordionTrigger className="py-0 text-zinc-100 hover:no-underline">
-                    <CardTitle className={compact ? "text-base" : "text-lg"}>
-                      <span className="flex items-center gap-2">
-                        {group.category}
-                        <Badge className="bg-zinc-800 text-zinc-300 border border-zinc-700">
-                          {group.items.length}
-                        </Badge>
-                      </span>
-                    </CardTitle>
+                <CardHeader className="p-0">
+                  <AccordionTrigger className="h-16 px-5 py-0 text-zinc-100 hover:no-underline">
+                    <span
+                      className={`flex items-center gap-2 leading-none ${
+                        compact ? "text-base" : "text-lg"
+                      }`}
+                    >
+                      {group.category}
+                      <Badge className="bg-zinc-800 text-zinc-300 border border-zinc-700">
+                        {group.items.length}
+                      </Badge>
+                    </span>
                   </AccordionTrigger>
                 </CardHeader>
                 <AccordionContent>
                   <CardContent className={compact ? "pt-0 pb-4" : "pt-0"}>
-                    <Accordion type="multiple" className="w-full">
+                    <Accordion
+                      type="multiple"
+                      className="w-full"
+                      value={openTopicValuesByCategory[group.category] ?? []}
+                      onValueChange={(values) =>
+                        setOpenTopicValuesByCategory((prev) => ({
+                          ...prev,
+                          [group.category]: values,
+                        }))
+                      }
+                    >
                       {group.items.map((item) => (
                         <AccordionItem
                           key={item.id}
@@ -648,7 +690,7 @@ function ContextHelp({
           Помощь
         </motion.button>
       </DialogTrigger>
-      <DialogContent className="max-w-3xl p-0 border-zinc-800 bg-zinc-950 text-zinc-100 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95 data-[state=open]:slide-in-from-bottom-4 data-[state=closed]:slide-out-to-bottom-2 duration-200">
+      <DialogContent className="max-w-3xl p-0 border-zinc-800 bg-zinc-950 text-zinc-100 origin-bottom-right data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95 data-[state=open]:slide-in-from-right-8 data-[state=open]:slide-in-from-bottom-8 data-[state=closed]:slide-out-to-right-8 data-[state=closed]:slide-out-to-bottom-8 duration-200">
         <DialogHeader className="px-6 pt-6 pb-2">
           <DialogTitle className="text-zinc-100">Помощь по игре</DialogTitle>
           <DialogDescription className="sr-only">
