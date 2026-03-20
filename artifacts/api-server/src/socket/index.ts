@@ -22,22 +22,64 @@ function randomCode(): string {
   return Math.random().toString(36).slice(2, 7).toUpperCase();
 }
 
-const DEFAULT_PREPARATION_STAGE_INDEX = 0;
-const DEFAULT_OPENING_SPEECH_STAGE_INDEX = 1;
-const PREPARATION_STAGE_NAME = "Подготовка";
-const OPENING_SPEECH_STAGE_NAME = "Выступление истца";
-const OPENING_SPEECH_FACT_LIMIT = 2;
+const PREPARATION_STAGE_MARKER = "подготов";
+const CROSS_EXAMINATION_STAGE_MARKERS = ["перекрест", "допрос"];
+const OPENING_STAGE_MARKERS = ["выступлен", "вступительн"];
+const CLOSING_STAGE_MARKERS = ["финальн", "заключительн"];
+const ROLE_STAGE_MARKERS: Record<string, string[]> = {
+  plaintiff: ["истц"],
+  defendant: ["ответчик"],
+  plaintiffLawyer: ["адвокат", "истц"],
+  defenseLawyer: ["адвокат", "ответчик"],
+  prosecutor: ["прокурор"],
+};
 
-function resolveStageIndex(
-  stages: string[] | undefined,
-  stageName: string,
-  fallbackIndex: number,
-): number {
-  if (!stages || stages.length === 0) return fallbackIndex;
-  const stageIndex = stages.indexOf(stageName);
-  return stageIndex >= 0 ? stageIndex : fallbackIndex;
+function normalizeStageName(stageName: string): string {
+  return stageName.toLowerCase().replace(/ё/g, "е").trim();
 }
 
+function stageIncludesAll(normalizedStageName: string, markers: string[]): boolean {
+  return markers.every((marker) => normalizedStageName.includes(marker));
+}
+
+function isPreparationStage(stageName: string): boolean {
+  const normalizedStageName = normalizeStageName(stageName);
+  return normalizedStageName.includes(PREPARATION_STAGE_MARKER);
+}
+
+function getCurrentStageName(stages: string[] | undefined, stageIndex: number): string {
+  if (!stages || stages.length === 0) return "";
+  return stages[stageIndex] ?? "";
+}
+
+function isCrossExaminationStage(stageName: string): boolean {
+  const normalizedStageName = normalizeStageName(stageName);
+  return stageIncludesAll(normalizedStageName, CROSS_EXAMINATION_STAGE_MARKERS);
+}
+
+function isRoleSpeechStage(roleKey: string | undefined, stageName: string): boolean {
+  if (!roleKey || !stageName) return false;
+
+  const normalizedStageName = normalizeStageName(stageName);
+  const roleMarkers = ROLE_STAGE_MARKERS[roleKey];
+  if (!roleMarkers || !stageIncludesAll(normalizedStageName, roleMarkers)) {
+    return false;
+  }
+
+  const isOpeningStage = OPENING_STAGE_MARKERS.some((marker) =>
+    normalizedStageName.includes(marker),
+  );
+  const isClosingStage = CLOSING_STAGE_MARKERS.some((marker) =>
+    normalizedStageName.includes(marker),
+  );
+
+  return isOpeningStage || isClosingStage;
+}
+
+function canRoleRevealFactsAtStage(roleKey: string | undefined, stageName: string): boolean {
+  if (isCrossExaminationStage(stageName)) return true;
+  return isRoleSpeechStage(roleKey, stageName);
+}
 function mapGamePlayers(players: any[]) {
   return players.map((p: any) => ({
     id: p.id,
@@ -303,30 +345,27 @@ export function setupSocket(httpServer: HttpServer) {
     socket.on("reveal_fact", ({ code, playerId, factId }: { code: string; playerId: string; factId: string }) => {
       const room = getRoom(code);
       if (!room?.game) return;
-      const preparationStageIndex = resolveStageIndex(
+      const currentStageName = getCurrentStageName(
         room.game.stages,
-        PREPARATION_STAGE_NAME,
-        DEFAULT_PREPARATION_STAGE_INDEX,
-      );
-      const openingSpeechStageIndex = resolveStageIndex(
-        room.game.stages,
-        OPENING_SPEECH_STAGE_NAME,
-        DEFAULT_OPENING_SPEECH_STAGE_INDEX,
+        room.game.stageIndex,
       );
 
-      if (room.game.stageIndex === preparationStageIndex) {
-        socket.emit("error", { message: "На этапе «Подготовка» раскрывать факты нельзя." });
+      if (isPreparationStage(currentStageName)) {
+        socket.emit("error", {
+          message: "На этапе «Подготовка» раскрывать факты нельзя.",
+        });
         return;
       }
 
-      if (room.game.stageIndex === openingSpeechStageIndex) {
-        const openingSpeechRevealedFacts = room.game.revealedFacts.filter(
-          (fact: any) => fact.stageIndex === openingSpeechStageIndex
-        ).length;
-        if (openingSpeechRevealedFacts >= OPENING_SPEECH_FACT_LIMIT) {
-          socket.emit("error", { message: "На этапе «Вступительная речь» можно раскрыть только 2 факта." });
-          return;
-        }
+      const currentPlayer = room.game.players.find((p: any) => p.id === playerId);
+      if (!currentPlayer) return;
+
+      if (!canRoleRevealFactsAtStage(currentPlayer.roleKey, currentStageName)) {
+        socket.emit("error", {
+          message:
+            "Сейчас вы не можете раскрывать факты. Можно на своем этапе и на этапе «Перекрестный допрос».",
+        });
+        return;
       }
 
       const updatedRoom = revealFact(code, playerId, factId);
@@ -346,12 +385,11 @@ export function setupSocket(httpServer: HttpServer) {
     socket.on("use_card", ({ code, playerId, cardId }: { code: string; playerId: string; cardId: string }) => {
       const room = getRoom(code);
       if (!room?.game) return;
-      const preparationStageIndex = resolveStageIndex(
+      const currentStageName = getCurrentStageName(
         room.game.stages,
-        PREPARATION_STAGE_NAME,
-        DEFAULT_PREPARATION_STAGE_INDEX,
+        room.game.stageIndex,
       );
-      if (room.game.stageIndex === preparationStageIndex) {
+      if (isPreparationStage(currentStageName)) {
         socket.emit("error", { message: "На этапе «Подготовка» карты механик использовать нельзя." });
         return;
       }
@@ -462,3 +500,4 @@ export function setupSocket(httpServer: HttpServer) {
 
   return io;
 }
+
