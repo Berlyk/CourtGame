@@ -462,4 +462,3 @@ export function setupSocket(httpServer: HttpServer) {
 
   return io;
 }
-
