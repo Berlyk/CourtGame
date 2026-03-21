@@ -233,7 +233,12 @@ function normalizeVenueUrl(url: string | undefined): string | undefined {
 export function createRoom(code: string, player: Player, options?: CreateRoomOptions): Room {
   const modeKey = normalizeModeKey(options?.modeKey);
   const maxPlayers = ROOM_MODE_MAX_PLAYERS[modeKey];
-  const visibility = normalizeVisibility(options?.visibility);
+  const visibility =
+    options?.visibility !== undefined
+      ? normalizeVisibility(options.visibility)
+      : modeKey === "quick_flex"
+        ? "public"
+        : "private";
   const password = normalizeRoomPassword(options?.password);
   const roomName = normalizeRoomName(options?.roomName);
   const venueLabel = normalizeVenueLabel(options?.venueLabel);

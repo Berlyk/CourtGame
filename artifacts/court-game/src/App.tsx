@@ -297,6 +297,36 @@ const floatingHelpButtonVariants = {
 const HIDE_SCROLLBAR_CLASS =
   "[scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden";
 
+function CourtAtmosphereBackground() {
+  return (
+    <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+      <div className="absolute inset-0 bg-[#0b0b0f]" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_20%,rgba(145,22,36,0.18),transparent_58%),radial-gradient(ellipse_at_50%_85%,rgba(120,16,28,0.1),transparent_62%)]" />
+
+      <div className="absolute inset-y-0 left-0 w-[18vw] min-w-[64px] max-w-[180px] opacity-[0.14]">
+        <div className="relative h-full w-full bg-[linear-gradient(to_right,rgba(212,212,216,0.09),rgba(212,212,216,0.03)_28%,transparent_72%,rgba(212,212,216,0.06))]">
+          <div className="absolute inset-y-0 left-[38%] w-px bg-zinc-100/10" />
+          <div className="absolute inset-y-0 right-[30%] w-px bg-zinc-100/10" />
+        </div>
+      </div>
+      <div className="absolute inset-y-0 right-0 w-[18vw] min-w-[64px] max-w-[180px] opacity-[0.14]">
+        <div className="relative h-full w-full bg-[linear-gradient(to_left,rgba(212,212,216,0.09),rgba(212,212,216,0.03)_28%,transparent_72%,rgba(212,212,216,0.06))]">
+          <div className="absolute inset-y-0 left-[30%] w-px bg-zinc-100/10" />
+          <div className="absolute inset-y-0 right-[38%] w-px bg-zinc-100/10" />
+        </div>
+      </div>
+
+      <div className="absolute left-1/2 top-[22%] h-[320px] w-[320px] -translate-x-1/2 opacity-[0.06]">
+        <div className="absolute left-[50%] top-[36%] h-2.5 w-44 -translate-x-1/2 rotate-[28deg] rounded-full bg-zinc-300/70" />
+        <div className="absolute left-[59%] top-[28%] h-9 w-24 -translate-x-1/2 rotate-[28deg] rounded-md border border-zinc-300/45 bg-zinc-300/30" />
+        <div className="absolute left-[41%] top-[53%] h-7 w-20 -translate-x-1/2 rotate-[28deg] rounded-md border border-zinc-300/40 bg-zinc-300/25" />
+      </div>
+
+      <div className="absolute inset-0 opacity-[0.07] mix-blend-soft-light bg-[radial-gradient(rgba(255,255,255,0.22)_0.55px,transparent_0.8px)] [background-size:3px_3px]" />
+    </div>
+  );
+}
+
 interface DevLogEntry {
   date: string;
   version: string;
@@ -1808,14 +1838,14 @@ export default function App() {
     };
   }, [socket, avatar, sharedAvatar]);
 
-  const createQuickPrivateRoom = useCallback(() => {
+  const createQuickRoom = useCallback(() => {
     const name = playerName.trim() || "Игрок";
     localStorage.setItem("court_nickname", name);
     socket.emit("create_room", {
       playerName: name,
       avatar: sharedAvatar || undefined,
       options: {
-        visibility: "private",
+        visibility: "public",
         modeKey: "quick_flex",
       },
     });
@@ -2277,8 +2307,9 @@ export default function App() {
         initial="initial"
         animate="animate"
         exit="exit"
-        className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center p-6"
+        className="relative isolate min-h-screen bg-[#0b0b0f] text-zinc-100 flex items-center justify-center p-6"
       >
+        <CourtAtmosphereBackground />
         <div className="w-full max-w-sm space-y-4">
           <Card className="rounded-[28px] border-zinc-800 bg-zinc-900/95 text-zinc-100">
             <CardContent className="p-8 space-y-6">
@@ -2353,8 +2384,9 @@ export default function App() {
         initial="initial"
         animate="animate"
         exit="exit"
-        className="min-h-screen overflow-y-scroll bg-zinc-950 text-zinc-100 p-6 md:p-10"
+        className="relative isolate min-h-screen overflow-y-auto bg-[#0b0b0f] text-zinc-100 p-6 md:p-10"
       >
+        <CourtAtmosphereBackground />
         <div className="max-w-4xl mx-auto">
           <Card className="rounded-[28px] border-zinc-800 bg-zinc-900/95 text-zinc-100">
             <CardContent className="p-8 md:p-10">
@@ -2490,8 +2522,9 @@ export default function App() {
         initial="initial"
         animate="animate"
         exit="exit"
-        className="min-h-screen bg-zinc-950 text-zinc-100 p-6 md:p-10"
+        className="relative isolate min-h-screen bg-[#0b0b0f] text-zinc-100 p-4 sm:p-6 md:p-10"
       >
+        <CourtAtmosphereBackground />
         <AnimatePresence>
           {kickedAlert && (
             <motion.div
@@ -2507,15 +2540,16 @@ export default function App() {
         </AnimatePresence>
 
         <div className="max-w-6xl mx-auto mb-8 flex justify-center">
-          <div className="relative">
-            <div className="inline-flex flex-wrap items-center justify-center gap-1 rounded-full border border-zinc-800 bg-zinc-900/90 p-1.5 shadow-sm shadow-black/30">
+          <div className="relative w-full max-w-[760px]">
+            <div className="flex flex-col gap-2 rounded-[28px] border border-zinc-800 bg-zinc-900/90 p-2 shadow-sm shadow-black/30 sm:flex-row sm:items-center sm:justify-between">
+              <div className="grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap sm:items-center sm:justify-center sm:gap-1">
               <Button
                 variant="ghost"
                 onClick={() => {
                   setHomeTab("play");
                   setProfileMenuOpen(false);
                 }}
-                className={`h-9 rounded-full px-4 gap-2 ${
+                className={`h-10 rounded-full px-4 gap-2 ${
                   homeTab === "play"
                     ? "bg-red-600 text-white hover:bg-red-500"
                     : "text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800"
@@ -2530,7 +2564,7 @@ export default function App() {
                   setHomeTab("development");
                   setProfileMenuOpen(false);
                 }}
-                className={`h-9 rounded-full px-4 gap-2 ${
+                className={`h-10 rounded-full px-4 gap-2 ${
                   homeTab === "development"
                     ? "bg-red-600 text-white hover:bg-red-500"
                     : "text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800"
@@ -2545,7 +2579,7 @@ export default function App() {
                   setHomeTab("help");
                   setProfileMenuOpen(false);
                 }}
-                className={`h-9 rounded-full px-4 gap-2 ${
+                className={`h-10 rounded-full px-4 gap-2 col-span-2 sm:col-span-1 ${
                   homeTab === "help"
                     ? "bg-red-600 text-white hover:bg-red-500"
                     : "text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800"
@@ -2554,18 +2588,20 @@ export default function App() {
                 <CircleHelp className="w-4 h-4" />
                 Помощь
               </Button>
+              </div>
 
-              <div className="mx-1 hidden h-5 w-px bg-zinc-700 sm:block" />
-
+              <div className="hidden h-5 w-px bg-zinc-700 sm:block" />
+              <div className="flex justify-center sm:justify-end sm:pl-2">
               <Button
                 variant="outline"
                 onClick={() => setProfileMenuOpen((prev) => !prev)}
-                className="rounded-full border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100 px-3.5 h-10 gap-2"
+                className="h-11 w-full sm:w-auto rounded-full border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100 px-3.5 gap-2"
               >
                 <Avatar src={avatar} name={playerName || "Игрок"} size={32} />
                 <span className="max-w-[130px] truncate text-sm">{playerName || "Игрок"}</span>
                 <ChevronDown className="w-4 h-4 text-zinc-400" />
               </Button>
+              </div>
             </div>
 
             <AnimatePresence>
@@ -2700,8 +2736,20 @@ export default function App() {
                         </AnimatePresence>
 
                         <div className="grid gap-4">
-                          <div className="rounded-2xl border border-zinc-800 bg-zinc-950/65 p-4 space-y-3">
-                            <div className="text-sm font-semibold text-zinc-200">Присоединиться по коду</div>
+                          <div className="rounded-2xl border border-zinc-800 bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950/90 p-4 sm:p-5 space-y-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                            <div className="flex items-start gap-3">
+                              <div className="mt-0.5 h-9 w-9 rounded-xl border border-zinc-700 bg-zinc-900/90 text-zinc-300 flex items-center justify-center">
+                                <Search className="h-4 w-4" />
+                              </div>
+                              <div className="space-y-1">
+                                <div className="text-sm sm:text-base font-semibold text-zinc-100">
+                                  Вход по коду комнаты
+                                </div>
+                                <div className="text-xs text-zinc-500">
+                                  Введите код и сразу перейдите в нужное лобби.
+                                </div>
+                              </div>
+                            </div>
                             <div className="flex flex-col sm:flex-row gap-3">
                               <Input
                                 value={joinCode}
@@ -2746,7 +2794,7 @@ export default function App() {
 
                           <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
                             <Button
-                              onClick={createQuickPrivateRoom}
+                              onClick={createQuickRoom}
                               className="w-full h-12 rounded-xl text-base gap-2 bg-red-600 hover:bg-red-500 text-white border-0"
                             >
                               <UserPlus className="w-4 h-4" />
@@ -2790,17 +2838,10 @@ export default function App() {
                             Выберите комнату для входа или создайте свою.
                           </p>
                         </div>
-                        <div className="flex w-full sm:w-auto items-center gap-2">
-                          <Button
-                            variant="outline"
-                            onClick={() => socket.emit("list_public_matches")}
-                            className="flex-1 sm:flex-initial rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
-                          >
-                            Обновить
-                          </Button>
+                        <div className="flex w-full sm:w-auto items-center">
                           <Button
                             onClick={() => setCreateMatchDialogOpen(true)}
-                            className="flex-1 sm:flex-initial rounded-xl bg-red-600 hover:bg-red-500 text-white border-0 gap-2"
+                            className="w-full sm:w-auto h-12 rounded-xl bg-red-600 hover:bg-red-500 text-white border-0 gap-2 px-7 text-base font-semibold shadow-[0_0_0_1px_rgba(239,68,68,0.5),0_0_24px_rgba(220,38,38,0.35)] hover:shadow-[0_0_0_1px_rgba(239,68,68,0.6),0_0_28px_rgba(239,68,68,0.5)]"
                           >
                             <UserPlus className="w-4 h-4" />
                             Создать матч
@@ -2915,7 +2956,9 @@ export default function App() {
                 }
               }}
             >
-              <DialogContent className="max-w-3xl border-zinc-800 bg-zinc-950 text-zinc-100 [&>button]:h-11 [&>button]:w-11 [&>button>svg]:h-6 [&>button>svg]:w-6 [&>button]:top-3 [&>button]:right-3">
+              <DialogContent
+                className={`w-[calc(100vw-1.25rem)] max-w-3xl max-h-[90vh] overflow-y-auto border-zinc-800 bg-zinc-950 text-zinc-100 p-5 sm:p-6 ${HIDE_SCROLLBAR_CLASS} [&>button]:h-12 [&>button]:w-12 [&>button>svg]:h-7 [&>button>svg]:w-7 [&>button]:top-2 [&>button]:right-2`}
+              >
                 <DialogHeader className="space-y-1">
                   <DialogTitle>Создать матч</DialogTitle>
                   <DialogDescription className="text-zinc-400">
@@ -2931,7 +2974,7 @@ export default function App() {
                       {selectedCreateMode.title}
                     </div>
                     <div className="mt-1 text-xs text-zinc-400">
-                      Лимит комнаты: {selectedCreateMode.maxPlayers} игроков
+                      На {selectedCreateMode.maxPlayers} игроков
                     </div>
                   </div>
                   <div className="grid gap-4 md:grid-cols-2">
@@ -3199,8 +3242,9 @@ export default function App() {
         initial="initial"
         animate="animate"
         exit="exit"
-        className="min-h-screen bg-zinc-950 text-zinc-100 p-6 md:p-10"
+        className="relative isolate min-h-screen bg-[#0b0b0f] text-zinc-100 p-4 sm:p-6 md:p-10"
       >
+        <CourtAtmosphereBackground />
         <div className="max-w-6xl mx-auto space-y-6">
           <AnimatePresence>
             {error && (
@@ -3326,7 +3370,7 @@ export default function App() {
                   </div>
                 ) : undefined}
               >
-                <div className="flex min-h-[460px] lg:min-h-[660px] flex-col">
+                <div className="relative flex min-h-[460px] lg:min-h-[660px] flex-col pb-12">
                   <div className="grid gap-3">
                     <AnimatePresence>
                       {room.players.map((player) => (
@@ -3341,7 +3385,7 @@ export default function App() {
                     </AnimatePresence>
                   </div>
                   {neededPlayersForStart > 0 && (
-                    <div className="mt-auto pb-2 text-center text-sm text-zinc-500">
+                    <div className="absolute inset-x-0 bottom-1 text-center text-sm text-zinc-500">
                       Ожидание игроков... (нужно ещё минимум {neededPlayersForStart})
                     </div>
                   )}
@@ -3515,8 +3559,9 @@ export default function App() {
         variants={pageVariants}
         initial="initial"
         animate="animate"
-        className="min-h-screen bg-zinc-950 text-zinc-100 p-6 md:p-10"
+        className="relative isolate min-h-screen bg-[#0b0b0f] text-zinc-100 p-4 sm:p-6 md:p-10"
       >
+        <CourtAtmosphereBackground />
         <AnimatePresence>
           {showFactHistory && (
             <motion.div
