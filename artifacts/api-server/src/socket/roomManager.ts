@@ -502,6 +502,10 @@ export function listPublicMatches(): PublicMatchInfo[] {
       const hostPlayer =
         room.players.find((p) => p.id === room.hostId) ??
         room.game?.players.find((p: any) => p.id === room.hostId);
+      const playerSource = room.game ? room.game.players : room.players;
+      const connectedPlayersCount = playerSource.filter(
+        (p: any) => typeof p?.socketId === "string" && p.socketId.trim().length > 0,
+      ).length;
 
       return {
         code: room.code,
@@ -509,7 +513,7 @@ export function listPublicMatches(): PublicMatchInfo[] {
         modeKey: room.modeKey,
         visibility: room.visibility,
         hostName: hostPlayer?.name ?? "Host",
-        playerCount: room.players.length,
+        playerCount: connectedPlayersCount,
         maxPlayers: room.maxPlayers,
         started: room.started,
         currentStage: room.game

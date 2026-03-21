@@ -2098,9 +2098,19 @@ export default function App() {
   );
 
   const returnHomeWithSession = useCallback(() => {
+    socket.emit("leave_room");
+    localStorage.removeItem("court_session");
+    localStorage.removeItem("court_session_token");
+    setHasSession(false);
     setScreen("home");
     setRoom(null);
     setGame(null);
+    setMyId(null);
+    setMySessionToken(null);
+    setAdminHostId(null);
+    localStorage.removeItem("court_admin_host_id");
+    setAdminHostSessionToken(null);
+    localStorage.removeItem("court_admin_host_token");
     setJoinCode("");
     setJoinPasswordDialogOpen(false);
     setJoinPasswordDialogMatch(null);
@@ -2118,7 +2128,7 @@ export default function App() {
     setLobbyChatMessages([]);
     setProfileMenuOpen(false);
     setCreateMatchDialogOpen(false);
-  }, []);
+  }, [socket]);
 
   const finalExit = useCallback(() => {
     socket.emit("leave_room");
