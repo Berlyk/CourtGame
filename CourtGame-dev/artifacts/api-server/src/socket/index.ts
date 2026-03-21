@@ -32,6 +32,7 @@ const PREPARATION_STAGE_MARKER = "подготов";
 const CROSS_EXAMINATION_STAGE_MARKERS = ["перекрест", "допрос"];
 const OPENING_STAGE_MARKERS = ["выступлен", "вступительн"];
 const CLOSING_STAGE_MARKERS = ["финальн", "заключительн"];
+const RECONNECT_GRACE_MS = 30_000;
 type SpeechOwnerRole =
   | "plaintiff"
   | "defendant"
@@ -154,25 +155,30 @@ function emitFactRevealPermissions(io: SocketIOServer, room: any) {
     });
   });
 }
+
+function isPlayerTemporarilyDisconnected(player: any): boolean {
+  return !player?.socketId && (player?.disconnectedUntil ?? 0) > Date.now();
+}
+
 function mapGamePlayers(players: any[]) {
-  return players
-    .filter((p: any) => !!p.socketId)
-    .map((p: any) => ({
+  return players.map((p: any) => ({
     id: p.id,
     name: p.name,
     avatar: p.avatar,
     roleKey: p.roleKey,
-    roleTitle: p.roleTitle
+    roleTitle: p.roleTitle,
+    isDisconnected: isPlayerTemporarilyDisconnected(p),
+    reconnectExpiresAt: p.disconnectedUntil ?? null,
   }));
 }
 
 function mapLobbyPlayers(players: any[]) {
-  return players
-    .filter((p: any) => !!p.socketId)
-    .map((p: any) => ({
+  return players.map((p: any) => ({
     id: p.id,
     name: p.name,
     avatar: p.avatar,
+    isDisconnected: isPlayerTemporarilyDisconnected(p),
+    reconnectExpiresAt: p.disconnectedUntil ?? null,
   }));
 }
 
@@ -275,6 +281,82 @@ export function setupSocket(httpServer: HttpServer) {
     return socketInfo.playerId;
   };
 
+  const disconnectCleanupTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  const cleanupKey = (roomCode: string, playerId: string) =>
+    `${roomCode}:${playerId}`;
+
+  const clearDisconnectCleanup = (roomCode: string, playerId: string) => {
+    const key = cleanupKey(roomCode, playerId);
+    const timer = disconnectCleanupTimers.get(key);
+    if (!timer) return;
+    clearTimeout(timer);
+    disconnectCleanupTimers.delete(key);
+  };
+
+  const emitRoomUpdated = (room: any) => {
+    io.to(room.code).emit("room_updated", {
+      players: mapLobbyPlayers(room.players),
+      hostId: room.hostId,
+      isHostJudge: room.isHostJudge,
+      visibility: room.visibility,
+      venueLabel: room.venueLabel,
+      venueUrl: room.venueUrl,
+      requiresPassword: !!room.password,
+      lobbyChat: room.lobbyChat,
+    });
+  };
+
+  const emitGamePlayersUpdated = (room: any) => {
+    if (!room?.game) return;
+    io.to(room.code).emit("game_players_updated", {
+      players: mapGamePlayers(room.game.players),
+    });
+  };
+
+  const scheduleDisconnectCleanup = (roomCode: string, playerId: string) => {
+    clearDisconnectCleanup(roomCode, playerId);
+
+    const key = cleanupKey(roomCode, playerId);
+    const timer = setTimeout(() => {
+      disconnectCleanupTimers.delete(key);
+
+      const room = getRoom(roomCode);
+      if (!room) {
+        emitPublicMatches(io);
+        return;
+      }
+
+      const lobbyPlayer = room.players.find((p: any) => p.id === playerId);
+      const gamePlayer = room.game?.players.find((p: any) => p.id === playerId);
+      const stillConnected = !!lobbyPlayer?.socketId || !!gamePlayer?.socketId;
+      if (stillConnected) {
+        emitPublicMatches(io);
+        return;
+      }
+
+      const deadline = Math.max(
+        lobbyPlayer?.disconnectedUntil ?? 0,
+        gamePlayer?.disconnectedUntil ?? 0,
+      );
+      if (deadline > Date.now()) {
+        scheduleDisconnectCleanup(roomCode, playerId);
+        return;
+      }
+
+      const updatedRoom = removePlayer(roomCode, playerId);
+      if (updatedRoom) {
+        if (updatedRoom.game) {
+          emitGamePlayersUpdated(updatedRoom);
+        } else {
+          emitRoomUpdated(updatedRoom);
+        }
+      }
+      emitPublicMatches(io);
+    }, RECONNECT_GRACE_MS + 100);
+
+    disconnectCleanupTimers.set(key, timer);
+  };
+
   io.on("connection", (socket) => {
     socket.on("list_public_matches", () => {
       socket.emit("public_matches_updated", {
@@ -300,6 +382,7 @@ export function setupSocket(httpServer: HttpServer) {
         id: playerId,
         name: playerName || "Игрок 1",
         socketId: socket.id,
+        disconnectedUntil: null,
         sessionToken,
         avatar: avatar || undefined
       };
@@ -343,6 +426,7 @@ export function setupSocket(httpServer: HttpServer) {
         id: playerId,
         name: trimmedName,
         socketId: socket.id,
+        disconnectedUntil: null,
         sessionToken,
         avatar: avatar || undefined
       };
@@ -414,6 +498,7 @@ export function setupSocket(httpServer: HttpServer) {
       }
 
       const { room, playerId } = result;
+      clearDisconnectCleanup(roomCode, playerId);
       socketToRoom.set(socket.id, { roomCode, playerId, sessionToken });
       socket.join(roomCode);
 
@@ -428,20 +513,9 @@ export function setupSocket(httpServer: HttpServer) {
           playerId,
           playerName: result.playerName.trim()
         });
-        io.to(roomCode).emit("game_players_updated", {
-          players: mapGamePlayers(room.game.players),
-        });
+        emitGamePlayersUpdated(room);
       } else {
-        io.to(roomCode).emit("room_updated", {
-          players: mapLobbyPlayers(room.players),
-          hostId: room.hostId,
-          isHostJudge: room.isHostJudge,
-          visibility: room.visibility,
-          venueLabel: room.venueLabel,
-          venueUrl: room.venueUrl,
-          requiresPassword: !!room.password,
-          lobbyChat: room.lobbyChat,
-        });
+        emitRoomUpdated(room);
       }
       emitPublicMatches(io);
     });
@@ -680,6 +754,7 @@ export function setupSocket(httpServer: HttpServer) {
         }
 
         const targetSocketId = targetPlayer.socketId;
+        clearDisconnectCleanup(roomCode, targetPlayerId);
         const updatedRoom = removePlayer(roomCode, targetPlayerId);
 
         const mappingEntry = [...socketToRoom.entries()].find(
@@ -697,16 +772,7 @@ export function setupSocket(httpServer: HttpServer) {
         }
 
         if (updatedRoom) {
-          io.to(roomCode).emit("room_updated", {
-            players: mapLobbyPlayers(updatedRoom.players),
-            hostId: updatedRoom.hostId,
-            isHostJudge: updatedRoom.isHostJudge,
-            visibility: updatedRoom.visibility,
-            venueLabel: updatedRoom.venueLabel,
-            venueUrl: updatedRoom.venueUrl,
-            requiresPassword: !!updatedRoom.password,
-            lobbyChat: updatedRoom.lobbyChat,
-          });
+          emitRoomUpdated(updatedRoom);
         }
         emitPublicMatches(io);
       }
@@ -905,35 +971,29 @@ export function setupSocket(httpServer: HttpServer) {
       const leavingLobbyPlayer = room.players.find((p: any) => p.id === info.playerId);
       const leavingGamePlayer = room.game?.players.find((p: any) => p.id === info.playerId);
       const leavingName = leavingLobbyPlayer?.name || leavingGamePlayer?.name || "Guest";
+      const disconnectedUntil = Date.now() + RECONNECT_GRACE_MS;
 
       if (leavingLobbyPlayer) {
         leavingLobbyPlayer.socketId = "";
+        leavingLobbyPlayer.disconnectedUntil = disconnectedUntil;
       }
       if (leavingGamePlayer) {
         leavingGamePlayer.socketId = "";
+        leavingGamePlayer.disconnectedUntil = disconnectedUntil;
       }
 
       if (room.game) {
-        socket.to(info.roomCode).emit("player_left", {
+        io.to(info.roomCode).emit("player_left", {
           playerId: info.playerId,
           playerName: leavingName,
+          reconnectExpiresAt: disconnectedUntil,
         });
-        socket.to(info.roomCode).emit("game_players_updated", {
-          players: mapGamePlayers(room.game.players),
-        });
+        emitGamePlayersUpdated(room);
       } else {
-        socket.to(info.roomCode).emit("room_updated", {
-          players: mapLobbyPlayers(room.players),
-          hostId: room.hostId,
-          isHostJudge: room.isHostJudge,
-          visibility: room.visibility,
-          venueLabel: room.venueLabel,
-          venueUrl: room.venueUrl,
-          requiresPassword: !!room.password,
-          lobbyChat: room.lobbyChat,
-        });
+        emitRoomUpdated(room);
       }
 
+      scheduleDisconnectCleanup(info.roomCode, info.playerId);
       emitPublicMatches(io);
     }
 

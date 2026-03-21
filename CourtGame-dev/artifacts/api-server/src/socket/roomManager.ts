@@ -87,6 +87,7 @@ export interface Player {
   id: string;
   name: string;
   socketId: string;
+  disconnectedUntil?: number | null;
   sessionToken?: string;
   avatar?: string;
   roleKey?: string;
@@ -338,12 +339,14 @@ export function rejoinRoom(
     );
     if (player) {
       player.socketId = newSocketId;
+      player.disconnectedUntil = null;
       if (avatar !== undefined) {
         player.avatar = normalizedAvatar;
       }
       const lobbyPlayer = room.players.find(p => p.id === player.id);
       if (lobbyPlayer) {
         lobbyPlayer.socketId = newSocketId;
+        lobbyPlayer.disconnectedUntil = null;
         if (avatar !== undefined) {
           lobbyPlayer.avatar = normalizedAvatar;
         }
@@ -355,6 +358,7 @@ export function rejoinRoom(
   const player = room.players.find((p) => p.sessionToken === normalizedToken);
   if (player) {
     player.socketId = newSocketId;
+    player.disconnectedUntil = null;
     if (avatar !== undefined) {
       player.avatar = normalizedAvatar;
     }
@@ -368,6 +372,9 @@ export function removePlayer(code: string, playerId: string): Room | null {
   const room = rooms.get(code);
   if (!room) return null;
   room.players = room.players.filter(p => p.id !== playerId);
+  if (room.game) {
+    room.game.players = room.game.players.filter((p) => p.id !== playerId);
+  }
   if (room.players.length === 0) {
     rooms.delete(code);
     return null;
@@ -379,10 +386,13 @@ export function removePlayer(code: string, playerId: string): Room | null {
 }
 
 export function listPublicMatches(): PublicMatchInfo[] {
+  const now = Date.now();
   return [...rooms.values()]
     .filter((room) => room.visibility === "public")
     .map((room) => {
-      const connectedLobbyPlayers = room.players.filter((p) => !!p.socketId);
+      const activeLobbyPlayers = room.players.filter(
+        (p) => !!p.socketId || ((p.disconnectedUntil ?? 0) > now),
+      );
       const hostPlayer =
         room.players.find((p) => p.id === room.hostId) ??
         room.game?.players.find((p: any) => p.id === room.hostId);
@@ -390,7 +400,7 @@ export function listPublicMatches(): PublicMatchInfo[] {
       return {
         code: room.code,
         hostName: hostPlayer?.name ?? "Host",
-        playerCount: connectedLobbyPlayers.length,
+        playerCount: activeLobbyPlayers.length,
         maxPlayers: 6,
         started: room.started,
         createdAt: room.createdAt,

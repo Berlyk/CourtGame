@@ -29,6 +29,7 @@ import {
   UserCircle2,
   ChevronDown,
   ExternalLink,
+  DoorOpen,
 } from "lucide-react";
 import { getSocket } from "@/lib/socket";
 import { Switch } from "@/components/ui/switch";
@@ -235,6 +236,8 @@ const floatingHelpButtonVariants = {
 
 const HIDE_SCROLLBAR_CLASS =
   "[scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden";
+const RECONNECT_GRACE_MS = 30_000;
+const RECONNECT_DEADLINE_KEY = "court_reconnect_deadline";
 
 interface DevLogEntry {
   date: string;
@@ -987,6 +990,8 @@ interface PlayerInfo {
   avatar?: string;
   roleKey?: string;
   roleTitle?: string;
+  isDisconnected?: boolean;
+  reconnectExpiresAt?: number | null;
 }
 
 interface Fact {
@@ -1136,6 +1141,12 @@ function PlayerCard({
             <Avatar src={player.avatar ?? null} name={player.name} size={52} />
             <div className="min-w-0">
               <div className="font-semibold text-base truncate">{player.name}</div>
+              {player.isDisconnected && (
+                <div className="inline-flex items-center gap-1 text-xs text-amber-400 mt-1">
+                  <DoorOpen className="w-3.5 h-3.5" />
+                  <span>Вышел</span>
+                </div>
+              )}
               <div className="text-sm text-zinc-400">
                 {isHost ? "Ведущий комнаты" : "Игрок"}
               </div>
@@ -1281,6 +1292,12 @@ export default function App() {
   const [createRoomPassword, setCreateRoomPassword] = useState("");
   const [lobbyChatInput, setLobbyChatInput] = useState("");
   const [lobbyChatMessages, setLobbyChatMessages] = useState<LobbyChatMessage[]>([]);
+  const [reconnectDeadline, setReconnectDeadline] = useState<number | null>(() => {
+    const stored = localStorage.getItem(RECONNECT_DEADLINE_KEY);
+    const parsed = stored ? Number(stored) : NaN;
+    return Number.isFinite(parsed) ? parsed : null;
+  });
+  const [reconnectNow, setReconnectNow] = useState(() => Date.now());
 
   const [myId, setMyId] = useState<string | null>(null);
   const [mySessionToken, setMySessionToken] = useState<string | null>(
@@ -1304,11 +1321,23 @@ export default function App() {
     typeof window !== "undefined" &&
     !!localStorage.getItem("court_session") &&
     !!localStorage.getItem("court_session_token");
-  const canReconnect = hasSession || hasStoredSession;
+  const reconnectSecondsLeft =
+    reconnectDeadline && reconnectDeadline > reconnectNow
+      ? Math.ceil((reconnectDeadline - reconnectNow) / 1000)
+      : 0;
+  const reconnectWindowActive = reconnectDeadline !== null && reconnectSecondsLeft > 0;
+  const canReconnect = reconnectWindowActive || hasSession || hasStoredSession;
 
   useEffect(() => {
     const savedName = localStorage.getItem("court_nickname");
     const savedAvatar = localStorage.getItem("court_avatar");
+    const storedDeadline = Number(localStorage.getItem(RECONNECT_DEADLINE_KEY) ?? "");
+    if (Number.isFinite(storedDeadline) && storedDeadline > 0 && storedDeadline <= Date.now()) {
+      localStorage.removeItem(RECONNECT_DEADLINE_KEY);
+      localStorage.removeItem("court_session");
+      localStorage.removeItem("court_session_token");
+      setReconnectDeadline(null);
+    }
     if (savedAvatar) setAvatar(savedAvatar);
 
     if (savedName) {
@@ -1346,6 +1375,25 @@ export default function App() {
   }, [screen, hasSession, hasStoredSession]);
 
   useEffect(() => {
+    if (!reconnectDeadline) return;
+    const timer = window.setInterval(() => {
+      setReconnectNow(Date.now());
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [reconnectDeadline]);
+
+  useEffect(() => {
+    if (!reconnectDeadline) return;
+    if (reconnectDeadline > reconnectNow) return;
+
+    localStorage.removeItem(RECONNECT_DEADLINE_KEY);
+    localStorage.removeItem("court_session");
+    localStorage.removeItem("court_session_token");
+    setReconnectDeadline(null);
+    setHasSession(false);
+  }, [reconnectDeadline, reconnectNow]);
+
+  useEffect(() => {
     socket.on(
       "room_joined",
       ({
@@ -1363,6 +1411,8 @@ export default function App() {
           localStorage.setItem("court_session_token", sessionToken);
         }
         localStorage.setItem("court_session", state.code);
+        localStorage.removeItem(RECONNECT_DEADLINE_KEY);
+        setReconnectDeadline(null);
         setHasSession(true);
         setStartGameLoading(false);
         setOpenMatchesOpen(false);
@@ -1557,11 +1607,13 @@ export default function App() {
     socket.on("rejoin_failed", () => {
       localStorage.removeItem("court_session");
       localStorage.removeItem("court_session_token");
+      localStorage.removeItem(RECONNECT_DEADLINE_KEY);
       localStorage.removeItem("court_admin_host_id");
       localStorage.removeItem("court_admin_host_token");
       setMySessionToken(null);
       setAdminHostId(null);
       setAdminHostSessionToken(null);
+      setReconnectDeadline(null);
       setHasSession(false);
       setLobbyChatMessages([]);
       setScreen("home");
@@ -1570,6 +1622,7 @@ export default function App() {
     socket.on("kicked", () => {
       localStorage.removeItem("court_session");
       localStorage.removeItem("court_session_token");
+      localStorage.removeItem(RECONNECT_DEADLINE_KEY);
       setHasSession(false);
       setRoom(null);
       setGame(null);
@@ -1589,6 +1642,7 @@ export default function App() {
       setLobbyChatMessages([]);
       setJoinPassword("");
       setProfileMenuOpen(false);
+      setReconnectDeadline(null);
       setScreen("home");
       setKickedAlert(
         "\u0412\u044b \u0431\u044b\u043b\u0438 \u043a\u0438\u043a\u043d\u0443\u0442\u044b \u0438\u0437 \u043a\u043e\u043c\u043d\u0430\u0442\u044b.",
@@ -1794,6 +1848,14 @@ export default function App() {
   }, []);
 
   const reconnect = useCallback(() => {
+    if (reconnectDeadline && reconnectDeadline <= Date.now()) {
+      localStorage.removeItem(RECONNECT_DEADLINE_KEY);
+      localStorage.removeItem("court_session");
+      localStorage.removeItem("court_session_token");
+      setReconnectDeadline(null);
+      setHasSession(false);
+      return;
+    }
     const sessionCode = localStorage.getItem("court_session");
     const sessionToken = localStorage.getItem("court_session_token");
     if (sessionCode && sessionToken) {
@@ -1804,7 +1866,7 @@ export default function App() {
       return;
     }
     setHasSession(false);
-  }, [socket]);
+  }, [socket, reconnectDeadline]);
 
   const takeOverPlayer = useCallback(
     (nextName: string) => {
@@ -1975,8 +2037,15 @@ export default function App() {
     const reconnectToken =
       mySessionToken ?? localStorage.getItem("court_session_token");
     if (reconnectCode && reconnectToken) {
+      const reconnectDeadlineAt = Date.now() + RECONNECT_GRACE_MS;
       localStorage.setItem("court_session", reconnectCode);
       localStorage.setItem("court_session_token", reconnectToken);
+      localStorage.setItem(RECONNECT_DEADLINE_KEY, String(reconnectDeadlineAt));
+      setReconnectDeadline(reconnectDeadlineAt);
+      setReconnectNow(Date.now());
+    } else {
+      localStorage.removeItem(RECONNECT_DEADLINE_KEY);
+      setReconnectDeadline(null);
     }
 
     if (activeRoomCode) {
@@ -2637,6 +2706,7 @@ export default function App() {
                             className="w-full h-12 rounded-xl border-red-600/50 text-red-400 hover:bg-red-600/10 hover:text-red-300 gap-2"
                           >
                             ↩ Переподключиться к игре
+                            {reconnectWindowActive ? ` (${reconnectSecondsLeft}с)` : ""}
                           </Button>
                         </motion.div>
                       </motion.div>
@@ -3381,6 +3451,9 @@ export default function App() {
                         <div className="flex items-center gap-2 min-w-0">
                           <Avatar src={p.avatar ?? null} name={p.name} size={32} />
                           <span className="text-zinc-300 truncate">{p.name}</span>
+                          {p.isDisconnected && (
+                            <DoorOpen className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                          )}
                         </div>
                         <span className="text-zinc-500">{p.roleTitle}</span>
                       </div>
