@@ -1,5 +1,6 @@
 import path from "path";
 import { fileURLToPath } from "url";
+import { spawn } from "child_process";
 import { build as esbuild } from "esbuild";
 import { rm, readFile } from "fs/promises";
 
@@ -38,8 +39,16 @@ const allowlist = [
 ];
 
 async function buildAll() {
+  const frontendDir = path.resolve(__dirname, "../court-game");
   const distDir = path.resolve(__dirname, "dist");
   await rm(distDir, { recursive: true, force: true });
+
+  console.log("building frontend...");
+  await runCommand(
+    process.platform === "win32" ? "npm.cmd" : "npm",
+    ["run", "build"],
+    frontendDir,
+  );
 
   console.log("building server...");
   const pkgPath = path.resolve(__dirname, "package.json");
@@ -66,6 +75,30 @@ async function buildAll() {
     minify: true,
     external: externals,
     logLevel: "info",
+  });
+}
+
+function runCommand(command: string, args: string[], cwd: string) {
+  return new Promise<void>((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd,
+      stdio: "inherit",
+      shell: false,
+    });
+
+    child.on("error", reject);
+    child.on("exit", (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+
+      reject(
+        new Error(
+          `Command failed: ${command} ${args.join(" ")} (exit code ${String(code)})`,
+        ),
+      );
+    });
   });
 }
 
