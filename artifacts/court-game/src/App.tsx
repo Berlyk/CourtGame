@@ -62,7 +62,12 @@ const DEFAULT_GAME_STAGES = [
   "Решение судьи",
 ];
 
-type RoomModeKey = "civil_3" | "criminal_4" | "criminal_5" | "company_6";
+type RoomModeKey =
+  | "quick_flex"
+  | "civil_3"
+  | "criminal_4"
+  | "criminal_5"
+  | "company_6";
 
 const ROOM_MODE_OPTIONS: Array<{
   key: RoomModeKey;
@@ -96,9 +101,16 @@ const ROOM_MODE_OPTIONS: Array<{
   },
 ];
 
+const QUICK_ROOM_MODE = {
+  key: "quick_flex" as RoomModeKey,
+  title: "Быстрая комната",
+  subtitle: "Свободный набор, старт от 3 до 6 игроков.",
+  maxPlayers: 6,
+};
+
 const ROOM_MODE_BY_KEY = Object.fromEntries(
-  ROOM_MODE_OPTIONS.map((mode) => [mode.key, mode]),
-) as Record<RoomModeKey, (typeof ROOM_MODE_OPTIONS)[number]>;
+  [...ROOM_MODE_OPTIONS, QUICK_ROOM_MODE].map((mode) => [mode.key, mode]),
+) as Record<RoomModeKey, { key: RoomModeKey; title: string; subtitle: string; maxPlayers: number }>;
 
 function getRoomModeMeta(modeKey: RoomModeKey | undefined, fallbackMaxPlayers = 6) {
   if (modeKey && ROOM_MODE_BY_KEY[modeKey]) {
@@ -1336,6 +1348,7 @@ export default function App() {
   const [createRoomName, setCreateRoomName] = useState("");
   const [createRoomMode, setCreateRoomMode] = useState<RoomModeKey>("civil_3");
   const [createRoomPrivate, setCreateRoomPrivate] = useState(false);
+  const [createVoiceUrl, setCreateVoiceUrl] = useState("");
   const [createRoomPassword, setCreateRoomPassword] = useState("");
   const [createRoomPasswordVisible, setCreateRoomPasswordVisible] = useState(false);
   const [showChatSeconds, setShowChatSeconds] = useState(
@@ -1803,7 +1816,7 @@ export default function App() {
       avatar: sharedAvatar || undefined,
       options: {
         visibility: "private",
-        modeKey: "company_6",
+        modeKey: "quick_flex",
       },
     });
   }, [socket, playerName, sharedAvatar]);
@@ -1823,6 +1836,7 @@ export default function App() {
         modeKey: createRoomMode,
         visibility: createRoomPrivate ? "private" : "public",
         roomName: createRoomName.trim() || undefined,
+        venueUrl: createVoiceUrl.trim() || undefined,
         password:
           createRoomPrivate && createRoomPassword.trim()
             ? createRoomPassword.trim()
@@ -1837,6 +1851,7 @@ export default function App() {
     createRoomMode,
     createRoomPrivate,
     createRoomName,
+    createVoiceUrl,
     createRoomPassword,
   ]);
 
@@ -1918,6 +1933,11 @@ export default function App() {
     }
     joinRoom({ code: targetCode });
   }, [joinCode, publicMatches, joinRoom]);
+
+  const openVoiceLink = useCallback((url: string | undefined) => {
+    if (!url) return;
+    window.open(url, "_blank", "noopener,noreferrer");
+  }, []);
 
   const joinPublicMatchWithPassword = useCallback(() => {
     if (!joinPasswordDialogMatch) return;
@@ -2679,44 +2699,29 @@ export default function App() {
                           )}
                         </AnimatePresence>
 
-                        <div className="grid gap-3">
-                          <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
-                            <Button
-                              onClick={createQuickPrivateRoom}
-                              className="w-full h-12 rounded-xl text-base gap-2 bg-red-600 hover:bg-red-500 text-white border-0"
-                            >
-                              <UserPlus className="w-4 h-4" />
-                              Быстрая приватная комната
-                            </Button>
-                          </motion.div>
-
-                          <div className="flex gap-3">
-                            <Input
-                              value={joinCode}
-                              onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                              placeholder="Код комнаты"
-                              className="h-12 rounded-xl bg-zinc-100 text-zinc-950 placeholder:text-zinc-400 border-0 focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-0"
-                              onKeyDown={(e) => e.key === "Enter" && joinByCodeFromQuickInput()}
-                            />
-                            <motion.div whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}>
-                              <Button
-                                onClick={joinByCodeFromQuickInput}
-                                variant="secondary"
-                                disabled={!joinCode.trim()}
-                                className="h-12 rounded-xl px-6 bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0"
-                              >
-                                Войти
-                              </Button>
-                            </motion.div>
+                        <div className="grid gap-4">
+                          <div className="rounded-2xl border border-zinc-800 bg-zinc-950/65 p-4 space-y-3">
+                            <div className="text-sm font-semibold text-zinc-200">Присоединиться по коду</div>
+                            <div className="flex flex-col sm:flex-row gap-3">
+                              <Input
+                                value={joinCode}
+                                onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                                placeholder="Введите код комнаты"
+                                className="h-12 rounded-xl bg-zinc-100 text-zinc-950 placeholder:text-zinc-400 border-0 focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-0"
+                                onKeyDown={(e) => e.key === "Enter" && joinByCodeFromQuickInput()}
+                              />
+                              <motion.div whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}>
+                                <Button
+                                  onClick={joinByCodeFromQuickInput}
+                                  variant="secondary"
+                                  disabled={!joinCode.trim()}
+                                  className="h-12 rounded-xl px-6 min-w-[120px] bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0"
+                                >
+                                  Войти
+                                </Button>
+                              </motion.div>
+                            </div>
                           </div>
-
-                          <Button
-                            onClick={() => setCreateMatchDialogOpen(true)}
-                            className="h-11 rounded-xl bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0 gap-2"
-                          >
-                            <UserPlus className="w-4 h-4" />
-                            Создать матч
-                          </Button>
 
                           <AnimatePresence>
                             {hasSession && (
@@ -2738,6 +2743,19 @@ export default function App() {
                               </motion.div>
                             )}
                           </AnimatePresence>
+
+                          <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
+                            <Button
+                              onClick={createQuickPrivateRoom}
+                              className="w-full h-12 rounded-xl text-base gap-2 bg-red-600 hover:bg-red-500 text-white border-0"
+                            >
+                              <UserPlus className="w-4 h-4" />
+                              Быстрая комната
+                            </Button>
+                          </motion.div>
+                          <div className="text-xs text-zinc-500 -mt-2">
+                            Быстрый режим: старт возможен при 3–6 игроках.
+                          </div>
                         </div>
 
                         <Separator className="bg-zinc-800" />
@@ -2772,17 +2790,17 @@ export default function App() {
                             Выберите комнату для входа или создайте свою.
                           </p>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex w-full sm:w-auto items-center gap-2">
                           <Button
                             variant="outline"
                             onClick={() => socket.emit("list_public_matches")}
-                            className="rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                            className="flex-1 sm:flex-initial rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
                           >
                             Обновить
                           </Button>
                           <Button
                             onClick={() => setCreateMatchDialogOpen(true)}
-                            className="rounded-xl bg-red-600 hover:bg-red-500 text-white border-0 gap-2"
+                            className="flex-1 sm:flex-initial rounded-xl bg-red-600 hover:bg-red-500 text-white border-0 gap-2"
                           >
                             <UserPlus className="w-4 h-4" />
                             Создать матч
@@ -2812,7 +2830,7 @@ export default function App() {
                         )}
                         {publicMatches.map((match) => {
                           const modeMeta = getRoomModeMeta(match.modeKey, match.maxPlayers);
-                          const roomTitle = match.roomName?.trim() || `Комната ${match.code}`;
+                          const roomTitle = match.roomName?.trim() || "Комната без названия";
                           const hasLock = match.requiresPassword;
                           const showLockBadge = hasLock || match.visibility === "private";
                           const roomTypeLabel =
@@ -2828,7 +2846,7 @@ export default function App() {
                               animate={{ opacity: 1, y: 0 }}
                               className="rounded-2xl border border-zinc-800 bg-zinc-950/70 px-4 py-4 md:px-5"
                             >
-                              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                              <div className="flex flex-col gap-4 md:gap-5 lg:flex-row lg:items-center lg:justify-between">
                                 <div className="min-w-0 space-y-2">
                                   <div className="flex flex-wrap items-center gap-2">
                                     <h3 className="text-base font-semibold text-zinc-100 truncate">
@@ -2848,9 +2866,6 @@ export default function App() {
                                     )}
                                   </div>
                                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-zinc-400">
-                                    <span className="font-mono tracking-wider text-zinc-300">
-                                      {match.code}
-                                    </span>
                                     <span>Хост: {match.hostName}</span>
                                     <span>{statusLabel}</span>
                                     <span className="text-zinc-300">
@@ -2863,14 +2878,22 @@ export default function App() {
                                     )}
                                   </div>
                                 </div>
-                                <div className="flex items-center gap-2 shrink-0">
+                                <div className="flex items-center gap-2 shrink-0 w-full lg:w-auto">
                                   <Button
-                                    size="sm"
-                                    className="rounded-lg bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0"
+                                    className="h-11 w-full lg:w-auto lg:min-w-[128px] rounded-xl bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0 text-base font-semibold"
                                     onClick={() => joinPublicMatch(match)}
                                   >
                                     Войти
                                   </Button>
+                                  {match.venueUrl && (
+                                    <Button
+                                      variant="outline"
+                                      className="h-11 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                                      onClick={() => openVoiceLink(match.venueUrl)}
+                                    >
+                                      Войс
+                                    </Button>
+                                  )}
                                 </div>
                               </div>
                             </motion.div>
@@ -2892,7 +2915,7 @@ export default function App() {
                 }
               }}
             >
-              <DialogContent className="max-w-3xl border-zinc-800 bg-zinc-950 text-zinc-100">
+              <DialogContent className="max-w-3xl border-zinc-800 bg-zinc-950 text-zinc-100 [&>button]:h-11 [&>button]:w-11 [&>button>svg]:h-6 [&>button>svg]:w-6 [&>button]:top-3 [&>button]:right-3">
                 <DialogHeader className="space-y-1">
                   <DialogTitle>Создать матч</DialogTitle>
                   <DialogDescription className="text-zinc-400">
@@ -2922,6 +2945,15 @@ export default function App() {
                       />
                     </div>
                     <div className="space-y-2 md:col-span-2">
+                      <label className="text-sm text-zinc-300">Ссылка на войс (опционально)</label>
+                      <Input
+                        value={createVoiceUrl}
+                        onChange={(e) => setCreateVoiceUrl(e.target.value)}
+                        placeholder="https://discord.gg/... или другая ссылка"
+                        className="h-11 rounded-xl bg-zinc-900 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
+                      />
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
                       <label className="text-sm text-zinc-300">Режим матча</label>
                       <div className="grid gap-2 sm:grid-cols-2">
                         {ROOM_MODE_OPTIONS.map((mode) => (
@@ -2942,7 +2974,7 @@ export default function App() {
                               {mode.subtitle}
                             </div>
                             <div className="text-xs text-zinc-500 mt-2">
-                              Лимит: {mode.maxPlayers} игроков
+                              На {mode.maxPlayers} игроков
                             </div>
                           </button>
                         ))}
@@ -3002,6 +3034,7 @@ export default function App() {
                       if (!created) return;
                       setCreateMatchDialogOpen(false);
                       setCreateRoomName("");
+                      setCreateVoiceUrl("");
                       setCreateRoomPassword("");
                       setCreateRoomPrivate(false);
                       setCreateRoomPasswordVisible(false);
@@ -3152,6 +3185,13 @@ export default function App() {
   if (screen === "room" && room) {
     const roomModeMeta = getRoomModeMeta(room.modeKey, room.maxPlayers ?? 6);
     const roomMaxPlayers = room.maxPlayers ?? roomModeMeta.maxPlayers;
+    const isQuickRoomMode = room.modeKey === "quick_flex";
+    const canStartRoomNow = isQuickRoomMode
+      ? room.players.length >= 3 && room.players.length <= roomMaxPlayers
+      : room.players.length === roomMaxPlayers;
+    const neededPlayersForStart = isQuickRoomMode
+      ? Math.max(0, 3 - room.players.length)
+      : Math.max(0, roomMaxPlayers - room.players.length);
     return (
       <motion.div
         key="room"
@@ -3198,7 +3238,8 @@ export default function App() {
                     {room.code}
                   </div>
                   <div className="text-sm text-zinc-400">
-                    Поделитесь кодом с другими игроками • {roomMaxPlayers} участников
+                    Поделитесь кодом с другими игроками •{" "}
+                    {isQuickRoomMode ? "3–6 участников" : `${roomMaxPlayers} участников`}
                   </div>
                   <div className="flex flex-wrap items-center gap-2 text-xs">
                     <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">
@@ -3211,6 +3252,16 @@ export default function App() {
                       <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">
                         С паролем
                       </Badge>
+                    )}
+                    {room.venueUrl && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 rounded-lg border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800 hover:text-zinc-100 gap-1"
+                        onClick={() => openVoiceLink(room.venueUrl)}
+                      >
+                        Войс
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -3237,8 +3288,7 @@ export default function App() {
                     onTakeOverPlayer={takeOverPlayer}
                     onStartGame={startGame}
                     canStartGame={
-                      !startGameLoading &&
-                      room.players.length === roomMaxPlayers
+                      !startGameLoading && canStartRoomNow
                     }
                   />
                   <Button
@@ -3290,9 +3340,9 @@ export default function App() {
                       ))}
                     </AnimatePresence>
                   </div>
-                  {room.players.length < roomMaxPlayers && (
+                  {neededPlayersForStart > 0 && (
                     <div className="mt-auto pb-2 text-center text-sm text-zinc-500">
-                      Ожидание игроков... (нужно ещё минимум {roomMaxPlayers - room.players.length})
+                      Ожидание игроков... (нужно ещё минимум {neededPlayersForStart})
                     </div>
                   )}
                 </div>
@@ -3336,8 +3386,7 @@ export default function App() {
                         className="mt-3 h-10 rounded-xl gap-2 bg-red-600 hover:bg-red-500 text-white border-0 disabled:bg-zinc-800 disabled:text-zinc-500"
                         onClick={startGame}
                         disabled={
-                          startGameLoading ||
-                          room.players.length !== roomMaxPlayers
+                          startGameLoading || !canStartRoomNow
                         }
                       >
                         <Play className="w-4 h-4" />

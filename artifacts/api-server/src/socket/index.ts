@@ -348,12 +348,6 @@ export function setupSocket(httpServer: HttpServer) {
       };
 
       if (room.started) {
-        if (room.players.length >= room.maxPlayers) {
-          socket.emit("error", {
-            message: `Матч заполнен (максимум ${room.maxPlayers} игроков).`,
-          });
-          return;
-        }
         const updatedRoom = joinRunningGameAsWitness(roomCode, player);
         if (!updatedRoom?.game) {
           socket.emit("error", { message: "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0432\u043e\u0439\u0442\u0438 \u0432 \u0443\u0436\u0435 \u0438\u0434\u0443\u0449\u0438\u0439 \u043c\u0430\u0442\u0447." });
@@ -457,7 +451,14 @@ export function setupSocket(httpServer: HttpServer) {
         socket.emit("error", { message: "Только ведущий может начать игру." });
         return;
       }
-      if (room.players.length !== room.maxPlayers) {
+      if (room.modeKey === "quick_flex") {
+        if (room.players.length < 3 || room.players.length > room.maxPlayers) {
+          socket.emit("error", {
+            message: `Для старта быстрой комнаты нужно от 3 до ${room.maxPlayers} игроков.`,
+          });
+          return;
+        }
+      } else if (room.players.length !== room.maxPlayers) {
         socket.emit("error", {
           message: `Для старта нужно ровно ${room.maxPlayers} игроков.`,
         });

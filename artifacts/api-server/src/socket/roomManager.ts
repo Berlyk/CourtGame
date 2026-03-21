@@ -179,12 +179,14 @@ export interface CreateRoomOptions {
 }
 
 export type RoomModeKey =
+  | "quick_flex"
   | "civil_3"
   | "criminal_4"
   | "criminal_5"
   | "company_6";
 
 const ROOM_MODE_MAX_PLAYERS: Record<RoomModeKey, number> = {
+  quick_flex: 6,
   civil_3: 3,
   criminal_4: 4,
   criminal_5: 5,
@@ -211,9 +213,9 @@ function normalizeRoomName(name: string | undefined): string | undefined {
 }
 
 function normalizeModeKey(modeKey: RoomModeKey | undefined): RoomModeKey {
-  if (!modeKey) return "civil_3";
+  if (!modeKey) return "quick_flex";
   if (modeKey in ROOM_MODE_MAX_PLAYERS) return modeKey;
-  return "civil_3";
+  return "quick_flex";
 }
 
 function normalizeVenueLabel(label: string | undefined): string | undefined {
@@ -336,7 +338,6 @@ export function joinRoom(code: string, player: Player, password?: string): Room 
 export function joinRunningGameAsWitness(code: string, player: Player): Room | null {
   const room = rooms.get(code);
   if (!room?.game) return null;
-  if (room.players.length >= room.maxPlayers) return null;
 
   const witnessPlayer: Player = {
     ...player,
@@ -541,7 +542,13 @@ export function updatePlayerProfile(
 export function startGame(code: string): Room | null {
   const room = rooms.get(code);
   if (!room) return null;
-  if (room.players.length !== room.maxPlayers) return null;
+  if (room.modeKey === "quick_flex") {
+    if (room.players.length < 3 || room.players.length > room.maxPlayers) {
+      return null;
+    }
+  } else if (room.players.length !== room.maxPlayers) {
+    return null;
+  }
 
 const count = room.players.length;
 const availableCases = cases[count] || cases[3];
