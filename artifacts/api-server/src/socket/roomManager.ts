@@ -414,14 +414,26 @@ export function rejoinRoom(
 export function removePlayer(code: string, playerId: string): Room | null {
   const room = rooms.get(code);
   if (!room) return null;
-  room.players = room.players.filter(p => p.id !== playerId);
-  if (room.players.length === 0) {
+
+  room.players = room.players.filter((p) => p.id !== playerId);
+  if (room.game) {
+    room.game.players = room.game.players.filter((p) => p.id !== playerId);
+  }
+
+  const hasLobbyPlayers = room.players.length > 0;
+  const hasGamePlayers = !!room.game && room.game.players.length > 0;
+  if (!hasLobbyPlayers && !hasGamePlayers) {
     rooms.delete(code);
     return null;
   }
-  if (room.hostId === playerId && room.players.length > 0) {
-    room.hostId = room.players[0].id;
+
+  if (room.hostId === playerId) {
+    const nextHostId = room.players[0]?.id ?? room.game?.players[0]?.id;
+    if (nextHostId) {
+      room.hostId = nextHostId;
+    }
   }
+
   return room;
 }
 

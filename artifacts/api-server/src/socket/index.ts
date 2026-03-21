@@ -155,13 +155,15 @@ function emitFactRevealPermissions(io: SocketIOServer, room: any) {
   });
 }
 function mapGamePlayers(players: any[]) {
-  return players.map((p: any) => ({
-    id: p.id,
-    name: p.name,
-    avatar: p.avatar,
-    roleKey: p.roleKey,
-    roleTitle: p.roleTitle
-  }));
+  return players
+    .filter((p: any) => typeof p?.socketId === "string" && p.socketId.trim().length > 0)
+    .map((p: any) => ({
+      id: p.id,
+      name: p.name,
+      avatar: p.avatar,
+      roleKey: p.roleKey,
+      roleTitle: p.roleTitle
+    }));
 }
 
 function mapLobbyPlayers(players: any[]) {
@@ -430,6 +432,9 @@ export function setupSocket(httpServer: HttpServer) {
         socket.to(roomCode).emit("player_rejoined", {
           playerId,
           playerName: result.playerName.trim()
+        });
+        io.to(roomCode).emit("game_players_updated", {
+          players: mapGamePlayers(room.game.players),
         });
       }
     });
@@ -904,24 +909,50 @@ export function setupSocket(httpServer: HttpServer) {
       emitPublicMatches(io);
     });
 
-    function handleLeave(socketId: string) {
+    function handleLeave(socketId: string, preserveForRejoin: boolean) {
       const info = socketToRoom.get(socketId);
       if (!info) return;
 
       socketToRoom.delete(socketId);
 
       const room = getRoom(info.roomCode);
-      const leavingPlayer = room?.players.find((p: any) => p.id === info.playerId)
-        || room?.game?.players.find((p: any) => p.id === info.playerId);
+      const lobbyPlayer = room?.players.find((p: any) => p.id === info.playerId);
+      const gamePlayer = room?.game?.players.find((p: any) => p.id === info.playerId);
+      const leavingPlayer = lobbyPlayer || gamePlayer;
       const leavingName = leavingPlayer?.name || "Игрок";
       const wasInGame = !!room?.game;
 
       if (wasInGame) {
-        if (leavingPlayer) leavingPlayer.socketId = "";
-        socket.to(info.roomCode).emit("player_left", {
-          playerId: info.playerId,
-          playerName: leavingName
-        });
+        if (preserveForRejoin) {
+          if (lobbyPlayer) lobbyPlayer.socketId = "";
+          if (gamePlayer) gamePlayer.socketId = "";
+
+          socket.to(info.roomCode).emit("player_left", {
+            playerId: info.playerId,
+            playerName: leavingName
+          });
+
+          if (room?.game) {
+            io.to(info.roomCode).emit("game_players_updated", {
+              players: mapGamePlayers(room.game.players),
+            });
+          }
+          emitPublicMatches(io);
+        } else {
+          const updatedRoom = removePlayer(info.roomCode, info.playerId);
+
+          socket.to(info.roomCode).emit("player_left", {
+            playerId: info.playerId,
+            playerName: leavingName
+          });
+
+          if (updatedRoom?.game) {
+            io.to(info.roomCode).emit("game_players_updated", {
+              players: mapGamePlayers(updatedRoom.game.players),
+            });
+          }
+          emitPublicMatches(io);
+        }
       } else {
         const updatedRoom = removePlayer(info.roomCode, info.playerId);
         if (updatedRoom) {
@@ -944,13 +975,14 @@ export function setupSocket(httpServer: HttpServer) {
     }
 
     socket.on("leave_room", () => {
-      handleLeave(socket.id);
+      handleLeave(socket.id, false);
     });
 
     socket.on("disconnect", () => {
-      handleLeave(socket.id);
+      handleLeave(socket.id, true);
     });
   });
 
   return io;
 }
+
