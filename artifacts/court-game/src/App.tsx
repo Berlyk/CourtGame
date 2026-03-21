@@ -2529,7 +2529,7 @@ export default function App() {
         initial="initial"
         animate="animate"
         exit="exit"
-        className="relative isolate min-h-screen bg-[#0b0b0f] text-zinc-100 p-4 sm:p-6 md:p-10"
+        className="relative isolate min-h-screen overflow-x-hidden bg-[#0b0b0f] text-zinc-100 p-4 sm:p-6 md:p-10"
       >
         <CourtAtmosphereBackground />
         <AnimatePresence>
@@ -2550,14 +2550,14 @@ export default function App() {
           <div className="relative w-full sm:w-auto">
             <div className="w-full sm:w-auto rounded-[28px] border border-zinc-800 bg-zinc-900/90 p-1.5 shadow-sm shadow-black/30">
               <div className="sm:flex sm:items-center sm:gap-1">
-                <div className="grid grid-cols-2 gap-1.5 sm:flex sm:items-center sm:gap-1">
+                <div className="grid grid-cols-3 gap-1.5 sm:flex sm:items-center sm:gap-1">
                   <Button
                     variant="ghost"
                     onClick={() => {
                       setHomeTab("play");
                       setProfileMenuOpen(false);
                     }}
-                    className={`h-10 rounded-full px-4 gap-2 transition-all duration-200 hover:-translate-y-0.5 ${
+                    className={`h-10 rounded-full px-2 sm:px-4 gap-1.5 sm:gap-2 text-[13px] sm:text-sm transition-all duration-200 hover:-translate-y-0.5 ${
                       homeTab === "play"
                         ? "bg-red-600 text-white hover:bg-red-500"
                         : "text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800"
@@ -2572,7 +2572,7 @@ export default function App() {
                       setHomeTab("development");
                       setProfileMenuOpen(false);
                     }}
-                    className={`h-10 rounded-full px-4 gap-2 transition-all duration-200 hover:-translate-y-0.5 ${
+                    className={`h-10 rounded-full px-2 sm:px-4 gap-1.5 sm:gap-2 text-[13px] sm:text-sm transition-all duration-200 hover:-translate-y-0.5 ${
                       homeTab === "development"
                         ? "bg-red-600 text-white hover:bg-red-500"
                         : "text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800"
@@ -2587,7 +2587,7 @@ export default function App() {
                       setHomeTab("help");
                       setProfileMenuOpen(false);
                     }}
-                    className={`h-10 rounded-full px-4 gap-2 col-span-2 sm:col-span-1 transition-all duration-200 hover:-translate-y-0.5 ${
+                    className={`h-10 rounded-full px-2 sm:px-4 gap-1.5 sm:gap-2 text-[13px] sm:text-sm transition-all duration-200 hover:-translate-y-0.5 ${
                       homeTab === "help"
                         ? "bg-red-600 text-white hover:bg-red-500"
                         : "text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800"
@@ -2636,14 +2636,14 @@ export default function App() {
 
         {homeTab === "play" && (
           <div className="max-w-6xl mx-auto space-y-6">
-            <div className="flex items-center justify-center gap-2">
+            <div className="mx-auto grid w-full max-w-md grid-cols-2 gap-2">
               <Button
                 variant={playView === "quick" ? "secondary" : "outline"}
                 onClick={() => setPlayView("quick")}
                 className={
                   playView === "quick"
-                    ? "rounded-full bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0 transition-all duration-200 hover:-translate-y-0.5"
-                    : "rounded-full border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100 transition-all duration-200 hover:-translate-y-0.5"
+                    ? "w-full rounded-full bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0 transition-all duration-200 hover:-translate-y-0.5"
+                    : "w-full rounded-full border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100 transition-all duration-200 hover:-translate-y-0.5"
                 }
               >
                 Быстрый вход
@@ -2656,8 +2656,8 @@ export default function App() {
                 }}
                 className={
                   playView === "matches"
-                    ? "rounded-full bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0 gap-2 transition-all duration-200 hover:-translate-y-0.5"
-                    : "rounded-full border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100 gap-2 transition-all duration-200 hover:-translate-y-0.5"
+                    ? "w-full rounded-full bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0 gap-2 transition-all duration-200 hover:-translate-y-0.5"
+                    : "w-full rounded-full border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100 gap-2 transition-all duration-200 hover:-translate-y-0.5"
                 }
               >
                 <Globe className="w-4 h-4" />
@@ -2681,7 +2681,7 @@ export default function App() {
                     animate="animate"
                   >
                     <Card className="rounded-[28px] shadow-sm border border-zinc-800 bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950 h-full text-zinc-100">
-                      <CardContent className="p-8 md:p-10 h-full flex flex-col justify-between gap-8">
+                      <CardContent className="p-6 sm:p-8 md:p-10 h-full flex flex-col justify-between gap-8">
                         <div className="space-y-5">
                           <Badge className="rounded-full px-3 py-1 text-sm bg-red-600/90 hover:bg-red-600 text-white border-0">
                             Made By Berly
@@ -2730,7 +2730,7 @@ export default function App() {
                     animate="animate"
                   >
                     <Card className="rounded-[28px] shadow-sm h-full bg-gradient-to-br from-zinc-900/95 via-zinc-900/92 to-zinc-800/85 border-zinc-800 text-zinc-100">
-                      <CardContent className="p-8 md:p-10 space-y-6">
+                      <CardContent className="p-6 sm:p-8 md:p-10 space-y-6">
                         <AnimatePresence>
                           {error && (
                             <motion.div
@@ -2750,7 +2750,7 @@ export default function App() {
                             initial={{ opacity: 0.85, y: 6 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.32, ease: "easeOut" }}
-                            className="rounded-2xl border border-zinc-700/90 bg-gradient-to-br from-zinc-900/80 via-zinc-900/65 to-zinc-800/55 px-4 py-5 sm:px-6 sm:py-6 space-y-4"
+                            className="rounded-2xl border border-zinc-700/90 bg-gradient-to-br from-zinc-900/85 via-zinc-900/74 to-zinc-800/62 px-4 py-5 sm:px-6 sm:py-6 space-y-4"
                           >
                             <motion.div whileHover={{ y: -1 }} whileTap={{ scale: 0.985 }}>
                               <Button
@@ -2760,9 +2760,6 @@ export default function App() {
                                 Быстрая комната
                               </Button>
                             </motion.div>
-                            <div className="text-center text-zinc-400 text-sm">
-                              Быстрый старт (3–6 игроков)
-                            </div>
                             <Separator className="bg-zinc-800" />
                             <div className="flex items-center gap-2">
                               <div className="h-12 flex-1 rounded-xl border border-zinc-700 bg-zinc-900/80 px-3 flex items-center gap-2">
@@ -2874,11 +2871,7 @@ export default function App() {
                         )}
                         {publicMatches.map((match) => {
                           const modeMeta = getRoomModeMeta(match.modeKey, match.maxPlayers);
-                          const roomTitle =
-                            match.roomName?.trim() ||
-                            (match.modeKey === "quick_flex"
-                              ? `Комната (${match.hostName})`
-                              : "Комната без названия");
+                          const roomTitle = match.roomName?.trim() || `Комната ${match.hostName}`;
                           const hasLock = match.requiresPassword;
                           const showLockBadge = hasLock || match.visibility === "private";
                           const roomTypeLabel =
