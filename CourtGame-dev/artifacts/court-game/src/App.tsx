@@ -2125,7 +2125,31 @@ export default function App() {
     if (activeRoomCode) {
       disconnectTestPlayersFromRoom(activeRoomCode);
     }
-    socket.emit("leave_room");
+    socket.emit(
+      "leave_room",
+      (payload?: {
+        code?: string;
+        sessionToken?: string;
+        reconnectExpiresAt?: number;
+      } | null) => {
+        const leaveCode = payload?.code?.trim() || reconnectCode || null;
+        const leaveToken =
+          payload?.sessionToken?.trim() || reconnectToken || null;
+        if (!leaveCode || !leaveToken) return;
+
+        const leaveDeadline =
+          payload?.reconnectExpiresAt && payload.reconnectExpiresAt > 0
+            ? payload.reconnectExpiresAt
+            : Date.now() + RECONNECT_GRACE_MS;
+
+        localStorage.setItem("court_session", leaveCode);
+        localStorage.setItem("court_session_token", leaveToken);
+        localStorage.setItem(RECONNECT_DEADLINE_KEY, String(leaveDeadline));
+        setReconnectDeadline(leaveDeadline);
+        setReconnectNow(Date.now());
+        setHasSession(true);
+      },
+    );
     setScreen("home");
     setRoom(null);
     setGame(null);

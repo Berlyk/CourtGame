@@ -958,18 +958,41 @@ export function setupSocket(httpServer: HttpServer) {
       });
     });
 
-    function handleLeave(socketId: string) {
+    function handleLeave(socketId: string): {
+      code: string;
+      sessionToken: string;
+      reconnectExpiresAt: number;
+    } | null {
       const info = socketToRoom.get(socketId);
-      if (!info) return;
+      if (!info) return null;
 
       socketToRoom.delete(socketId);
       socket.leave(info.roomCode);
 
       const room = getRoom(info.roomCode);
-      if (!room) return;
+      if (!room) return null;
 
-      const leavingLobbyPlayer = room.players.find((p: any) => p.id === info.playerId);
-      const leavingGamePlayer = room.game?.players.find((p: any) => p.id === info.playerId);
+      let leavingLobbyPlayer =
+        room.players.find((p: any) => p.id === info.playerId) ?? null;
+      let leavingGamePlayer =
+        room.game?.players.find((p: any) => p.id === info.playerId) ?? null;
+
+      if ((!leavingLobbyPlayer || !leavingGamePlayer) && info.sessionToken) {
+        const byToken = findPlayerBySessionToken(room, info.sessionToken);
+        if (byToken) {
+          leavingLobbyPlayer =
+            leavingLobbyPlayer ??
+            room.players.find((p: any) => p.id === byToken.id) ??
+            null;
+          leavingGamePlayer =
+            leavingGamePlayer ??
+            room.game?.players.find((p: any) => p.id === byToken.id) ??
+            null;
+        }
+      }
+
+      const effectivePlayerId =
+        leavingLobbyPlayer?.id ?? leavingGamePlayer?.id ?? info.playerId;
       const leavingName = leavingLobbyPlayer?.name || leavingGamePlayer?.name || "Guest";
       const disconnectedUntil = Date.now() + RECONNECT_GRACE_MS;
 
@@ -982,15 +1005,17 @@ export function setupSocket(httpServer: HttpServer) {
         leavingGamePlayer.disconnectedUntil = disconnectedUntil;
       }
 
-      io.to(socketId).emit("reconnect_available", {
+      const reconnectPayload = {
         code: info.roomCode,
         sessionToken: info.sessionToken,
         reconnectExpiresAt: disconnectedUntil,
-      });
+      };
+
+      io.to(socketId).emit("reconnect_available", reconnectPayload);
 
       if (room.game) {
         io.to(info.roomCode).emit("player_left", {
-          playerId: info.playerId,
+          playerId: effectivePlayerId,
           playerName: leavingName,
           reconnectExpiresAt: disconnectedUntil,
         });
@@ -999,12 +1024,20 @@ export function setupSocket(httpServer: HttpServer) {
         emitRoomUpdated(room);
       }
 
-      scheduleDisconnectCleanup(info.roomCode, info.playerId);
+      scheduleDisconnectCleanup(info.roomCode, effectivePlayerId);
       emitPublicMatches(io);
+      return reconnectPayload;
     }
 
-    socket.on("leave_room", () => {
-      handleLeave(socket.id);
+    socket.on("leave_room", (ack?: (payload: {
+      code: string;
+      sessionToken: string;
+      reconnectExpiresAt: number;
+    } | null) => void) => {
+      const reconnectPayload = handleLeave(socket.id);
+      if (typeof ack === "function") {
+        ack(reconnectPayload);
+      }
     });
 
     socket.on("disconnect", () => {
