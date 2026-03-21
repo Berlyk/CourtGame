@@ -39,6 +39,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import TestPlayersPanel from "@/components/test/TestPlayersPanel";
+import {
+  disconnectTestPlayersFromRoom,
+  type TestRoleView,
+} from "@/lib/testPlayersHarness";
 
 const DEFAULT_GAME_STAGES = [
   "Подготовка",
@@ -1231,6 +1236,9 @@ export default function App() {
   const [hasSession, setHasSession] = useState(false);
 
   const [myId, setMyId] = useState<string | null>(null);
+  const [adminHostId, setAdminHostId] = useState<string | null>(
+    () => localStorage.getItem("court_admin_host_id"),
+  );
   const [room, setRoom] = useState<RoomState | null>(null);
   const [game, setGame] = useState<GameState | null>(null);
   const [showFactHistory, setShowFactHistory] = useState(false);
@@ -1238,6 +1246,7 @@ export default function App() {
 
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const socket = getSocket();
+  const activeRoomCode = room?.code ?? game?.code ?? null;
 
   useEffect(() => {
     const savedName = localStorage.getItem("court_nickname");
@@ -1267,6 +1276,10 @@ export default function App() {
         localStorage.setItem("court_session", state.code);
         setHasSession(true);
         setStartGameLoading(false);
+        if (state.hostId === playerId) {
+          setAdminHostId(playerId);
+          localStorage.setItem("court_admin_host_id", playerId);
+        }
         if (avatar) {
           socket.emit("update_avatar", {
             code: state.code,
@@ -1380,6 +1393,8 @@ export default function App() {
       setRoom(null);
       setGame(null);
       setMyId(null);
+      setAdminHostId(null);
+      localStorage.removeItem("court_admin_host_id");
       setJoinCode("");
       setDisconnectAlert("");
       setRejoinAlert("");
@@ -1506,28 +1521,50 @@ export default function App() {
     }
   }, [socket]);
 
+  const takeOverPlayer = useCallback(
+    (nextName: string) => {
+      const name = nextName.trim();
+      if (!name) return;
+      const code = room?.code ?? game?.code ?? localStorage.getItem("court_session");
+      if (!code) return;
+
+      localStorage.setItem("court_nickname", name);
+      setPlayerName(name);
+      socket.emit("rejoin_room", {
+        code,
+        playerName: name,
+      });
+    },
+    [socket, room, game],
+  );
+
+  const roomControlPlayerId =
+    room && adminHostId === room.hostId ? adminHostId : myId;
+  const gameControlPlayerId =
+    game && adminHostId === game.hostId ? adminHostId : myId;
+
   const startGame = useCallback(() => {
-    if (!room || !myId) return;
+    if (!room || !roomControlPlayerId) return;
     setStartGameLoading(true);
-    socket.emit("start_game", { code: room.code, playerId: myId });
-  }, [socket, room, myId]);
+    socket.emit("start_game", { code: room.code, playerId: roomControlPlayerId });
+  }, [socket, room, roomControlPlayerId]);
 
   const toggleHostJudge = useCallback((checked: boolean) => {
-    if (!room || !myId) return;
+    if (!room || !roomControlPlayerId) return;
     setIsHostJudge(checked);
-    socket.emit("set_host_judge", { code: room.code, playerId: myId, isHostJudge: checked });
-  }, [socket, room, myId]);
+    socket.emit("set_host_judge", { code: room.code, playerId: roomControlPlayerId, isHostJudge: checked });
+  }, [socket, room, roomControlPlayerId]);
 
   const kickPlayerFromRoom = useCallback(
     (targetPlayerId: string) => {
-      if (!room || !myId || myId !== room.hostId) return;
+      if (!room || !roomControlPlayerId || roomControlPlayerId !== room.hostId) return;
       socket.emit("kick_player", {
         code: room.code,
-        playerId: myId,
+        playerId: roomControlPlayerId,
         targetPlayerId,
       });
     },
-    [socket, room, myId],
+    [socket, room, roomControlPlayerId],
   );
 
   const revealFact = useCallback(
@@ -1547,14 +1584,30 @@ export default function App() {
   );
 
   const advanceStage = useCallback(() => {
-    if (!game || !myId) return;
-    socket.emit("next_stage", { code: game.code, playerId: myId });
-  }, [socket, game, myId]);
+    if (!game || !gameControlPlayerId) return;
+    socket.emit("next_stage", { code: game.code, playerId: gameControlPlayerId });
+  }, [socket, game, gameControlPlayerId]);
 
   const retreatStage = useCallback(() => {
-    if (!game || !myId) return;
-    socket.emit("prev_stage", { code: game.code, playerId: myId });
-  }, [socket, game, myId]);
+    if (!game || !gameControlPlayerId) return;
+    socket.emit("prev_stage", { code: game.code, playerId: gameControlPlayerId });
+  }, [socket, game, gameControlPlayerId]);
+
+  const jumpToStage = useCallback(
+    (targetIndex: number) => {
+      if (!game || !gameControlPlayerId) return;
+      const maxIndex = Math.max(0, game.stages.length - 1);
+      const clampedTarget = Math.max(0, Math.min(targetIndex, maxIndex));
+      if (clampedTarget === game.stageIndex) return;
+
+      const steps = Math.abs(clampedTarget - game.stageIndex);
+      const eventName = clampedTarget > game.stageIndex ? "next_stage" : "prev_stage";
+      for (let i = 0; i < steps; i += 1) {
+        socket.emit(eventName, { code: game.code, playerId: gameControlPlayerId });
+      }
+    },
+    [socket, game, gameControlPlayerId],
+  );
 
   const submitVerdict = useCallback(
     (verdict: string) => {
@@ -1565,11 +1618,16 @@ export default function App() {
   );
 
   const resetAll = useCallback(() => {
+    if (activeRoomCode) {
+      disconnectTestPlayersFromRoom(activeRoomCode);
+    }
     socket.emit("leave_room");
     setScreen("home");
     setRoom(null);
     setGame(null);
     setMyId(null);
+    setAdminHostId(null);
+    localStorage.removeItem("court_admin_host_id");
     setJoinCode("");
     setDisconnectAlert("");
     setRejoinAlert("");
@@ -1578,9 +1636,12 @@ export default function App() {
     setIsHostJudge(false);
     setStartGameLoading(false);
     setContextHelpOpen(false);
-  }, [socket]);
+  }, [socket, activeRoomCode]);
 
   const finalExit = useCallback(() => {
+    if (activeRoomCode) {
+      disconnectTestPlayersFromRoom(activeRoomCode);
+    }
     socket.emit("leave_room");
     localStorage.removeItem("court_session");
     setHasSession(false);
@@ -1588,12 +1649,14 @@ export default function App() {
     setRoom(null);
     setGame(null);
     setMyId(null);
+    setAdminHostId(null);
+    localStorage.removeItem("court_admin_host_id");
     setJoinCode("");
     setKickedAlert("");
     setCopiedRoomCode(false);
     setStartGameLoading(false);
     setContextHelpOpen(false);
-  }, [socket]);
+  }, [socket, activeRoomCode]);
 
   const setupNickname = useCallback(() => {
     const name = playerName.trim();
@@ -2120,6 +2183,25 @@ export default function App() {
                     <Copy className="w-4 h-4" />
                     {copiedRoomCode ? "Скопировано" : "Скопировать"}
                   </Button>
+                  <TestPlayersPanel
+                    roomCode={room.code}
+                    currentPlayers={room.players.length}
+                    isHost={roomControlPlayerId === room.hostId}
+                    mode="room"
+                    players={room.players.map((p) => ({
+                      id: p.id,
+                      name: p.name,
+                      isHost: p.id === room.hostId,
+                    }))}
+                    currentPlayerId={myId}
+                    onTakeOverPlayer={takeOverPlayer}
+                    onStartGame={startGame}
+                    canStartGame={
+                      !startGameLoading &&
+                      room.players.length >= 3 &&
+                      room.players.length <= 6
+                    }
+                  />
                   {myId === room.hostId && (
                     <motion.div
                       whileHover={{ scale: 1.03 }}
@@ -2245,6 +2327,7 @@ export default function App() {
     const currentStage = gameStages[game.stageIndex] ?? gameStages[0];
     const stageProgress = ((game.stageIndex + 1) / gameStages.length) * 100;
     const isHost = myId === game.hostId;
+    const hasGameAdminAccess = gameControlPlayerId === game.hostId;
     const isJudge = game.me.roleKey === "judge";
     const isWitness = game.me.roleKey === "witness";
     const isObserverRole = isJudge || isWitness;
@@ -2257,6 +2340,18 @@ export default function App() {
         : null;
     const isPreparationStage = isPreparationStageName(currentStage);
     const canRevealFactsAtCurrentStage = game.me.canRevealFactsNow === true;
+    const selfRoleView: TestRoleView = {
+      playerId: game.me.id,
+      playerName: game.me.name,
+      roleKey: game.me.roleKey,
+      roleTitle: game.me.roleTitle,
+      goal: game.me.goal,
+      facts: game.me.facts,
+      cards: game.me.cards,
+      canRevealFactsNow: game.me.canRevealFactsNow === true,
+      stageIndex: game.stageIndex,
+      stages: gameStages,
+    };
 
     return (
       <motion.div
@@ -2509,6 +2604,25 @@ export default function App() {
                     className="h-3 bg-zinc-800 [&>div]:bg-red-600 [&>div]:transition-all [&>div]:duration-500"
                   />
                   <div className="flex flex-wrap gap-3">
+                    <TestPlayersPanel
+                      roomCode={game.code}
+                      currentPlayers={game.players.length}
+                      isHost={hasGameAdminAccess}
+                      mode="game"
+                      players={game.players.map((p) => ({
+                        id: p.id,
+                        name: p.name,
+                        roleTitle: p.roleTitle,
+                        isHost: p.id === game.hostId,
+                      }))}
+                      currentPlayerId={myId}
+                      onTakeOverPlayer={takeOverPlayer}
+                      stages={gameStages}
+                      currentStageIndex={game.stageIndex}
+                      onJumpToStage={jumpToStage}
+                      canControlStages={hasGameAdminAccess || isJudge}
+                      selfRoleView={selfRoleView}
+                    />
                     {(isHost || isJudge) && (
                       <>
                         <Button
