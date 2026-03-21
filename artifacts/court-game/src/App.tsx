@@ -22,6 +22,13 @@ import {
   Gamepad2,
   Search,
   Wrench,
+  MessageSquare,
+  Lock,
+  Globe,
+  Link2,
+  UserCircle2,
+  ChevronDown,
+  ExternalLink,
 } from "lucide-react";
 import { getSocket } from "@/lib/socket";
 import { Switch } from "@/components/ui/switch";
@@ -1013,6 +1020,27 @@ interface UsedCard {
   description: string;
 }
 
+interface LobbyChatMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  senderAvatar?: string;
+  text: string;
+  createdAt: number;
+}
+
+interface PublicMatchInfo {
+  code: string;
+  hostName: string;
+  playerCount: number;
+  maxPlayers: number;
+  started: boolean;
+  createdAt: number;
+  venueLabel?: string;
+  venueUrl?: string;
+  requiresPassword: boolean;
+}
+
 interface MyPlayer {
   id: string;
   name: string;
@@ -1052,6 +1080,11 @@ interface RoomState {
   players: PlayerInfo[];
   started: boolean;
   isHostJudge?: boolean;
+  visibility?: "public" | "private";
+  venueLabel?: string;
+  venueUrl?: string;
+  requiresPassword?: boolean;
+  lobbyChat?: LobbyChatMessage[];
 }
 
 function Avatar({
@@ -1218,7 +1251,7 @@ function ContextHelp({
 }
 
 export default function App() {
-  const [screen, setScreen] = useState<"setup" | "home" | "room" | "game">(
+  const [screen, setScreen] = useState<"setup" | "home" | "profile" | "room" | "game">(
     "home",
   );
   const [homeTab, setHomeTab] = useState<HomeTab>("play");
@@ -1235,6 +1268,19 @@ export default function App() {
   const [copiedRoomCode, setCopiedRoomCode] = useState(false);
   const [startGameLoading, setStartGameLoading] = useState(false);
   const [hasSession, setHasSession] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [openMatchesOpen, setOpenMatchesOpen] = useState(false);
+  const [publicMatches, setPublicMatches] = useState<PublicMatchInfo[]>([]);
+  const [matchPasswords, setMatchPasswords] = useState<Record<string, string>>({});
+  const [joinPassword, setJoinPassword] = useState("");
+  const [createVisibility, setCreateVisibility] = useState<"public" | "private">(
+    "public",
+  );
+  const [createVenueLabel, setCreateVenueLabel] = useState("");
+  const [createVenueUrl, setCreateVenueUrl] = useState("");
+  const [createRoomPassword, setCreateRoomPassword] = useState("");
+  const [lobbyChatInput, setLobbyChatInput] = useState("");
+  const [lobbyChatMessages, setLobbyChatMessages] = useState<LobbyChatMessage[]>([]);
 
   const [myId, setMyId] = useState<string | null>(null);
   const [mySessionToken, setMySessionToken] = useState<string | null>(
@@ -1280,6 +1326,17 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (screen !== "home") return;
+    socket.emit("list_public_matches");
+  }, [socket, screen]);
+
+  useEffect(() => {
+    if (screen !== "home") {
+      setProfileMenuOpen(false);
+    }
+  }, [screen]);
+
+  useEffect(() => {
     socket.on(
       "room_joined",
       ({
@@ -1299,6 +1356,9 @@ export default function App() {
         localStorage.setItem("court_session", state.code);
         setHasSession(true);
         setStartGameLoading(false);
+        setOpenMatchesOpen(false);
+        setProfileMenuOpen(false);
+        setJoinPassword("");
         if (state.hostId === playerId && sessionToken) {
           setAdminHostId(playerId);
           localStorage.setItem("court_admin_host_id", playerId);
@@ -1320,6 +1380,7 @@ export default function App() {
               p.id === playerId && avatar ? { ...p, avatar } : p,
             ),
           });
+          setLobbyChatMessages(roomState.lobbyChat ?? []);
           setIsHostJudge(state.isHostJudge ?? false);
           setGame(null);
           setScreen("room");
@@ -1336,6 +1397,7 @@ export default function App() {
                 : gameState.me,
           });
           setRoom(null);
+          setLobbyChatMessages([]);
           setScreen("game");
         }
       },
@@ -1343,7 +1405,25 @@ export default function App() {
 
     socket.on(
       "room_updated",
-      ({ players, hostId, isHostJudge: hj }: { players: PlayerInfo[]; hostId: string; isHostJudge?: boolean }) => {
+      ({
+        players,
+        hostId,
+        isHostJudge: hj,
+        visibility,
+        venueLabel,
+        venueUrl,
+        requiresPassword,
+        lobbyChat,
+      }: {
+        players: PlayerInfo[];
+        hostId: string;
+        isHostJudge?: boolean;
+        visibility?: "public" | "private";
+        venueLabel?: string;
+        venueUrl?: string;
+        requiresPassword?: boolean;
+        lobbyChat?: LobbyChatMessage[];
+      }) => {
         setRoom((prev) => {
           if (!prev) return prev;
           const mergedPlayers = players.map((nextPlayer) => {
@@ -1353,8 +1433,20 @@ export default function App() {
               avatar: nextPlayer.avatar ?? prevPlayer?.avatar,
             };
           });
-          return { ...prev, players: mergedPlayers, hostId };
+          return {
+            ...prev,
+            players: mergedPlayers,
+            hostId,
+            visibility: visibility ?? prev.visibility,
+            venueLabel: venueLabel ?? prev.venueLabel,
+            venueUrl: venueUrl ?? prev.venueUrl,
+            requiresPassword: requiresPassword ?? prev.requiresPassword,
+            lobbyChat: lobbyChat ?? prev.lobbyChat,
+          };
         });
+        if (lobbyChat) {
+          setLobbyChatMessages(lobbyChat);
+        }
         if (hj !== undefined) setIsHostJudge(hj);
       },
     );
@@ -1391,6 +1483,53 @@ export default function App() {
     });
 
     socket.on(
+      "game_profile_updated",
+      ({
+        players,
+        revealedFacts,
+        usedCards,
+      }: {
+        players: PlayerInfo[];
+        revealedFacts: RevealedFact[];
+        usedCards: UsedCard[];
+      }) => {
+        setGame((prev) => {
+          if (!prev) return prev;
+          const updatedMe =
+            prev.me ? players.find((player) => player.id === prev.me!.id) : null;
+          return {
+            ...prev,
+            players,
+            revealedFacts,
+            usedCards,
+            me:
+              prev.me && updatedMe
+                ? {
+                    ...prev.me,
+                    name: updatedMe.name,
+                    avatar: updatedMe.avatar,
+                    roleKey: updatedMe.roleKey ?? prev.me.roleKey,
+                    roleTitle: updatedMe.roleTitle ?? prev.me.roleTitle,
+                  }
+                : prev.me,
+          };
+        });
+      },
+    );
+
+    socket.on("public_matches_updated", ({ matches }: { matches: PublicMatchInfo[] }) => {
+      setPublicMatches(matches);
+    });
+
+    socket.on(
+      "lobby_chat_updated",
+      ({ messages }: { messages: LobbyChatMessage[] }) => {
+        setLobbyChatMessages(messages);
+        setRoom((prev) => (prev ? { ...prev, lobbyChat: messages } : prev));
+      },
+    );
+
+    socket.on(
       "player_left",
       ({ playerName: name }: { playerId: string; playerName: string }) => {
         setDisconnectAlert(`⚠️ ${name} покинул игру`);
@@ -1415,6 +1554,7 @@ export default function App() {
       setAdminHostId(null);
       setAdminHostSessionToken(null);
       setHasSession(false);
+      setLobbyChatMessages([]);
       setScreen("home");
     });
 
@@ -1437,6 +1577,9 @@ export default function App() {
       setIsHostJudge(false);
       setStartGameLoading(false);
       setContextHelpOpen(false);
+      setLobbyChatMessages([]);
+      setJoinPassword("");
+      setProfileMenuOpen(false);
       setScreen("home");
       setKickedAlert(
         "\u0412\u044b \u0431\u044b\u043b\u0438 \u043a\u0438\u043a\u043d\u0443\u0442\u044b \u0438\u0437 \u043a\u043e\u043c\u043d\u0430\u0442\u044b.",
@@ -1448,6 +1591,7 @@ export default function App() {
       setStartGameLoading(false);
       setGame(state as GameState);
       setRoom(null);
+      setLobbyChatMessages([]);
       setScreen("game");
     });
 
@@ -1514,6 +1658,9 @@ export default function App() {
       socket.off("room_joined");
       socket.off("room_updated");
       socket.off("game_players_updated");
+      socket.off("game_profile_updated");
+      socket.off("public_matches_updated");
+      socket.off("lobby_chat_updated");
       socket.off("player_left");
       socket.off("player_rejoined");
       socket.off("rejoin_failed");
@@ -1530,20 +1677,112 @@ export default function App() {
     };
   }, [socket, avatar]);
 
-  const createRoom = useCallback(() => {
+  const createQuickPrivateRoom = useCallback(() => {
     const name = playerName.trim() || "Игрок";
     localStorage.setItem("court_nickname", name);
-    socket.emit("create_room", { playerName: name });
-  }, [socket, playerName]);
-
-  const joinRoom = useCallback(() => {
-    if (!joinCode.trim()) return;
-    const name = playerName.trim() || "Игрок";
-    socket.emit("join_room", {
-      code: joinCode.trim().toUpperCase(),
+    socket.emit("create_room", {
       playerName: name,
+      avatar,
+      options: {
+        visibility: "private",
+      },
     });
-  }, [socket, joinCode, playerName]);
+  }, [socket, playerName, avatar]);
+
+  const createRoomFromPanel = useCallback(() => {
+    const name = playerName.trim() || "Игрок";
+    localStorage.setItem("court_nickname", name);
+    socket.emit("create_room", {
+      playerName: name,
+      avatar,
+      options: {
+        visibility: createVisibility,
+        password: createRoomPassword.trim() || undefined,
+        venueLabel: createVenueLabel.trim() || undefined,
+        venueUrl: createVenueUrl.trim() || undefined,
+      },
+    });
+  }, [
+    socket,
+    playerName,
+    avatar,
+    createVisibility,
+    createRoomPassword,
+    createVenueLabel,
+    createVenueUrl,
+  ]);
+
+  const joinRoom = useCallback((options?: { code?: string; password?: string }) => {
+    const targetCode = (options?.code ?? joinCode).trim().toUpperCase();
+    if (!targetCode) return;
+    const password = (options?.password ?? joinPassword).trim();
+    const name = playerName.trim() || "Игрок";
+    localStorage.setItem("court_nickname", name);
+    socket.emit("join_room", {
+      code: targetCode,
+      playerName: name,
+      avatar,
+      password: password || undefined,
+    });
+  }, [socket, joinCode, joinPassword, playerName, avatar]);
+
+  const updateProfile = useCallback(() => {
+    const nextName = playerName.trim();
+    if (!nextName) return;
+
+    localStorage.setItem("court_nickname", nextName);
+    if (avatar) {
+      localStorage.setItem("court_avatar", avatar);
+    } else {
+      localStorage.removeItem("court_avatar");
+    }
+
+    if (activeRoomCode && mySessionToken) {
+      socket.emit("update_profile", {
+        code: activeRoomCode,
+        sessionToken: mySessionToken,
+        name: nextName,
+        avatar,
+      });
+    }
+
+    setProfileMenuOpen(false);
+    setScreen("home");
+  }, [socket, activeRoomCode, mySessionToken, playerName, avatar]);
+
+  const sendLobbyChatMessage = useCallback(() => {
+    const text = lobbyChatInput.trim();
+    if (!room || !mySessionToken || !text) return;
+    socket.emit("send_lobby_chat", {
+      code: room.code,
+      sessionToken: mySessionToken,
+      text,
+    });
+    setLobbyChatInput("");
+  }, [socket, room, mySessionToken, lobbyChatInput]);
+
+  const joinPublicMatch = useCallback(
+    (match: PublicMatchInfo) => {
+      const password = (matchPasswords[match.code] ?? "").trim();
+      if (match.requiresPassword && !password) {
+        setError("Для этой комнаты нужен пароль.");
+        setTimeout(() => setError(""), 3500);
+        return;
+      }
+      joinRoom({ code: match.code, password });
+    },
+    [joinRoom, matchPasswords],
+  );
+
+  const openPublicMatchLink = useCallback((url: string | undefined) => {
+    if (!url) return;
+    window.open(url, "_blank", "noopener,noreferrer");
+  }, []);
+
+  const openProfileScreen = useCallback(() => {
+    setProfileMenuOpen(false);
+    setScreen("profile");
+  }, []);
 
   const reconnect = useCallback(() => {
     const sessionCode = localStorage.getItem("court_session");
@@ -1735,6 +1974,7 @@ export default function App() {
     setAdminHostSessionToken(null);
     localStorage.removeItem("court_admin_host_token");
     setJoinCode("");
+    setJoinPassword("");
     setDisconnectAlert("");
     setRejoinAlert("");
     setKickedAlert("");
@@ -1742,6 +1982,10 @@ export default function App() {
     setIsHostJudge(false);
     setStartGameLoading(false);
     setContextHelpOpen(false);
+    setLobbyChatInput("");
+    setLobbyChatMessages([]);
+    setProfileMenuOpen(false);
+    setOpenMatchesOpen(false);
   }, [socket, activeRoomCode]);
 
   const finalExit = useCallback(() => {
@@ -1762,10 +2006,15 @@ export default function App() {
     setAdminHostSessionToken(null);
     localStorage.removeItem("court_admin_host_token");
     setJoinCode("");
+    setJoinPassword("");
     setKickedAlert("");
     setCopiedRoomCode(false);
     setStartGameLoading(false);
     setContextHelpOpen(false);
+    setLobbyChatInput("");
+    setLobbyChatMessages([]);
+    setProfileMenuOpen(false);
+    setOpenMatchesOpen(false);
   }, [socket, activeRoomCode]);
 
   const setupNickname = useCallback(() => {
@@ -1913,6 +2162,93 @@ export default function App() {
     );
   }
 
+  if (screen === "profile") {
+    return (
+      <motion.div
+        key="profile"
+        variants={pageVariants}
+        initial="initial"
+        animate="animate"
+        exit="exit"
+        className="min-h-screen bg-zinc-950 text-zinc-100 p-6 md:p-10"
+      >
+        <div className="max-w-2xl mx-auto">
+          <Card className="rounded-[28px] border-zinc-800 bg-zinc-900/95 text-zinc-100">
+            <CardContent className="p-8 md:p-10 space-y-6">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="text-sm uppercase tracking-[0.16em] text-zinc-500">
+                    Профиль
+                  </div>
+                  <h2 className="text-3xl font-bold mt-2">Личные настройки</h2>
+                  <p className="text-zinc-400 mt-2">
+                    Здесь можно изменить ник и аватар.
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  className="rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                  onClick={() => setScreen("home")}
+                >
+                  Назад
+                </Button>
+              </div>
+
+              <div className="flex flex-col items-center gap-3">
+                <div
+                  className="relative cursor-pointer group"
+                  onClick={() => avatarInputRef.current?.click()}
+                >
+                  <Avatar src={avatar} name={playerName || "?"} size={96} />
+                  <div className="absolute inset-0 rounded-full bg-black/55 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Camera className="w-6 h-6 text-white" />
+                  </div>
+                </div>
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleAvatarChange}
+                />
+                <div className="text-xs text-zinc-500">
+                  Нажмите на аватар, чтобы загрузить новый
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Никнейм</label>
+                <Input
+                  value={playerName}
+                  onChange={(e) => setPlayerName(e.target.value)}
+                  placeholder="Например: Berly"
+                  className="h-11 rounded-xl bg-zinc-100 text-zinc-950 placeholder:text-zinc-400 border-0 focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-0"
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  className="flex-1 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                  onClick={() => setScreen("home")}
+                >
+                  Отмена
+                </Button>
+                <Button
+                  className="flex-1 rounded-xl bg-red-600 hover:bg-red-500 text-white border-0"
+                  onClick={updateProfile}
+                  disabled={!playerName.trim()}
+                >
+                  Сохранить
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </motion.div>
+    );
+  }
+
   if (screen === "home") {
     return (
       <motion.div
@@ -1937,44 +2273,76 @@ export default function App() {
           )}
         </AnimatePresence>
 
-        <div className="max-w-6xl mx-auto mb-6 flex justify-center">
-          <div className="inline-flex items-center gap-1 rounded-full border border-zinc-800 bg-zinc-900/90 p-1.5 shadow-sm shadow-black/30">
+        <div className="max-w-6xl mx-auto mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="md:flex-1 md:flex md:justify-center">
+            <div className="inline-flex items-center gap-1 rounded-full border border-zinc-800 bg-zinc-900/90 p-1.5 shadow-sm shadow-black/30">
+              <Button
+                variant="ghost"
+                onClick={() => setHomeTab("play")}
+                className={`h-9 rounded-full px-4 gap-2 ${
+                  homeTab === "play"
+                    ? "bg-red-600 text-white hover:bg-red-500"
+                    : "text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800"
+                }`}
+              >
+                <Gamepad2 className="w-4 h-4" />
+                Играть
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => setHomeTab("development")}
+                className={`h-9 rounded-full px-4 gap-2 ${
+                  homeTab === "development"
+                    ? "bg-red-600 text-white hover:bg-red-500"
+                    : "text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800"
+                }`}
+              >
+                <Wrench className="w-4 h-4" />
+                Разработка
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => setHomeTab("help")}
+                className={`h-9 rounded-full px-4 gap-2 ${
+                  homeTab === "help"
+                    ? "bg-red-600 text-white hover:bg-red-500"
+                    : "text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800"
+                }`}
+              >
+                <CircleHelp className="w-4 h-4" />
+                Помощь
+              </Button>
+            </div>
+          </div>
+          <div className="relative self-end md:self-auto">
             <Button
-              variant="ghost"
-              onClick={() => setHomeTab("play")}
-              className={`h-9 rounded-full px-4 gap-2 ${
-                homeTab === "play"
-                  ? "bg-red-600 text-white hover:bg-red-500"
-                  : "text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800"
-              }`}
+              variant="outline"
+              onClick={() => setProfileMenuOpen((prev) => !prev)}
+              className="rounded-full border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100 px-3 h-11 gap-2"
             >
-              <Gamepad2 className="w-4 h-4" />
-              Играть
+              <Avatar src={avatar} name={playerName || "Игрок"} size={28} />
+              <span className="max-w-[120px] truncate">{playerName || "Игрок"}</span>
+              <ChevronDown className="w-4 h-4 text-zinc-400" />
             </Button>
-            <Button
-              variant="ghost"
-              onClick={() => setHomeTab("development")}
-              className={`h-9 rounded-full px-4 gap-2 ${
-                homeTab === "development"
-                  ? "bg-red-600 text-white hover:bg-red-500"
-                  : "text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800"
-              }`}
-            >
-              <Wrench className="w-4 h-4" />
-              Разработка
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={() => setHomeTab("help")}
-              className={`h-9 rounded-full px-4 gap-2 ${
-                homeTab === "help"
-                  ? "bg-red-600 text-white hover:bg-red-500"
-                  : "text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800"
-              }`}
-            >
-              <CircleHelp className="w-4 h-4" />
-              Помощь
-            </Button>
+            <AnimatePresence>
+              {profileMenuOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -8, scale: 0.96 }}
+                  className="absolute right-0 mt-2 w-56 rounded-2xl border border-zinc-800 bg-zinc-900/95 shadow-2xl shadow-black/50 p-2 z-30"
+                >
+                  <button
+                    type="button"
+                    onClick={openProfileScreen}
+                    className="w-full rounded-xl px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-800 flex items-center gap-2"
+                  >
+                    <UserCircle2 className="w-4 h-4" />
+                    Открыть профиль
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
 
@@ -2052,52 +2420,17 @@ export default function App() {
                   )}
                 </AnimatePresence>
 
-                <div className="flex items-center gap-4">
-                  <div
-                    className="relative cursor-pointer group flex-shrink-0"
-                    onClick={() => avatarInputRef.current?.click()}
-                  >
-                    <Avatar src={avatar} name={playerName} size={52} />
-                    <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Camera className="w-4 h-4 text-white" />
-                    </div>
-                  </div>
-                  <input
-                    ref={avatarInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleAvatarChange}
-                  />
-                  <div className="flex-1 space-y-2">
-                    <label className="text-sm font-medium">Ваш никнейм</label>
-                    <Input
-                      value={playerName}
-                      onChange={(e) => {
-                        setPlayerName(e.target.value);
-                        if (e.target.value.trim())
-                          localStorage.setItem(
-                            "court_nickname",
-                            e.target.value.trim(),
-                          );
-                      }}
-                      placeholder="Например: Артём"
-                      className="h-11 rounded-xl bg-zinc-100 text-zinc-950 placeholder:text-zinc-400 border-0 focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-0"
-                    />
-                  </div>
-                </div>
-
                 <div className="grid gap-3">
                   <motion.div
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.97 }}
                   >
                     <Button
-                      onClick={createRoom}
+                      onClick={createQuickPrivateRoom}
                       className="w-full h-12 rounded-xl text-base gap-2 bg-red-600 hover:bg-red-500 text-white border-0"
                     >
                       <UserPlus className="w-4 h-4" />
-                      Создать комнату
+                      Быстрая приватная комната
                     </Button>
                   </motion.div>
 
@@ -2116,7 +2449,7 @@ export default function App() {
                       whileTap={{ scale: 0.97 }}
                     >
                       <Button
-                        onClick={joinRoom}
+                        onClick={() => joinRoom()}
                         variant="secondary"
                         disabled={!joinCode.trim()}
                         className="h-12 rounded-xl px-6 bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0"
@@ -2125,6 +2458,171 @@ export default function App() {
                       </Button>
                     </motion.div>
                   </div>
+
+                  <Input
+                    value={joinPassword}
+                    type="password"
+                    onChange={(e) => setJoinPassword(e.target.value)}
+                    placeholder="Пароль комнаты (если есть)"
+                    className="h-10 rounded-xl bg-zinc-900 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
+                    onKeyDown={(e) => e.key === "Enter" && joinRoom()}
+                  />
+
+                  <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setOpenMatchesOpen((prev) => !prev);
+                        socket.emit("list_public_matches");
+                      }}
+                      className="w-full h-11 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100 gap-2"
+                    >
+                      <Globe className="w-4 h-4" />
+                      Открытые матчи
+                      <Badge className="ml-auto bg-zinc-800 text-zinc-100 border border-zinc-700">
+                        {publicMatches.length}
+                      </Badge>
+                    </Button>
+                  </motion.div>
+
+                  <AnimatePresence>
+                    {openMatchesOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -8, height: 0 }}
+                        animate={{ opacity: 1, y: 0, height: "auto" }}
+                        exit={{ opacity: 0, y: -6, height: 0 }}
+                        className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4 space-y-4"
+                      >
+                        <div className="space-y-3">
+                          <div className="text-sm font-semibold text-zinc-200">
+                            Создать матч
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant={createVisibility === "public" ? "secondary" : "outline"}
+                              className={createVisibility === "public" ? "bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0 rounded-xl" : "rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"}
+                              onClick={() => setCreateVisibility("public")}
+                            >
+                              <Globe className="w-4 h-4" />
+                              Публичный
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant={createVisibility === "private" ? "secondary" : "outline"}
+                              className={createVisibility === "private" ? "bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0 rounded-xl" : "rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"}
+                              onClick={() => setCreateVisibility("private")}
+                            >
+                              <Lock className="w-4 h-4" />
+                              Приватный
+                            </Button>
+                          </div>
+                          <Input
+                            value={createVenueLabel}
+                            onChange={(e) => setCreateVenueLabel(e.target.value)}
+                            placeholder="Где проводите матч (например: Discord)"
+                            className="h-10 rounded-xl bg-zinc-900 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
+                          />
+                          <Input
+                            value={createVenueUrl}
+                            onChange={(e) => setCreateVenueUrl(e.target.value)}
+                            placeholder="Ссылка для входа (опционально)"
+                            className="h-10 rounded-xl bg-zinc-900 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
+                          />
+                          <Input
+                            value={createRoomPassword}
+                            type="password"
+                            onChange={(e) => setCreateRoomPassword(e.target.value)}
+                            placeholder="Пароль комнаты (опционально)"
+                            className="h-10 rounded-xl bg-zinc-900 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
+                          />
+                          <Button
+                            onClick={createRoomFromPanel}
+                            className="w-full h-10 rounded-xl bg-red-600 hover:bg-red-500 text-white border-0 gap-2"
+                          >
+                            <UserPlus className="w-4 h-4" />
+                            Создать матч
+                          </Button>
+                        </div>
+
+                        <Separator />
+
+                        <div className="space-y-3">
+                          <div className="text-sm font-semibold text-zinc-200">
+                            Активные матчи
+                          </div>
+                          <div className={`space-y-2 max-h-64 overflow-y-auto pr-1 ${HIDE_SCROLLBAR_CLASS}`}>
+                            {publicMatches.length === 0 && (
+                              <div className="text-sm text-zinc-500">
+                                Сейчас нет публичных матчей.
+                              </div>
+                            )}
+                            {publicMatches.map((match) => (
+                              <div
+                                key={match.code}
+                                className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-3 space-y-2"
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="text-sm font-semibold text-zinc-100 tracking-wider">
+                                    {match.code}
+                                  </div>
+                                  <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">
+                                    {match.playerCount}/{match.maxPlayers}
+                                  </Badge>
+                                </div>
+                                <div className="text-xs text-zinc-400">
+                                  Хост: {match.hostName}
+                                </div>
+                                <div className="text-xs text-zinc-500">
+                                  {match.started ? "Матч уже идет" : "Лобби набирает игроков"}
+                                </div>
+                                {match.venueLabel && (
+                                  <div className="text-xs text-zinc-400 flex items-center gap-1">
+                                    <Link2 className="w-3.5 h-3.5" />
+                                    {match.venueLabel}
+                                  </div>
+                                )}
+                                {match.requiresPassword && (
+                                  <Input
+                                    type="password"
+                                    value={matchPasswords[match.code] ?? ""}
+                                    onChange={(e) =>
+                                      setMatchPasswords((prev) => ({
+                                        ...prev,
+                                        [match.code]: e.target.value,
+                                      }))
+                                    }
+                                    placeholder="Пароль для входа"
+                                    className="h-9 rounded-lg bg-zinc-950 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
+                                  />
+                                )}
+                                <div className="flex gap-2">
+                                  <Button
+                                    size="sm"
+                                    className="rounded-lg bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0"
+                                    onClick={() => joinPublicMatch(match)}
+                                  >
+                                    Войти
+                                  </Button>
+                                  {match.venueUrl && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="rounded-lg border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                                      onClick={() => openPublicMatchLink(match.venueUrl)}
+                                    >
+                                      <ExternalLink className="w-3.5 h-3.5 mr-1" />
+                                      Ссылка
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
 
                   <AnimatePresence>
                     {hasSession && (
@@ -2283,6 +2781,31 @@ export default function App() {
                   <div className="text-sm text-zinc-400">
                     Поделитесь кодом с другими игроками • 3–6 участников
                   </div>
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">
+                      {room.visibility === "public" ? "Публичная" : "Приватная"}
+                    </Badge>
+                    {room.requiresPassword && (
+                      <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">
+                        С паролем
+                      </Badge>
+                    )}
+                    {room.venueLabel && (
+                      <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">
+                        {room.venueLabel}
+                      </Badge>
+                    )}
+                  </div>
+                  {room.venueUrl && (
+                    <button
+                      type="button"
+                      className="text-xs text-zinc-400 hover:text-zinc-200 transition-colors inline-flex items-center gap-1"
+                      onClick={() => openPublicMatchLink(room.venueUrl)}
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      {room.venueUrl}
+                    </button>
+                  )}
                 </div>
                 <div className="flex flex-wrap gap-3">
                   <Button
@@ -2420,6 +2943,70 @@ export default function App() {
               </InfoBlock>
             </motion.div>
           </div>
+
+          <motion.div
+            custom={3}
+            variants={cardVariants}
+            initial="initial"
+            animate="animate"
+          >
+            <InfoBlock
+              title="Чат лобби"
+              icon={<MessageSquare className="w-5 h-5" />}
+            >
+              <div className="space-y-3">
+                <div
+                  className={`rounded-2xl border border-zinc-800 bg-zinc-950/70 p-3 h-56 overflow-y-auto ${HIDE_SCROLLBAR_CLASS}`}
+                >
+                  <div className="space-y-2">
+                    {lobbyChatMessages.length === 0 && (
+                      <div className="text-sm text-zinc-500">
+                        Сообщений пока нет.
+                      </div>
+                    )}
+                    {lobbyChatMessages.map((message) => (
+                      <div key={message.id} className="text-sm">
+                        <div className="flex items-center gap-2 text-zinc-400 text-xs mb-1">
+                          <Avatar
+                            src={message.senderAvatar ?? null}
+                            name={message.senderName}
+                            size={20}
+                          />
+                          <span>{message.senderName}</span>
+                          <span>•</span>
+                          <span>
+                            {new Date(message.createdAt).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </span>
+                        </div>
+                        <div className="text-zinc-200 whitespace-pre-wrap break-words">
+                          {message.text}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    value={lobbyChatInput}
+                    onChange={(e) => setLobbyChatInput(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && sendLobbyChatMessage()}
+                    placeholder="Сообщение в лобби..."
+                    className="h-10 rounded-xl bg-zinc-900 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
+                  />
+                  <Button
+                    onClick={sendLobbyChatMessage}
+                    className="h-10 rounded-xl bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0"
+                    disabled={!lobbyChatInput.trim()}
+                  >
+                    Отправить
+                  </Button>
+                </div>
+              </div>
+            </InfoBlock>
+          </motion.div>
           <ContextHelp
             open={contextHelpOpen}
             onOpenChange={setContextHelpOpen}
