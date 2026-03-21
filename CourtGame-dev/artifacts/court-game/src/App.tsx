@@ -1971,6 +1971,14 @@ export default function App() {
   );
 
   const resetAll = useCallback(() => {
+    const reconnectCode = activeRoomCode ?? localStorage.getItem("court_session");
+    const reconnectToken =
+      mySessionToken ?? localStorage.getItem("court_session_token");
+    if (reconnectCode && reconnectToken) {
+      localStorage.setItem("court_session", reconnectCode);
+      localStorage.setItem("court_session_token", reconnectToken);
+    }
+
     if (activeRoomCode) {
       disconnectTestPlayersFromRoom(activeRoomCode);
     }
@@ -1997,11 +2005,8 @@ export default function App() {
     setLobbyChatMessages([]);
     setProfileMenuOpen(false);
     setOpenMatchesOpen(false);
-    const hasStoredSession =
-      !!localStorage.getItem("court_session") &&
-      !!localStorage.getItem("court_session_token");
-    setHasSession(hasStoredSession);
-  }, [socket, activeRoomCode]);
+    setHasSession(!!reconnectCode && !!reconnectToken);
+  }, [socket, activeRoomCode, mySessionToken]);
 
   const finalExit = useCallback(() => {
     resetAll();
