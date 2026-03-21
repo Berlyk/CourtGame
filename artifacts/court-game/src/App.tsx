@@ -2097,36 +2097,6 @@ export default function App() {
     [socket, game, mySessionToken],
   );
 
-  const resetAll = useCallback(() => {
-    socket.emit("leave_room");
-    setScreen("home");
-    setRoom(null);
-    setGame(null);
-    setMyId(null);
-    setMySessionToken(null);
-    setAdminHostId(null);
-    localStorage.removeItem("court_admin_host_id");
-    setAdminHostSessionToken(null);
-    localStorage.removeItem("court_admin_host_token");
-    setJoinCode("");
-    setJoinPasswordDialogOpen(false);
-    setJoinPasswordDialogMatch(null);
-    setJoinPasswordInput("");
-    setJoinPasswordDialogError("");
-    setJoinPasswordVisible(false);
-    setDisconnectAlert("");
-    setRejoinAlert("");
-    setKickedAlert("");
-    setCopiedRoomCode(false);
-    setIsHostJudge(false);
-    setStartGameLoading(false);
-    setContextHelpOpen(false);
-    setLobbyChatInput("");
-    setLobbyChatMessages([]);
-    setProfileMenuOpen(false);
-    setCreateMatchDialogOpen(false);
-  }, [socket]);
-
   const returnHomeWithSession = useCallback(() => {
     setScreen("home");
     setRoom(null);
@@ -3748,7 +3718,7 @@ export default function App() {
                     <Button
                       variant="outline"
                       className="rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
-                      onClick={resetAll}
+                      onClick={returnHomeWithSession}
                     >
                       Выйти
                     </Button>
