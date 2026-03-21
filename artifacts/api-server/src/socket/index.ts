@@ -177,6 +177,7 @@ function getRoomState(room: any, playerId: string) {
     return {
       type: "room",
       code: room.code,
+      roomName: room.roomName,
       hostId: room.hostId,
       players: mapLobbyPlayers(room.players),
       started: room.started,
@@ -194,6 +195,7 @@ function getRoomState(room: any, playerId: string) {
   return {
     type: "game",
     code: room.code,
+    roomName: room.roomName,
     hostId: room.hostId,
     caseData: room.game.caseData,
     stages: room.game.stages,
@@ -386,6 +388,7 @@ export function setupSocket(httpServer: HttpServer) {
       socket.to(roomCode).emit("room_updated", {
         players: mapLobbyPlayers(updatedRoom.players),
         hostId: updatedRoom.hostId,
+        roomName: updatedRoom.roomName,
         isHostJudge: updatedRoom.isHostJudge,
         visibility: updatedRoom.visibility,
         venueLabel: updatedRoom.venueLabel,
@@ -481,6 +484,7 @@ export function setupSocket(httpServer: HttpServer) {
       socket.to(roomCode).emit("room_updated", {
         players: mapLobbyPlayers(room.players),
         hostId: room.hostId,
+        roomName: room.roomName,
         isHostJudge,
         visibility: room.visibility,
         venueLabel: room.venueLabel,
@@ -517,6 +521,7 @@ export function setupSocket(httpServer: HttpServer) {
         io.to(roomCode).emit("room_updated", {
           players: mapLobbyPlayers(room.players),
           hostId: room.hostId,
+          roomName: room.roomName,
           isHostJudge: room.isHostJudge,
           visibility: room.visibility,
           venueLabel: room.venueLabel,
@@ -579,6 +584,7 @@ export function setupSocket(httpServer: HttpServer) {
           io.to(roomCode).emit("room_updated", {
             players: mapLobbyPlayers(updatedRoom.players),
             hostId: updatedRoom.hostId,
+            roomName: updatedRoom.roomName,
             isHostJudge: updatedRoom.isHostJudge,
             visibility: updatedRoom.visibility,
             venueLabel: updatedRoom.venueLabel,
@@ -681,6 +687,7 @@ export function setupSocket(httpServer: HttpServer) {
           io.to(roomCode).emit("room_updated", {
             players: mapLobbyPlayers(updatedRoom.players),
             hostId: updatedRoom.hostId,
+            roomName: updatedRoom.roomName,
             isHostJudge: updatedRoom.isHostJudge,
             visibility: updatedRoom.visibility,
             venueLabel: updatedRoom.venueLabel,
@@ -816,6 +823,7 @@ export function setupSocket(httpServer: HttpServer) {
       if (!updatedRoom) return;
 
       io.to(roomCode).emit("stage_updated", { stageIndex: updatedRoom.game!.stageIndex });
+      emitPublicMatches(io);
       emitFactRevealPermissions(io, updatedRoom);
     });
 
@@ -841,6 +849,7 @@ export function setupSocket(httpServer: HttpServer) {
       if (!updatedRoom) return;
 
       io.to(roomCode).emit("stage_updated", { stageIndex: updatedRoom.game!.stageIndex });
+      emitPublicMatches(io);
       emitFactRevealPermissions(io, updatedRoom);
     });
 
@@ -871,6 +880,7 @@ export function setupSocket(httpServer: HttpServer) {
         finished: true,
         truth: updatedRoom.game!.caseData.truth
       });
+      emitPublicMatches(io);
     });
 
     function handleLeave(socketId: string) {
@@ -897,6 +907,7 @@ export function setupSocket(httpServer: HttpServer) {
           socket.to(info.roomCode).emit("room_updated", {
             players: mapLobbyPlayers(updatedRoom.players),
             hostId: updatedRoom.hostId,
+            roomName: updatedRoom.roomName,
             isHostJudge: updatedRoom.isHostJudge,
             visibility: updatedRoom.visibility,
             venueLabel: updatedRoom.venueLabel,

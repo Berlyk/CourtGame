@@ -128,6 +128,7 @@ export interface GameState {
 
 export interface Room {
   code: string;
+  roomName?: string;
   hostId: string;
   players: Player[];
   game: GameState | null;
@@ -152,10 +153,13 @@ export interface LobbyChatMessage {
 
 export interface PublicMatchInfo {
   code: string;
+  roomName?: string;
+  visibility: "public" | "private";
   hostName: string;
   playerCount: number;
   maxPlayers: number;
   started: boolean;
+  currentStage?: string;
   createdAt: number;
   venueLabel?: string;
   venueUrl?: string;
@@ -165,6 +169,7 @@ export interface PublicMatchInfo {
 export interface CreateRoomOptions {
   visibility?: "public" | "private";
   password?: string;
+  roomName?: string;
   venueLabel?: string;
   venueUrl?: string;
 }
@@ -182,6 +187,12 @@ function normalizeRoomPassword(password: string | undefined): string | undefined
   return trimmed ? trimmed.slice(0, 64) : undefined;
 }
 
+function normalizeRoomName(name: string | undefined): string | undefined {
+  if (!name) return undefined;
+  const trimmed = name.trim();
+  return trimmed ? trimmed.slice(0, 80) : undefined;
+}
+
 function normalizeVenueLabel(label: string | undefined): string | undefined {
   if (!label) return undefined;
   const trimmed = label.trim();
@@ -197,10 +208,12 @@ function normalizeVenueUrl(url: string | undefined): string | undefined {
 export function createRoom(code: string, player: Player, options?: CreateRoomOptions): Room {
   const visibility = normalizeVisibility(options?.visibility);
   const password = normalizeRoomPassword(options?.password);
+  const roomName = normalizeRoomName(options?.roomName);
   const venueLabel = normalizeVenueLabel(options?.venueLabel);
   const venueUrl = normalizeVenueUrl(options?.venueUrl);
   const room: Room = {
     code,
+    roomName,
     hostId: player.id,
     players: [player],
     game: null,
@@ -380,7 +393,6 @@ export function removePlayer(code: string, playerId: string): Room | null {
 
 export function listPublicMatches(): PublicMatchInfo[] {
   return [...rooms.values()]
-    .filter((room) => room.visibility === "public")
     .map((room) => {
       const hostPlayer =
         room.players.find((p) => p.id === room.hostId) ??
@@ -388,10 +400,15 @@ export function listPublicMatches(): PublicMatchInfo[] {
 
       return {
         code: room.code,
+        roomName: room.roomName,
+        visibility: room.visibility,
         hostName: hostPlayer?.name ?? "Host",
         playerCount: room.players.length,
         maxPlayers: 6,
         started: room.started,
+        currentStage: room.game
+          ? room.game.stages[room.game.stageIndex] ?? undefined
+          : undefined,
         createdAt: room.createdAt,
         venueLabel: room.venueLabel,
         venueUrl: room.venueUrl,

@@ -23,6 +23,7 @@ import {
   Search,
   Wrench,
   MessageSquare,
+  Lock,
   Globe,
   Link2,
   UserCircle2,
@@ -1030,10 +1031,13 @@ interface LobbyChatMessage {
 
 interface PublicMatchInfo {
   code: string;
+  roomName?: string;
+  visibility: "public" | "private";
   hostName: string;
   playerCount: number;
   maxPlayers: number;
   started: boolean;
+  currentStage?: string;
   createdAt: number;
   venueLabel?: string;
   venueUrl?: string;
@@ -1075,6 +1079,7 @@ interface GameState {
 
 interface RoomState {
   code: string;
+  roomName?: string;
   hostId: string;
   players: PlayerInfo[];
   started: boolean;
@@ -1271,8 +1276,10 @@ export default function App() {
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [createMatchDialogOpen, setCreateMatchDialogOpen] = useState(false);
   const [publicMatches, setPublicMatches] = useState<PublicMatchInfo[]>([]);
-  const [matchPasswords, setMatchPasswords] = useState<Record<string, string>>({});
-  const [joinPassword, setJoinPassword] = useState("");
+  const [joinPasswordDialogOpen, setJoinPasswordDialogOpen] = useState(false);
+  const [joinPasswordDialogMatch, setJoinPasswordDialogMatch] = useState<PublicMatchInfo | null>(null);
+  const [joinPasswordInput, setJoinPasswordInput] = useState("");
+  const [createRoomName, setCreateRoomName] = useState("");
   const [createVenueLabel, setCreateVenueLabel] = useState("");
   const [createVenueUrl, setCreateVenueUrl] = useState("");
   const [createRoomPassword, setCreateRoomPassword] = useState("");
@@ -1360,7 +1367,9 @@ export default function App() {
         setStartGameLoading(false);
         setCreateMatchDialogOpen(false);
         setProfileMenuOpen(false);
-        setJoinPassword("");
+        setJoinPasswordDialogOpen(false);
+        setJoinPasswordDialogMatch(null);
+        setJoinPasswordInput("");
         if (state.hostId === playerId && sessionToken) {
           setAdminHostId(playerId);
           localStorage.setItem("court_admin_host_id", playerId);
@@ -1411,6 +1420,7 @@ export default function App() {
         players,
         hostId,
         isHostJudge: hj,
+        roomName,
         visibility,
         venueLabel,
         venueUrl,
@@ -1420,6 +1430,7 @@ export default function App() {
         players: PlayerInfo[];
         hostId: string;
         isHostJudge?: boolean;
+        roomName?: string;
         visibility?: "public" | "private";
         venueLabel?: string;
         venueUrl?: string;
@@ -1439,6 +1450,7 @@ export default function App() {
             ...prev,
             players: mergedPlayers,
             hostId,
+            roomName: roomName ?? prev.roomName,
             visibility: visibility ?? prev.visibility,
             venueLabel: venueLabel ?? prev.venueLabel,
             venueUrl: venueUrl ?? prev.venueUrl,
@@ -1580,11 +1592,13 @@ export default function App() {
       setStartGameLoading(false);
       setContextHelpOpen(false);
       setLobbyChatMessages([]);
-      setJoinPassword("");
+      setJoinPasswordDialogOpen(false);
+      setJoinPasswordDialogMatch(null);
+      setJoinPasswordInput("");
       setProfileMenuOpen(false);
       setScreen("home");
       setKickedAlert(
-        "\u0412\u044b \u0431\u044b\u043b\u0438 \u043a\u0438\u043a\u043d\u0443\u0442\u044b \u0438\u0437 \u043a\u043e\u043c\u043d\u0430\u0442\u044b.",
+        "Вы были кикнуты из комнаты.",
       );
       setTimeout(() => setKickedAlert(""), 5000);
     });
@@ -1699,6 +1713,7 @@ export default function App() {
       avatar,
       options: {
         visibility: "public",
+        roomName: createRoomName.trim() || undefined,
         password: createRoomPassword.trim() || undefined,
         venueLabel: createVenueLabel.trim() || undefined,
         venueUrl: createVenueUrl.trim() || undefined,
@@ -1708,6 +1723,7 @@ export default function App() {
     socket,
     playerName,
     avatar,
+    createRoomName,
     createRoomPassword,
     createVenueLabel,
     createVenueUrl,
@@ -1716,7 +1732,7 @@ export default function App() {
   const joinRoom = useCallback((options?: { code?: string; password?: string }) => {
     const targetCode = (options?.code ?? joinCode).trim().toUpperCase();
     if (!targetCode) return;
-    const password = (options?.password ?? joinPassword).trim();
+    const password = (options?.password ?? "").trim();
     const name = playerName.trim() || "Игрок";
     localStorage.setItem("court_nickname", name);
     socket.emit("join_room", {
@@ -1725,7 +1741,7 @@ export default function App() {
       avatar,
       password: password || undefined,
     });
-  }, [socket, joinCode, joinPassword, playerName, avatar]);
+  }, [socket, joinCode, playerName, avatar]);
 
   const updateProfile = useCallback(() => {
     const nextName = playerName.trim();
@@ -1764,21 +1780,35 @@ export default function App() {
 
   const joinPublicMatch = useCallback(
     (match: PublicMatchInfo) => {
-      const password = (matchPasswords[match.code] ?? "").trim();
-      if (match.requiresPassword && !password) {
-        setError("Для этой комнаты нужен пароль.");
-        setTimeout(() => setError(""), 3500);
+      if (match.requiresPassword) {
+        setJoinPasswordDialogMatch(match);
+        setJoinPasswordInput("");
+        setJoinPasswordDialogOpen(true);
         return;
       }
-      joinRoom({ code: match.code, password });
+      joinRoom({ code: match.code });
     },
-    [joinRoom, matchPasswords],
+    [joinRoom],
   );
 
   const openPublicMatchLink = useCallback((url: string | undefined) => {
     if (!url) return;
     window.open(url, "_blank", "noopener,noreferrer");
   }, []);
+
+  const joinPublicMatchWithPassword = useCallback(() => {
+    if (!joinPasswordDialogMatch) return;
+    const password = joinPasswordInput.trim();
+    if (!password) {
+      setError("Введите пароль комнаты.");
+      setTimeout(() => setError(""), 3000);
+      return;
+    }
+    joinRoom({ code: joinPasswordDialogMatch.code, password });
+    setJoinPasswordDialogOpen(false);
+    setJoinPasswordDialogMatch(null);
+    setJoinPasswordInput("");
+  }, [joinPasswordDialogMatch, joinPasswordInput, joinRoom]);
 
   const openProfileScreen = useCallback(() => {
     setProfileMenuOpen(false);
@@ -1975,7 +2005,9 @@ export default function App() {
     setAdminHostSessionToken(null);
     localStorage.removeItem("court_admin_host_token");
     setJoinCode("");
-    setJoinPassword("");
+    setJoinPasswordDialogOpen(false);
+    setJoinPasswordDialogMatch(null);
+    setJoinPasswordInput("");
     setDisconnectAlert("");
     setRejoinAlert("");
     setKickedAlert("");
@@ -2007,7 +2039,9 @@ export default function App() {
     setAdminHostSessionToken(null);
     localStorage.removeItem("court_admin_host_token");
     setJoinCode("");
-    setJoinPassword("");
+    setJoinPasswordDialogOpen(false);
+    setJoinPasswordDialogMatch(null);
+    setJoinPasswordInput("");
     setKickedAlert("");
     setCopiedRoomCode(false);
     setStartGameLoading(false);
@@ -2330,7 +2364,7 @@ export default function App() {
                 onClick={() => setProfileMenuOpen((prev) => !prev)}
                 className="rounded-full border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100 px-3.5 h-10 gap-2"
               >
-                <Avatar src={avatar} name={playerName || "Игрок"} size={28} />
+                <Avatar src={avatar} name={playerName || "Игрок"} size={32} />
                 <span className="max-w-[130px] truncate text-sm">{playerName || "Игрок"}</span>
                 <ChevronDown className="w-4 h-4 text-zinc-400" />
               </Button>
@@ -2385,10 +2419,7 @@ export default function App() {
                 }
               >
                 <Globe className="w-4 h-4" />
-                Активные матчи
-                <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">
-                  {publicMatches.length}
-                </Badge>
+                Подбор игроков
               </Button>
             </div>
 
@@ -2501,15 +2532,6 @@ export default function App() {
                             </motion.div>
                           </div>
 
-                          <Input
-                            value={joinPassword}
-                            type="password"
-                            onChange={(e) => setJoinPassword(e.target.value)}
-                            placeholder="Пароль комнаты (если есть)"
-                            className="h-10 rounded-xl bg-zinc-900 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
-                            onKeyDown={(e) => e.key === "Enter" && joinRoom()}
-                          />
-
                           <Button
                             onClick={() => setCreateMatchDialogOpen(true)}
                             className="h-11 rounded-xl bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0 gap-2"
@@ -2540,18 +2562,6 @@ export default function App() {
                           </AnimatePresence>
                         </div>
 
-                        <Separator />
-
-                        <div className="space-y-3">
-                          <div className="font-semibold">Функционал</div>
-                          <div className="grid gap-2 text-sm text-zinc-400">
-                            <div>• создайте комнату и поделитесь кодом с игроками</div>
-                            <div>• ведущий запускает игру и роли раздаются автоматически</div>
-                            <div>• каждый видит только свои факты и карты механик</div>
-                            <div>• раскрытые факты и использованные карты видят все</div>
-                            <div>• судья меняет этапы и выносит финальный вердикт</div>
-                          </div>
-                        </div>
                       </CardContent>
                     </Card>
                   </motion.div>
@@ -2567,15 +2577,12 @@ export default function App() {
                     <CardContent className="p-6 md:p-8 space-y-5">
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div className="space-y-1">
-                          <h2 className="text-2xl font-semibold tracking-tight">Активные матчи</h2>
+                          <h2 className="text-2xl font-semibold tracking-tight">Подбор игроков</h2>
                           <p className="text-sm text-zinc-400">
-                            Выберите открытый матч для входа или создайте свой.
+                            Выберите комнату для входа или создайте свою.
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">
-                            {publicMatches.length} активных
-                          </Badge>
                           <Button
                             variant="outline"
                             onClick={() => socket.emit("list_public_matches")}
@@ -2607,74 +2614,91 @@ export default function App() {
                         )}
                       </AnimatePresence>
 
-                      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                      <div className="space-y-3">
                         {publicMatches.length === 0 && (
                           <div className="text-sm text-zinc-500">
-                            Сейчас нет публичных матчей.
+                            Сейчас нет доступных комнат.
                           </div>
                         )}
-                        {publicMatches.map((match) => (
-                          <motion.div
-                            key={match.code}
-                            layout
-                            initial={{ opacity: 0, y: 8 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4 space-y-3"
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="text-sm font-semibold text-zinc-100 tracking-wider">
-                                {match.code}
+                        {publicMatches.map((match) => {
+                          const roomTitle = match.roomName?.trim() || `Комната ${match.code}`;
+                          const hasLock = match.requiresPassword;
+                          const showLockBadge = hasLock || match.visibility === "private";
+                          const roomTypeLabel =
+                            match.visibility === "private" ? "Приватная" : "Публичная";
+                          const statusLabel = match.started
+                            ? "Матч уже идёт"
+                            : "Лобби набирает игроков";
+                          return (
+                            <motion.div
+                              key={match.code}
+                              layout
+                              initial={{ opacity: 0, y: 8 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              className="rounded-2xl border border-zinc-800 bg-zinc-950/70 px-4 py-4 md:px-5"
+                            >
+                              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                                <div className="min-w-0 space-y-2">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <h3 className="text-base font-semibold text-zinc-100 truncate">
+                                      {roomTitle}
+                                    </h3>
+                                    <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">
+                                      {match.playerCount}/{match.maxPlayers}
+                                    </Badge>
+                                    <Badge className="bg-zinc-800 text-zinc-200 border border-zinc-700">
+                                      {roomTypeLabel}
+                                    </Badge>
+                                    {showLockBadge && (
+                                      <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700 gap-1">
+                                        <Lock className="w-3.5 h-3.5" />
+                                        {hasLock ? "С паролем" : "Закрытая"}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-zinc-400">
+                                    <span className="font-mono tracking-wider text-zinc-300">
+                                      {match.code}
+                                    </span>
+                                    <span>Хост: {match.hostName}</span>
+                                    <span>{statusLabel}</span>
+                                    {match.currentStage && (
+                                      <span className="text-zinc-300">
+                                        Этап: {match.currentStage}
+                                      </span>
+                                    )}
+                                    {match.venueLabel && (
+                                      <span className="inline-flex items-center gap-1">
+                                        <Link2 className="w-3.5 h-3.5" />
+                                        {match.venueLabel}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <Button
+                                    size="sm"
+                                    className="rounded-lg bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0"
+                                    onClick={() => joinPublicMatch(match)}
+                                  >
+                                    Войти
+                                  </Button>
+                                  {match.venueUrl && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="rounded-lg border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                                      onClick={() => openPublicMatchLink(match.venueUrl)}
+                                    >
+                                      <ExternalLink className="w-3.5 h-3.5 mr-1" />
+                                      Ссылка
+                                    </Button>
+                                  )}
+                                </div>
                               </div>
-                              <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">
-                                {match.playerCount}/{match.maxPlayers}
-                              </Badge>
-                            </div>
-                            <div className="text-xs text-zinc-400">Хост: {match.hostName}</div>
-                            <div className="text-xs text-zinc-500">
-                              {match.started ? "Матч уже идет" : "Лобби набирает игроков"}
-                            </div>
-                            {match.venueLabel && (
-                              <div className="text-xs text-zinc-400 flex items-center gap-1">
-                                <Link2 className="w-3.5 h-3.5" />
-                                {match.venueLabel}
-                              </div>
-                            )}
-                            {match.requiresPassword && (
-                              <Input
-                                type="password"
-                                value={matchPasswords[match.code] ?? ""}
-                                onChange={(e) =>
-                                  setMatchPasswords((prev) => ({
-                                    ...prev,
-                                    [match.code]: e.target.value,
-                                  }))
-                                }
-                                placeholder="Пароль для входа"
-                                className="h-9 rounded-lg bg-zinc-950 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
-                              />
-                            )}
-                            <div className="flex gap-2">
-                              <Button
-                                size="sm"
-                                className="rounded-lg bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0"
-                                onClick={() => joinPublicMatch(match)}
-                              >
-                                Войти
-                              </Button>
-                              {match.venueUrl && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="rounded-lg border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
-                                  onClick={() => openPublicMatchLink(match.venueUrl)}
-                                >
-                                  <ExternalLink className="w-3.5 h-3.5 mr-1" />
-                                  Ссылка
-                                </Button>
-                              )}
-                            </div>
-                          </motion.div>
-                        ))}
+                            </motion.div>
+                          );
+                        })}
                       </div>
                     </CardContent>
                   </Card>
@@ -2687,14 +2711,23 @@ export default function App() {
                 <DialogHeader>
                   <DialogTitle>Создать матч</DialogTitle>
                   <DialogDescription className="text-zinc-400">
-                    Матч будет виден в списке «Активные матчи». Пароль ограничит вход.
+                    Настройте комнату для раздела «Подбор игроков».
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
                   <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-xs text-zinc-400">
-                    Публичный матч • Комната появится в общем списке
+                    Комната появится в общем списке и будет доступна для подключения.
                   </div>
                   <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2 md:col-span-2">
+                      <label className="text-sm text-zinc-300">Название комнаты</label>
+                      <Input
+                        value={createRoomName}
+                        onChange={(e) => setCreateRoomName(e.target.value)}
+                        placeholder="Например: Вечерний суд #1"
+                        className="h-11 rounded-xl bg-zinc-900 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
+                      />
+                    </div>
                     <div className="space-y-2 md:col-span-2">
                       <label className="text-sm text-zinc-300">Где проводится матч</label>
                       <Input
@@ -2728,11 +2761,56 @@ export default function App() {
                     onClick={() => {
                       createRoomFromPanel();
                       setCreateMatchDialogOpen(false);
+                      setCreateRoomName("");
+                      setCreateVenueLabel("");
+                      setCreateVenueUrl("");
+                      setCreateRoomPassword("");
                     }}
                     className="w-full h-11 rounded-xl bg-red-600 hover:bg-red-500 text-white border-0 gap-2"
                   >
                     <UserPlus className="w-4 h-4" />
-                    Создать открытый матч
+                    Создать комнату
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog
+              open={joinPasswordDialogOpen}
+              onOpenChange={(open) => {
+                setJoinPasswordDialogOpen(open);
+                if (!open) {
+                  setJoinPasswordDialogMatch(null);
+                  setJoinPasswordInput("");
+                }
+              }}
+            >
+              <DialogContent className="max-w-md border-zinc-800 bg-zinc-950 text-zinc-100">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <Lock className="w-4 h-4" />
+                    Вход в закрытую комнату
+                  </DialogTitle>
+                  <DialogDescription className="text-zinc-400">
+                    {joinPasswordDialogMatch
+                      ? `Введите пароль для комнаты ${joinPasswordDialogMatch.code}.`
+                      : "Введите пароль комнаты."}
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-3">
+                  <Input
+                    type="password"
+                    value={joinPasswordInput}
+                    onChange={(e) => setJoinPasswordInput(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && joinPublicMatchWithPassword()}
+                    placeholder="Пароль комнаты"
+                    className="h-11 rounded-xl bg-zinc-900 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
+                  />
+                  <Button
+                    onClick={joinPublicMatchWithPassword}
+                    className="w-full h-11 rounded-xl bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0"
+                  >
+                    Войти
                   </Button>
                 </div>
               </DialogContent>
@@ -2843,6 +2921,11 @@ export default function App() {
                     <Scale className="w-4 h-4" />
                     Код комнаты
                   </div>
+                  {room.roomName && (
+                    <div className="text-base font-semibold text-zinc-100">
+                      {room.roomName}
+                    </div>
+                  )}
                   <div className="text-3xl font-bold tracking-[0.25em] text-red-400">
                     {room.code}
                   </div>
@@ -2851,7 +2934,7 @@ export default function App() {
                   </div>
                   <div className="flex flex-wrap items-center gap-2 text-xs">
                     <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">
-                      {room.visibility === "public" ? "Публичная" : "Приватная"}
+                      {room.visibility === "private" ? "Приватная" : "Публичная"}
                     </Badge>
                     {room.requiresPassword && (
                       <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">
@@ -2903,25 +2986,6 @@ export default function App() {
                       room.players.length <= 6
                     }
                   />
-                  {myId === room.hostId && (
-                    <motion.div
-                      whileHover={{ scale: 1.03 }}
-                      whileTap={{ scale: 0.97 }}
-                    >
-                      <Button
-                        className="rounded-xl gap-2 bg-red-600 hover:bg-red-500 text-white border-0 disabled:bg-zinc-800 disabled:text-zinc-500"
-                        onClick={startGame}
-                        disabled={
-                          startGameLoading ||
-                          room.players.length < 3 ||
-                          room.players.length > 6
-                        }
-                      >
-                        <Play className="w-4 h-4" />
-                        {startGameLoading ? "\u0417\u0430\u043f\u0443\u0441\u043a..." : "\u041d\u0430\u0447\u0430\u0442\u044c \u0438\u0433\u0440\u0443"}
-                      </Button>
-                    </motion.div>
-                  )}
                   <Button
                     variant="outline"
                     className="rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
@@ -2957,22 +3021,23 @@ export default function App() {
                   </div>
                 ) : undefined}
               >
-                <div className="grid gap-3">
-                  <AnimatePresence>
-                    {room.players.map((player) => (
-                      <PlayerCard
-                        key={player.id}
-                        player={player}
-                        isHost={player.id === room.hostId}
-                        canKick={myId === room.hostId && player.id !== room.hostId}
-                        onKick={() => kickPlayerFromRoom(player.id)}
-                      />
-                    ))}
-                  </AnimatePresence>
+                <div className="flex min-h-[360px] flex-col">
+                  <div className="grid gap-3">
+                    <AnimatePresence>
+                      {room.players.map((player) => (
+                        <PlayerCard
+                          key={player.id}
+                          player={player}
+                          isHost={player.id === room.hostId}
+                          canKick={myId === room.hostId && player.id !== room.hostId}
+                          onKick={() => kickPlayerFromRoom(player.id)}
+                        />
+                      ))}
+                    </AnimatePresence>
+                  </div>
                   {room.players.length < 3 && (
-                    <div className="text-sm text-zinc-500 mt-2">
-                      Ожидание игроков... (нужно ещё минимум{" "}
-                      {3 - room.players.length})
+                    <div className="mt-auto pt-4 text-center text-sm text-zinc-500">
+                      Ожидание игроков... (нужно ещё минимум {3 - room.players.length})
                     </div>
                   )}
                 </div>
@@ -3008,6 +3073,20 @@ export default function App() {
                       Ведущий запускает игру, сайт случайно выбирает подходящее
                       дело и распределяет роли.
                     </div>
+                    {myId === room.hostId && (
+                      <Button
+                        className="mt-3 h-10 rounded-xl gap-2 bg-red-600 hover:bg-red-500 text-white border-0 disabled:bg-zinc-800 disabled:text-zinc-500"
+                        onClick={startGame}
+                        disabled={
+                          startGameLoading ||
+                          room.players.length < 3 ||
+                          room.players.length > 6
+                        }
+                      >
+                        <Play className="w-4 h-4" />
+                        {startGameLoading ? "Запуск..." : "Запустить матч"}
+                      </Button>
+                    )}
                   </div>
                 </InfoBlock>
 
@@ -3017,7 +3096,7 @@ export default function App() {
                 >
                   <div className="space-y-3">
                     <div
-                      className={`rounded-2xl border border-zinc-800 bg-zinc-950/70 p-3 h-[360px] overflow-y-auto ${HIDE_SCROLLBAR_CLASS}`}
+                      className={`rounded-2xl border border-zinc-800 bg-zinc-950/70 p-3 h-[360px] overflow-y-auto overflow-x-hidden ${HIDE_SCROLLBAR_CLASS}`}
                     >
                       <div className="space-y-2">
                         {lobbyChatMessages.length === 0 && (
@@ -3026,24 +3105,33 @@ export default function App() {
                           </div>
                         )}
                         {lobbyChatMessages.map((message) => (
-                          <div key={message.id} className="text-sm">
-                            <div className="flex items-center gap-2 text-zinc-400 text-xs mb-1">
+                          <div
+                            key={message.id}
+                            className="rounded-xl border border-zinc-800 bg-zinc-900/55 p-3"
+                          >
+                            <div className="flex items-start gap-3 min-w-0">
                               <Avatar
                                 src={message.senderAvatar ?? null}
                                 name={message.senderName}
-                                size={20}
+                                size={30}
                               />
-                              <span>{message.senderName}</span>
-                              <span>•</span>
-                              <span>
-                                {new Date(message.createdAt).toLocaleTimeString([], {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })}
-                              </span>
-                            </div>
-                            <div className="text-zinc-200 whitespace-pre-wrap break-words">
-                              {message.text}
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-2 text-zinc-400 text-xs">
+                                  <span className="text-sm font-semibold text-zinc-100">
+                                    {message.senderName}
+                                  </span>
+                                  <span>•</span>
+                                  <span>
+                                    {new Date(message.createdAt).toLocaleTimeString([], {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    })}
+                                  </span>
+                                </div>
+                                <div className="mt-1 text-zinc-200 text-sm whitespace-pre-wrap break-all overflow-hidden">
+                                  {message.text}
+                                </div>
+                              </div>
                             </div>
                           </div>
                         ))}
