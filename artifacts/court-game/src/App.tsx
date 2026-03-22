@@ -4476,7 +4476,7 @@ export default function App() {
                                   disabled={!canWarn}
                                   onClick={() => triggerJudgeWarning(player.id)}
                                 >
-                                  {reachedLimit ? "Лимит предупреждений" : "Выдать предупреждение"}
+                                  {warningCount === 0 ? "Выдать предупреждение" : "Добавить"}
                                 </Button>
                                 {warningCount > 0 && (
                                   <Button
@@ -4489,7 +4489,7 @@ export default function App() {
                                     disabled={!canRemove}
                                     onClick={() => removeJudgeWarning(player.id)}
                                   >
-                                    Снять предупреждение
+                                    Убрать
                                   </Button>
                                 )}
                               </div>
