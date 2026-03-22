@@ -35,12 +35,49 @@ const CROSS_EXAMINATION_STAGE_MARKERS = ["перекрест", "допрос"];
 const OPENING_STAGE_MARKERS = ["выступлен", "вступительн"];
 const CLOSING_STAGE_MARKERS = ["финальн", "заключительн"];
 const RECONNECT_GRACE_MS = 30_000;
+const PROTEST_COOLDOWN_MS = 30_000;
+const JUDGE_SILENCE_COOLDOWN_MS = 15_000;
+const INFLUENCE_ANNOUNCEMENT_DURATION_MS = 3_000;
 type SpeechOwnerRole =
   | "plaintiff"
   | "defendant"
   | "plaintiffLawyer"
   | "defenseLawyer"
   | "prosecutor";
+
+type CanonicalRole =
+  | "plaintiff"
+  | "defendant"
+  | "plaintiffLawyer"
+  | "defenseLawyer"
+  | "prosecutor"
+  | "judge"
+  | "witness";
+
+function normalizeRoleKey(roleKey: string | undefined): CanonicalRole | null {
+  if (!roleKey) return null;
+  const normalized = roleKey.trim();
+  const alias: Record<string, CanonicalRole> = {
+    plaintiff: "plaintiff",
+    defendant: "defendant",
+    plaintiffLawyer: "plaintiffLawyer",
+    defenseLawyer: "defenseLawyer",
+    defendantLawyer: "defenseLawyer",
+    prosecutor: "prosecutor",
+    judge: "judge",
+    witness: "witness",
+  };
+  return alias[normalized] ?? null;
+}
+
+function resolveLawyerPartnerRole(role: CanonicalRole | null): CanonicalRole | null {
+  if (!role) return null;
+  if (role === "plaintiff") return "plaintiffLawyer";
+  if (role === "plaintiffLawyer") return "plaintiff";
+  if (role === "defendant") return "defenseLawyer";
+  if (role === "defenseLawyer") return "defendant";
+  return null;
+}
 
 function normalizeStageName(stageName: string): string {
   return stageName.toLowerCase().replace(/ё/g, "е").trim();
@@ -179,6 +216,14 @@ function mapLobbyPlayers(players: any[]) {
   }));
 }
 
+interface LawyerChatMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  text: string;
+  createdAt: number;
+}
+
 function getRoomState(room: any, playerId: string) {
   if (!room.game) {
     return {
@@ -246,9 +291,88 @@ export function setupSocket(httpServer: HttpServer) {
     { roomCode: string; playerId: string; sessionToken: string }
   >();
   const reconnectCleanupTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  const actionCooldowns = new Map<string, number>();
+  const lawyerChats = new Map<string, LawyerChatMessage[]>();
   const normalizeRoomCode = (code: string): string => code.trim().toUpperCase();
   const getReconnectKey = (roomCode: string, playerId: string) =>
     `${roomCode}:${playerId}`;
+  const getActionCooldownKey = (
+    roomCode: string,
+    playerId: string,
+    action: "protest" | "silence",
+  ) => `${roomCode}:${playerId}:${action}`;
+  const getLawyerChatKey = (roomCode: string, firstId: string, secondId: string) => {
+    const sorted = [firstId, secondId].sort();
+    return `${roomCode}:${sorted[0]}:${sorted[1]}`;
+  };
+
+  const cleanupRoomCaches = (roomCode: string) => {
+    [...actionCooldowns.keys()]
+      .filter((key) => key.startsWith(`${roomCode}:`))
+      .forEach((key) => actionCooldowns.delete(key));
+    [...lawyerChats.keys()]
+      .filter((key) => key.startsWith(`${roomCode}:`))
+      .forEach((key) => lawyerChats.delete(key));
+    [...reconnectCleanupTimers.keys()]
+      .filter((key) => key.startsWith(`${roomCode}:`))
+      .forEach((key) => {
+        const timeout = reconnectCleanupTimers.get(key);
+        if (timeout) {
+          clearTimeout(timeout);
+        }
+        reconnectCleanupTimers.delete(key);
+      });
+  };
+
+  const resolveLawyerPair = (room: any, playerId: string) => {
+    if (!room?.game) return null;
+    const self = room.game.players.find((p: any) => p.id === playerId);
+    if (!self) return null;
+    const partnerRole = resolveLawyerPartnerRole(normalizeRoleKey(self.roleKey));
+    if (!partnerRole) return null;
+
+    const partner = room.game.players.find(
+      (p: any) => p.id !== playerId && normalizeRoleKey(p.roleKey) === partnerRole,
+    );
+    if (!partner) return null;
+
+    return {
+      self,
+      partner,
+      chatKey: getLawyerChatKey(room.code, self.id, partner.id),
+    };
+  };
+
+  const emitLawyerChatStateToSocket = (socketId: string, roomCode: string, playerId: string) => {
+    const room = getRoom(roomCode);
+    if (!room?.game) {
+      io.to(socketId).emit("lawyer_chat_state", {
+        enabled: false,
+        partner: null,
+        messages: [],
+      });
+      return;
+    }
+    const pair = resolveLawyerPair(room, playerId);
+    if (!pair) {
+      io.to(socketId).emit("lawyer_chat_state", {
+        enabled: false,
+        partner: null,
+        messages: [],
+      });
+      return;
+    }
+
+    io.to(socketId).emit("lawyer_chat_state", {
+      enabled: true,
+      partner: {
+        id: pair.partner.id,
+        name: pair.partner.name,
+        roleTitle: pair.partner.roleTitle,
+      },
+      messages: lawyerChats.get(pair.chatKey) ?? [],
+    });
+  };
 
   const clearReconnectCleanup = (roomCode: string, playerId: string) => {
     const key = getReconnectKey(roomCode, playerId);
@@ -262,6 +386,7 @@ export function setupSocket(httpServer: HttpServer) {
   const emitRoomSnapshot = (roomCode: string) => {
     const room = getRoom(roomCode);
     if (!room) {
+      cleanupRoomCaches(roomCode);
       emitPublicMatches(io);
       return;
     }
@@ -430,6 +555,9 @@ export function setupSocket(httpServer: HttpServer) {
           state: getRoomState(reclaimed.room, reclaimed.playerId),
         });
         if (reclaimed.room.game) {
+          emitLawyerChatStateToSocket(socket.id, roomCode, reclaimed.playerId);
+        }
+        if (reclaimed.room.game) {
           socket.to(roomCode).emit("player_rejoined", {
             playerId: reclaimed.playerId,
             playerName: reclaimed.playerName.trim(),
@@ -485,6 +613,7 @@ export function setupSocket(httpServer: HttpServer) {
           sessionToken,
           state: getRoomState(updatedRoom, playerId)
         });
+        emitLawyerChatStateToSocket(socket.id, roomCode, playerId);
         io.to(roomCode).emit("game_players_updated", {
           players: mapGamePlayers(updatedRoom.game.players)
         });
@@ -550,6 +679,9 @@ export function setupSocket(httpServer: HttpServer) {
         sessionToken,
         state: getRoomState(room, playerId)
       });
+      if (room.game) {
+        emitLawyerChatStateToSocket(socket.id, roomCode, playerId);
+      }
 
       if (room.game) {
         socket.to(roomCode).emit("player_rejoined", {
@@ -620,6 +752,7 @@ export function setupSocket(httpServer: HttpServer) {
           io.to(pSocketId).emit("game_started", {
             state: getRoomState(updatedRoom, p.id)
           });
+          emitLawyerChatStateToSocket(pSocketId, roomCode, p.id);
         }
       });
       emitPublicMatches(io);
@@ -795,6 +928,212 @@ export function setupSocket(httpServer: HttpServer) {
     );
 
     socket.on(
+      "get_lawyer_chat_state",
+      ({ code, sessionToken }: { code: string; sessionToken?: string }) => {
+        const roomCode = normalizeRoomCode(code);
+        const room = getRoom(roomCode);
+        if (!room?.game) {
+          socket.emit("lawyer_chat_state", {
+            enabled: false,
+            partner: null,
+            messages: [],
+          });
+          return;
+        }
+
+        const actorId = resolveActorId({
+          socketId: socket.id,
+          roomCode,
+          room,
+          sessionToken,
+        });
+        if (!actorId) {
+          socket.emit("lawyer_chat_state", {
+            enabled: false,
+            partner: null,
+            messages: [],
+          });
+          return;
+        }
+
+        emitLawyerChatStateToSocket(socket.id, roomCode, actorId);
+      },
+    );
+
+    socket.on(
+      "send_lawyer_chat",
+      ({
+        code,
+        text,
+        sessionToken,
+      }: {
+        code: string;
+        text: string;
+        sessionToken?: string;
+      }) => {
+        const roomCode = normalizeRoomCode(code);
+        const room = getRoom(roomCode);
+        if (!room?.game) return;
+
+        const actorId = resolveActorId({
+          socketId: socket.id,
+          roomCode,
+          room,
+          sessionToken,
+        });
+        if (!actorId) return;
+
+        const pair = resolveLawyerPair(room, actorId);
+        if (!pair) return;
+
+        const normalizedText = (text ?? "").trim().slice(0, 500);
+        if (!normalizedText) return;
+
+        const messages = lawyerChats.get(pair.chatKey) ?? [];
+        messages.push({
+          id: crypto.randomUUID(),
+          senderId: actorId,
+          senderName: pair.self.name,
+          text: normalizedText,
+          createdAt: Date.now(),
+        });
+        if (messages.length > 150) {
+          lawyerChats.set(pair.chatKey, messages.slice(-150));
+        } else {
+          lawyerChats.set(pair.chatKey, messages);
+        }
+        const nextMessages = lawyerChats.get(pair.chatKey) ?? [];
+
+        const targets = [pair.self, pair.partner]
+          .map((player: any) => player.socketId)
+          .filter((socketId: any) => typeof socketId === "string" && socketId.trim().length > 0);
+
+        targets.forEach((targetSocketId: string) => {
+          io.to(targetSocketId).emit("lawyer_chat_updated", {
+            messages: nextMessages,
+            partner: {
+              id:
+                targetSocketId === pair.self.socketId
+                  ? pair.partner.id
+                  : pair.self.id,
+              name:
+                targetSocketId === pair.self.socketId
+                  ? pair.partner.name
+                  : pair.self.name,
+              roleTitle:
+                targetSocketId === pair.self.socketId
+                  ? pair.partner.roleTitle
+                  : pair.self.roleTitle,
+            },
+          });
+        });
+      },
+    );
+
+    socket.on(
+      "trigger_protest",
+      ({ code, sessionToken }: { code: string; sessionToken?: string }) => {
+        const roomCode = normalizeRoomCode(code);
+        const room = getRoom(roomCode);
+        if (!room?.game || room.game.finished) return;
+
+        const actorId = resolveActorId({
+          socketId: socket.id,
+          roomCode,
+          room,
+          sessionToken,
+        });
+        if (!actorId) return;
+
+        const actor = room.game.players.find((p: any) => p.id === actorId);
+        if (!actor) return;
+        if (normalizeRoleKey(actor.roleKey) === "judge") {
+          socket.emit("error", { message: "Судья не использует кнопку «Протестую»." });
+          return;
+        }
+
+        const stageName = getCurrentStageName(room.game.stages, room.game.stageIndex);
+        if (!isCrossExaminationStage(stageName)) {
+          socket.emit("error", { message: "Протест доступен только на этапе «Перекрестный допрос»." });
+          return;
+        }
+
+        const key = getActionCooldownKey(roomCode, actorId, "protest");
+        const now = Date.now();
+        const cooldownEndsAt = actionCooldowns.get(key) ?? 0;
+        if (cooldownEndsAt > now) {
+          socket.emit("influence_cooldown", {
+            action: "protest",
+            cooldownEndsAt,
+          });
+          return;
+        }
+
+        const nextCooldownEndsAt = now + PROTEST_COOLDOWN_MS;
+        actionCooldowns.set(key, nextCooldownEndsAt);
+        socket.emit("influence_cooldown", {
+          action: "protest",
+          cooldownEndsAt: nextCooldownEndsAt,
+        });
+        io.to(roomCode).emit("influence_announcement", {
+          id: crypto.randomUUID(),
+          kind: "protest",
+          title: "Протестую",
+          subtitle: actor.roleTitle || actor.name,
+          durationMs: INFLUENCE_ANNOUNCEMENT_DURATION_MS,
+        });
+      },
+    );
+
+    socket.on(
+      "trigger_judge_silence",
+      ({ code, sessionToken }: { code: string; sessionToken?: string }) => {
+        const roomCode = normalizeRoomCode(code);
+        const room = getRoom(roomCode);
+        if (!room?.game || room.game.finished) return;
+
+        const actorId = resolveActorId({
+          socketId: socket.id,
+          roomCode,
+          room,
+          sessionToken,
+        });
+        if (!actorId) return;
+
+        const actor = room.game.players.find((p: any) => p.id === actorId);
+        if (!actor || normalizeRoleKey(actor.roleKey) !== "judge") {
+          socket.emit("error", { message: "Эту кнопку может использовать только судья." });
+          return;
+        }
+
+        const key = getActionCooldownKey(roomCode, actorId, "silence");
+        const now = Date.now();
+        const cooldownEndsAt = actionCooldowns.get(key) ?? 0;
+        if (cooldownEndsAt > now) {
+          socket.emit("influence_cooldown", {
+            action: "silence",
+            cooldownEndsAt,
+          });
+          return;
+        }
+
+        const nextCooldownEndsAt = now + JUDGE_SILENCE_COOLDOWN_MS;
+        actionCooldowns.set(key, nextCooldownEndsAt);
+        socket.emit("influence_cooldown", {
+          action: "silence",
+          cooldownEndsAt: nextCooldownEndsAt,
+        });
+        io.to(roomCode).emit("influence_announcement", {
+          id: crypto.randomUUID(),
+          kind: "silence",
+          title: "Тишина в зале!",
+          subtitle: actor.roleTitle || actor.name,
+          durationMs: INFLUENCE_ANNOUNCEMENT_DURATION_MS,
+        });
+      },
+    );
+
+    socket.on(
       "kick_player",
       ({ code, targetPlayerId, sessionToken }: { code: string; targetPlayerId: string; sessionToken?: string }) => {
         const roomCode = normalizeRoomCode(code);
@@ -860,6 +1199,8 @@ export function setupSocket(httpServer: HttpServer) {
             requiresPassword: !!updatedRoom.password,
             lobbyChat: updatedRoom.lobbyChat,
           });
+        } else {
+          cleanupRoomCaches(roomCode);
         }
         emitPublicMatches(io);
       }

@@ -29,6 +29,7 @@ import {
   UserCircle2,
   ChevronDown,
   DoorOpen,
+  ArrowLeft,
 } from "lucide-react";
 import { getSocket } from "@/lib/socket";
 import { Switch } from "@/components/ui/switch";
@@ -1124,6 +1125,28 @@ interface LobbyChatMessage {
   createdAt: number;
 }
 
+interface LawyerChatMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  text: string;
+  createdAt: number;
+}
+
+interface LawyerChatPartner {
+  id: string;
+  name: string;
+  roleTitle?: string;
+}
+
+interface InfluenceAnnouncement {
+  id: string;
+  kind: "protest" | "silence";
+  title: string;
+  subtitle?: string;
+  durationMs?: number;
+}
+
 interface PublicMatchInfo {
   code: string;
   roomName?: string;
@@ -1426,6 +1449,22 @@ export default function App() {
   );
   const [lobbyChatInput, setLobbyChatInput] = useState("");
   const [lobbyChatMessages, setLobbyChatMessages] = useState<LobbyChatMessage[]>([]);
+  const [influenceView, setInfluenceView] = useState<"main" | "chat" | "notes">(
+    "main",
+  );
+  const [lawyerChatPartner, setLawyerChatPartner] = useState<LawyerChatPartner | null>(
+    null,
+  );
+  const [lawyerChatMessages, setLawyerChatMessages] = useState<LawyerChatMessage[]>(
+    [],
+  );
+  const [lawyerChatInput, setLawyerChatInput] = useState("");
+  const [lawyerChatUnreadCount, setLawyerChatUnreadCount] = useState(0);
+  const [influenceNotes, setInfluenceNotes] = useState("");
+  const [protestCooldownEndsAt, setProtestCooldownEndsAt] = useState(0);
+  const [silenceCooldownEndsAt, setSilenceCooldownEndsAt] = useState(0);
+  const [influenceAnnouncement, setInfluenceAnnouncement] =
+    useState<InfluenceAnnouncement | null>(null);
 
   const [myId, setMyId] = useState<string | null>(null);
   const [mySessionToken, setMySessionToken] = useState<string | null>(
@@ -1445,6 +1484,9 @@ export default function App() {
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const lobbyChatScrollRef = useRef<HTMLDivElement>(null);
   const joinPasswordDialogOpenRef = useRef(false);
+  const influenceViewRef = useRef<"main" | "chat" | "notes">("main");
+  const myIdRef = useRef<string | null>(null);
+  const influenceAnnouncementTimerRef = useRef<number | null>(null);
   const socket = getSocket();
   const activeRoomCode = room?.code ?? game?.code ?? null;
   const sharedAvatar = shareAvatarInProfile ? avatar : null;
@@ -1453,6 +1495,16 @@ export default function App() {
     reconnectExpiresAt !== null
       ? Math.max(0, Math.ceil((reconnectExpiresAt - nowMs) / 1000))
       : 0;
+  const protestCooldownLeft = Math.max(
+    0,
+    Math.ceil((protestCooldownEndsAt - nowMs) / 1000),
+  );
+  const silenceCooldownLeft = Math.max(
+    0,
+    Math.ceil((silenceCooldownEndsAt - nowMs) / 1000),
+  );
+  const notesStorageKey =
+    game && game.me ? `court_notes_${game.code}_${game.me.id}` : null;
 
   const clearReconnectWindow = useCallback(() => {
     localStorage.removeItem("court_reconnect_expires_at");
@@ -1526,6 +1578,47 @@ export default function App() {
   }, [joinPasswordDialogOpen]);
 
   useEffect(() => {
+    influenceViewRef.current = influenceView;
+    if (influenceView === "chat") {
+      setLawyerChatUnreadCount(0);
+    }
+  }, [influenceView]);
+
+  useEffect(() => {
+    myIdRef.current = myId;
+  }, [myId]);
+
+  useEffect(() => {
+    if (screen !== "game") {
+      setInfluenceView("main");
+      setLawyerChatUnreadCount(0);
+      setLawyerChatMessages([]);
+      setLawyerChatInput("");
+      setLawyerChatPartner(null);
+      setInfluenceNotes("");
+      setProtestCooldownEndsAt(0);
+      setSilenceCooldownEndsAt(0);
+      setInfluenceAnnouncement(null);
+      return;
+    }
+    setInfluenceView("main");
+    setLawyerChatUnreadCount(0);
+  }, [screen, game?.code]);
+
+  useEffect(() => {
+    if (!notesStorageKey) {
+      setInfluenceNotes("");
+      return;
+    }
+    setInfluenceNotes(localStorage.getItem(notesStorageKey) ?? "");
+  }, [notesStorageKey]);
+
+  useEffect(() => {
+    if (!notesStorageKey) return;
+    localStorage.setItem(notesStorageKey, influenceNotes.slice(0, 5000));
+  }, [influenceNotes, notesStorageKey]);
+
+  useEffect(() => {
     localStorage.setItem("court_show_chat_seconds", showChatSeconds ? "1" : "0");
   }, [showChatSeconds]);
 
@@ -1560,6 +1653,14 @@ export default function App() {
     setHasSession(false);
     setMySessionToken(null);
   }, [clearReconnectWindow, game, nowMs, reconnectExpiresAt, room]);
+
+  useEffect(() => {
+    if (screen !== "game" || !game || !mySessionToken) return;
+    socket.emit("get_lawyer_chat_state", {
+      code: game.code,
+      sessionToken: mySessionToken,
+    });
+  }, [screen, game?.code, game?.me?.id, mySessionToken, socket]);
 
   useEffect(() => {
     socket.on(
@@ -1785,6 +1886,92 @@ export default function App() {
     );
 
     socket.on(
+      "lawyer_chat_state",
+      ({
+        enabled,
+        partner,
+        messages,
+      }: {
+        enabled: boolean;
+        partner: LawyerChatPartner | null;
+        messages: LawyerChatMessage[];
+      }) => {
+        if (!enabled) {
+          setLawyerChatPartner(null);
+          setLawyerChatMessages([]);
+          setLawyerChatUnreadCount(0);
+          setInfluenceView((prev) => (prev === "chat" ? "main" : prev));
+          return;
+        }
+
+        setLawyerChatPartner(partner);
+        setLawyerChatMessages(messages ?? []);
+        if (influenceViewRef.current === "chat") {
+          setLawyerChatUnreadCount(0);
+        }
+      },
+    );
+
+    socket.on(
+      "lawyer_chat_updated",
+      ({
+        partner,
+        messages,
+      }: {
+        partner: LawyerChatPartner | null;
+        messages: LawyerChatMessage[];
+      }) => {
+        if (partner) {
+          setLawyerChatPartner(partner);
+        }
+        setLawyerChatMessages((prev) => {
+          const nextMessages = messages ?? [];
+          if (influenceViewRef.current !== "chat") {
+            const prevIds = new Set(prev.map((item) => item.id));
+            const me = myIdRef.current;
+            const unreadAdded = nextMessages.filter(
+              (item) => !prevIds.has(item.id) && item.senderId !== me,
+            ).length;
+            if (unreadAdded > 0) {
+              setLawyerChatUnreadCount((value) => value + unreadAdded);
+            }
+          } else {
+            setLawyerChatUnreadCount(0);
+          }
+          return nextMessages;
+        });
+      },
+    );
+
+    socket.on(
+      "influence_cooldown",
+      ({
+        action,
+        cooldownEndsAt,
+      }: {
+        action: "protest" | "silence";
+        cooldownEndsAt: number;
+      }) => {
+        if (action === "protest") {
+          setProtestCooldownEndsAt(cooldownEndsAt || 0);
+          return;
+        }
+        setSilenceCooldownEndsAt(cooldownEndsAt || 0);
+      },
+    );
+
+    socket.on("influence_announcement", (announcement: InfluenceAnnouncement) => {
+      setInfluenceAnnouncement(announcement);
+      if (influenceAnnouncementTimerRef.current) {
+        window.clearTimeout(influenceAnnouncementTimerRef.current);
+      }
+      const duration = announcement?.durationMs ?? 3000;
+      influenceAnnouncementTimerRef.current = window.setTimeout(() => {
+        setInfluenceAnnouncement(null);
+      }, duration);
+    });
+
+    socket.on(
       "reconnect_available",
       ({
         code,
@@ -1928,6 +2115,10 @@ export default function App() {
     });
 
     return () => {
+      if (influenceAnnouncementTimerRef.current) {
+        window.clearTimeout(influenceAnnouncementTimerRef.current);
+        influenceAnnouncementTimerRef.current = null;
+      }
       socket.off("room_joined");
       socket.off("room_updated");
       socket.off("game_players_updated");
@@ -1936,6 +2127,10 @@ export default function App() {
       socket.off("lobby_chat_updated");
       socket.off("player_left");
       socket.off("player_rejoined");
+      socket.off("lawyer_chat_state");
+      socket.off("lawyer_chat_updated");
+      socket.off("influence_cooldown");
+      socket.off("influence_announcement");
       socket.off("reconnect_available");
       socket.off("rejoin_failed");
       socket.off("kicked");
@@ -2215,6 +2410,44 @@ export default function App() {
     },
     [socket, game, mySessionToken],
   );
+
+  const triggerProtest = useCallback(() => {
+    if (!game || !mySessionToken) return;
+    socket.emit("trigger_protest", {
+      code: game.code,
+      sessionToken: mySessionToken,
+    });
+  }, [game, mySessionToken, socket]);
+
+  const triggerJudgeSilence = useCallback(() => {
+    if (!game || !mySessionToken) return;
+    socket.emit("trigger_judge_silence", {
+      code: game.code,
+      sessionToken: mySessionToken,
+    });
+  }, [game, mySessionToken, socket]);
+
+  const openLawyerChat = useCallback(() => {
+    if (!game || !mySessionToken) return;
+    setLawyerChatUnreadCount(0);
+    setInfluenceView("chat");
+    socket.emit("get_lawyer_chat_state", {
+      code: game.code,
+      sessionToken: mySessionToken,
+    });
+  }, [game, mySessionToken, socket]);
+
+  const sendLawyerChatMessage = useCallback(() => {
+    if (!game || !mySessionToken || !lawyerChatPartner) return;
+    const text = lawyerChatInput.trim();
+    if (!text) return;
+    socket.emit("send_lawyer_chat", {
+      code: game.code,
+      sessionToken: mySessionToken,
+      text,
+    });
+    setLawyerChatInput("");
+  }, [game, lawyerChatInput, lawyerChatPartner, mySessionToken, socket]);
 
   const returnHomeWithSession = useCallback(() => {
     startReconnectWindow();
@@ -3563,7 +3796,11 @@ export default function App() {
         ? game.usedCards[game.usedCards.length - 1].id
         : null;
     const isPreparationStage = isPreparationStageName(currentStage);
+    const isCrossExaminationStage = isCrossExaminationStageName(currentStage);
     const canRevealFactsAtCurrentStage = game.me.canRevealFactsNow === true;
+    const canUseProtest =
+      !isJudge && !game.finished && isCrossExaminationStage && protestCooldownLeft <= 0;
+    const canUseJudgeSilence = isJudge && !game.finished && silenceCooldownLeft <= 0;
     return (
       <motion.div
         key="game"
@@ -3782,6 +4019,30 @@ export default function App() {
             )}
           </AnimatePresence>
 
+          <AnimatePresence>
+            {influenceAnnouncement && (
+              <motion.div
+                key={influenceAnnouncement.id}
+                initial={{ opacity: 0, y: -24, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -18, scale: 0.96 }}
+                transition={{ duration: 0.25, ease: "easeOut" }}
+                className="fixed top-6 left-1/2 z-[70] -translate-x-1/2 pointer-events-none"
+              >
+                <div className="rounded-2xl border border-zinc-700 bg-zinc-950/95 px-6 py-4 shadow-[0_14px_44px_rgba(0,0,0,0.55)] text-center min-w-[280px]">
+                  <div className="text-xl font-bold text-red-400">
+                    {influenceAnnouncement.title}
+                  </div>
+                  {influenceAnnouncement.subtitle && (
+                    <div className="mt-1 text-sm text-zinc-400">
+                      {influenceAnnouncement.subtitle}
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           <Card className="rounded-[28px] shadow-sm border border-zinc-800 bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950 text-zinc-100">
             <CardContent className="p-8 space-y-6">
               <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6">
@@ -3931,7 +4192,7 @@ export default function App() {
               </div>
             </InfoBlock>
 
-            <InfoBlock title="Вердикт" icon={<Gavel className="w-5 h-5" />}>
+            <InfoBlock title={isJudge ? "Вердикт" : "Влияние"} icon={<Gavel className="w-5 h-5" />}>
               <div className="space-y-3">
                 {isJudge ? (
                   <>
@@ -3965,17 +4226,162 @@ export default function App() {
                         </Button>
                       </motion.div>
                     ))}
+                    <Separator className="bg-zinc-800" />
+                    <div className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-3 space-y-2">
+                      <div className="text-xs uppercase tracking-[0.12em] text-zinc-500">
+                        Контроль зала
+                      </div>
+                      <Button
+                        className={`w-full rounded-xl border-0 ${
+                          canUseJudgeSilence
+                            ? "bg-red-600 text-white hover:bg-red-500"
+                            : "bg-zinc-800 text-zinc-400 hover:bg-zinc-800"
+                        }`}
+                        disabled={!canUseJudgeSilence}
+                        onClick={triggerJudgeSilence}
+                      >
+                        Тишина в зале!
+                        {silenceCooldownLeft > 0 ? ` (${silenceCooldownLeft}s)` : ""}
+                      </Button>
+                    </div>
                   </>
                 ) : (
-                  <div className="text-sm text-zinc-400">
-                    Вердикт выносит судья
-                    {judgePlayer ? ` - ${judgePlayer.name}` : ""}.
-                    {game.stageIndex < gameStages.length - 1 && (
-                      <span className="block mt-1 text-zinc-500">
-                        Дождитесь последнего этапа.
-                      </span>
+                  <>
+                    {influenceView === "chat" && lawyerChatPartner ? (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="text-sm text-zinc-300">
+                            Чат с {lawyerChatPartner.name}
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 rounded-lg text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
+                            onClick={() => setInfluenceView("main")}
+                          >
+                            <ArrowLeft className="h-4 w-4 mr-1" />
+                            Назад
+                          </Button>
+                        </div>
+                        <div className={`rounded-xl border border-zinc-800 bg-zinc-950/70 p-3 h-[220px] overflow-y-auto ${HIDE_SCROLLBAR_CLASS}`}>
+                          <div className="space-y-2">
+                            {lawyerChatMessages.length === 0 && (
+                              <div className="text-sm text-zinc-500">
+                                Пока нет сообщений.
+                              </div>
+                            )}
+                            {lawyerChatMessages.map((message) => {
+                              const own = message.senderId === myId;
+                              return (
+                                <div key={message.id} className={`flex ${own ? "justify-end" : "justify-start"}`}>
+                                  <div className={`max-w-[85%] rounded-xl px-3 py-2 text-sm ${own ? "bg-red-600 text-white" : "bg-zinc-800 text-zinc-200"}`}>
+                                    <div className="text-[11px] opacity-75 mb-1">
+                                      {message.senderName} ·{" "}
+                                      {new Date(message.createdAt).toLocaleTimeString([], {
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                        second: showChatSeconds ? "2-digit" : undefined,
+                                      })}
+                                    </div>
+                                    <div className="whitespace-pre-wrap break-words">
+                                      {message.text}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Input
+                            value={lawyerChatInput}
+                            onChange={(e) => setLawyerChatInput(e.target.value)}
+                            onKeyDown={(e) => e.key === "Enter" && sendLawyerChatMessage()}
+                            placeholder="Сообщение адвокату..."
+                            className="h-10 rounded-xl bg-zinc-900 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
+                          />
+                          <Button
+                            className="h-10 rounded-xl bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0"
+                            onClick={sendLawyerChatMessage}
+                            disabled={!lawyerChatInput.trim()}
+                          >
+                            Отправить
+                          </Button>
+                        </div>
+                      </div>
+                    ) : influenceView === "notes" ? (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="text-sm text-zinc-300">Личные заметки</div>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 rounded-lg text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
+                            onClick={() => setInfluenceView("main")}
+                          >
+                            <ArrowLeft className="h-4 w-4 mr-1" />
+                            Назад
+                          </Button>
+                        </div>
+                        <textarea
+                          value={influenceNotes}
+                          onChange={(e) => setInfluenceNotes(e.target.value)}
+                          placeholder="Записывайте мысли по делу..."
+                          className={`w-full h-[220px] resize-none rounded-xl border border-zinc-700 bg-zinc-950/75 p-3 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none focus:ring-1 focus:ring-red-500/60 ${HIDE_SCROLLBAR_CLASS}`}
+                        />
+                        <div className="text-xs text-zinc-500">
+                          Заметки видите только вы. Сохраняются до конца матча.
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <Button
+                          className={`w-full rounded-xl border-0 ${
+                            canUseProtest
+                              ? "bg-red-600 text-white hover:bg-red-500"
+                              : "bg-zinc-800 text-zinc-400 hover:bg-zinc-800"
+                          }`}
+                          onClick={triggerProtest}
+                          disabled={!canUseProtest}
+                        >
+                          Протестую
+                          {protestCooldownLeft > 0 ? ` (${protestCooldownLeft}s)` : ""}
+                        </Button>
+                        {!isCrossExaminationStage && (
+                          <div className="text-xs text-zinc-500">
+                            Кнопка активна только на этапе «Перекрестный допрос».
+                          </div>
+                        )}
+                        {lawyerChatPartner && (
+                          <Button
+                            variant="outline"
+                            className={`w-full rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100 ${
+                              lawyerChatUnreadCount > 0 ? "animate-pulse" : ""
+                            }`}
+                            onClick={openLawyerChat}
+                          >
+                            Чат с адвокатом
+                            {lawyerChatUnreadCount > 0 && (
+                              <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 text-xs text-white">
+                                {lawyerChatUnreadCount}
+                              </span>
+                            )}
+                          </Button>
+                        )}
+                        <Button
+                          variant="outline"
+                          className="w-full rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                          onClick={() => setInfluenceView("notes")}
+                        >
+                          Заметки
+                        </Button>
+                        <div className="text-sm text-zinc-500">
+                          Вердикт выносит судья
+                          {judgePlayer ? ` - ${judgePlayer.name}` : ""}.
+                        </div>
+                      </div>
                     )}
-                  </div>
+                  </>
                 )}
               </div>
             </InfoBlock>
