@@ -28,6 +28,7 @@ import {
   Globe,
   UserCircle2,
   ChevronDown,
+  DoorOpen,
 } from "lucide-react";
 import { getSocket } from "@/lib/socket";
 import { Switch } from "@/components/ui/switch";
@@ -101,6 +102,7 @@ const QUICK_ROOM_MODE = {
   subtitle: "Свободный набор, старт от 3 до 6 игроков.",
   maxPlayers: 6,
 };
+const RECONNECT_GRACE_MS = 30_000;
 
 const ROOM_MODE_BY_KEY = Object.fromEntries(
   [...ROOM_MODE_OPTIONS, QUICK_ROOM_MODE].map((mode) => [mode.key, mode]),
@@ -1079,6 +1081,7 @@ interface PlayerInfo {
   avatar?: string;
   roleKey?: string;
   roleTitle?: string;
+  disconnectedUntil?: number;
 }
 
 interface Fact {
@@ -1221,12 +1224,26 @@ function PlayerCard({
   isHost,
   canKick = false,
   onKick,
+  nowTs,
 }: {
   player: PlayerInfo;
   isHost: boolean;
   canKick?: boolean;
   onKick?: () => void;
+  nowTs: number;
 }) {
+  const disconnectRemainingMs =
+    typeof player.disconnectedUntil === "number"
+      ? Math.max(0, player.disconnectedUntil - nowTs)
+      : 0;
+  const isDisconnected = disconnectRemainingMs > 0;
+  const disconnectProgress = isDisconnected
+    ? 1 - Math.min(1, disconnectRemainingMs / RECONNECT_GRACE_MS)
+    : 1;
+  const red = Math.round(239 + (113 - 239) * disconnectProgress);
+  const green = Math.round(68 + (113 - 68) * disconnectProgress);
+  const blue = Math.round(68 + (122 - 68) * disconnectProgress);
+  const doorColor = `rgb(${red}, ${green}, ${blue})`;
   return (
     <motion.div variants={cardVariants} initial="initial" animate="animate">
       <Card className="rounded-2xl shadow-sm bg-zinc-900/90 border-zinc-800 text-zinc-100">
@@ -1241,6 +1258,19 @@ function PlayerCard({
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {isDisconnected && (
+              <motion.div
+                animate={{ opacity: [0.85, 1, 0.85], scale: [1, 1.04, 1] }}
+                transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
+                className="inline-flex items-center gap-1.5 rounded-full border border-zinc-700 bg-zinc-900/80 px-2 py-1"
+                title={`Игрок вышел. Осталось ${Math.ceil(disconnectRemainingMs / 1000)} сек.`}
+              >
+                <DoorOpen className="h-4 w-4" style={{ color: doorColor }} />
+                <span className="text-xs text-zinc-400">
+                  {Math.ceil(disconnectRemainingMs / 1000)}s
+                </span>
+              </motion.div>
+            )}
             <Badge
               className={
                 isHost
@@ -1368,6 +1398,12 @@ export default function App() {
   const [copiedRoomCode, setCopiedRoomCode] = useState(false);
   const [startGameLoading, setStartGameLoading] = useState(false);
   const [hasSession, setHasSession] = useState(false);
+  const [reconnectExpiresAt, setReconnectExpiresAt] = useState<number | null>(() => {
+    const raw = localStorage.getItem("court_reconnect_expires_at");
+    const parsed = raw ? Number(raw) : NaN;
+    return Number.isFinite(parsed) ? parsed : null;
+  });
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [createMatchDialogOpen, setCreateMatchDialogOpen] = useState(false);
   const [publicMatches, setPublicMatches] = useState<PublicMatchInfo[]>([]);
@@ -1413,6 +1449,37 @@ export default function App() {
   const activeRoomCode = room?.code ?? game?.code ?? null;
   const sharedAvatar = shareAvatarInProfile ? avatar : null;
   const selectedCreateMode = getRoomModeMeta(createRoomMode);
+  const reconnectSecondsLeft =
+    reconnectExpiresAt !== null
+      ? Math.max(0, Math.ceil((reconnectExpiresAt - nowMs) / 1000))
+      : 0;
+
+  const clearReconnectWindow = useCallback(() => {
+    localStorage.removeItem("court_reconnect_expires_at");
+    setReconnectExpiresAt(null);
+  }, []);
+
+  const startReconnectWindow = useCallback(
+    (expiresAt?: number | null) => {
+      const fallbackCode = room?.code ?? game?.code ?? localStorage.getItem("court_session");
+      const fallbackToken = mySessionToken ?? localStorage.getItem("court_session_token");
+      if (!fallbackCode || !fallbackToken) {
+        clearReconnectWindow();
+        return;
+      }
+
+      const safeExpiresAt =
+        typeof expiresAt === "number" && Number.isFinite(expiresAt)
+          ? expiresAt
+          : Date.now() + RECONNECT_GRACE_MS;
+      localStorage.setItem("court_session", fallbackCode);
+      localStorage.setItem("court_session_token", fallbackToken);
+      localStorage.setItem("court_reconnect_expires_at", String(safeExpiresAt));
+      setReconnectExpiresAt(safeExpiresAt);
+      setHasSession(true);
+    },
+    [clearReconnectWindow, game?.code, mySessionToken, room?.code],
+  );
 
   useEffect(() => {
     const savedName = localStorage.getItem("court_nickname");
@@ -1476,6 +1543,25 @@ export default function App() {
   }, [lobbyChatMessages, screen, room?.code]);
 
   useEffect(() => {
+    const timer = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 250);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (reconnectExpiresAt === null) return;
+    if (reconnectExpiresAt > nowMs) return;
+    if (room || game) return;
+
+    clearReconnectWindow();
+    localStorage.removeItem("court_session");
+    localStorage.removeItem("court_session_token");
+    setHasSession(false);
+    setMySessionToken(null);
+  }, [clearReconnectWindow, game, nowMs, reconnectExpiresAt, room]);
+
+  useEffect(() => {
     socket.on(
       "room_joined",
       ({
@@ -1493,6 +1579,7 @@ export default function App() {
           localStorage.setItem("court_session_token", sessionToken);
         }
         localStorage.setItem("court_session", state.code);
+        clearReconnectWindow();
         setHasSession(true);
         setStartGameLoading(false);
         setCreateMatchDialogOpen(false);
@@ -1697,7 +1784,30 @@ export default function App() {
       },
     );
 
+    socket.on(
+      "reconnect_available",
+      ({
+        code,
+        sessionToken,
+        expiresAt,
+      }: {
+        code?: string;
+        sessionToken?: string;
+        expiresAt?: number;
+      }) => {
+        if (code) {
+          localStorage.setItem("court_session", code);
+        }
+        if (sessionToken) {
+          localStorage.setItem("court_session_token", sessionToken);
+          setMySessionToken(sessionToken);
+        }
+        startReconnectWindow(expiresAt ?? null);
+      },
+    );
+
     socket.on("rejoin_failed", () => {
+      clearReconnectWindow();
       localStorage.removeItem("court_session");
       localStorage.removeItem("court_session_token");
       localStorage.removeItem("court_admin_host_id");
@@ -1711,6 +1821,7 @@ export default function App() {
     });
 
     socket.on("kicked", () => {
+      clearReconnectWindow();
       localStorage.removeItem("court_session");
       localStorage.removeItem("court_session_token");
       setHasSession(false);
@@ -1825,6 +1936,7 @@ export default function App() {
       socket.off("lobby_chat_updated");
       socket.off("player_left");
       socket.off("player_rejoined");
+      socket.off("reconnect_available");
       socket.off("rejoin_failed");
       socket.off("kicked");
       socket.off("game_started");
@@ -1837,7 +1949,7 @@ export default function App() {
       socket.off("verdict_set");
       socket.off("error");
     };
-  }, [socket, avatar, sharedAvatar]);
+  }, [socket, avatar, clearReconnectWindow, sharedAvatar, startReconnectWindow]);
 
   const createQuickRoom = useCallback(() => {
     const name = playerName.trim() || "Игрок";
@@ -1991,6 +2103,13 @@ export default function App() {
   }, []);
 
   const reconnect = useCallback(() => {
+    if (reconnectExpiresAt !== null && reconnectExpiresAt <= Date.now()) {
+      clearReconnectWindow();
+      localStorage.removeItem("court_session");
+      localStorage.removeItem("court_session_token");
+      setHasSession(false);
+      return;
+    }
     const sessionCode = localStorage.getItem("court_session");
     const sessionToken = localStorage.getItem("court_session_token");
     if (sessionCode && sessionToken) {
@@ -1999,7 +2118,7 @@ export default function App() {
         sessionToken,
       });
     }
-  }, [socket]);
+  }, [clearReconnectWindow, reconnectExpiresAt, socket]);
 
   const roomControlPlayerId =
     room && adminHostId === room.hostId ? adminHostId : myId;
@@ -2098,15 +2217,12 @@ export default function App() {
   );
 
   const returnHomeWithSession = useCallback(() => {
+    startReconnectWindow();
     socket.emit("leave_room");
-    localStorage.removeItem("court_session");
-    localStorage.removeItem("court_session_token");
-    setHasSession(false);
     setScreen("home");
     setRoom(null);
     setGame(null);
     setMyId(null);
-    setMySessionToken(null);
     setAdminHostId(null);
     localStorage.removeItem("court_admin_host_id");
     setAdminHostSessionToken(null);
@@ -2128,18 +2244,15 @@ export default function App() {
     setLobbyChatMessages([]);
     setProfileMenuOpen(false);
     setCreateMatchDialogOpen(false);
-  }, [socket]);
+  }, [socket, startReconnectWindow]);
 
   const finalExit = useCallback(() => {
+    startReconnectWindow();
     socket.emit("leave_room");
-    localStorage.removeItem("court_session");
-    localStorage.removeItem("court_session_token");
-    setHasSession(false);
     setScreen("home");
     setRoom(null);
     setGame(null);
     setMyId(null);
-    setMySessionToken(null);
     setAdminHostId(null);
     localStorage.removeItem("court_admin_host_id");
     setAdminHostSessionToken(null);
@@ -2158,7 +2271,7 @@ export default function App() {
     setLobbyChatMessages([]);
     setProfileMenuOpen(false);
     setCreateMatchDialogOpen(false);
-  }, [socket]);
+  }, [socket, startReconnectWindow]);
 
   const setupNickname = useCallback(() => {
     const name = playerName.trim();
@@ -2710,7 +2823,7 @@ export default function App() {
                           </motion.div>
 
                           <AnimatePresence>
-                            {hasSession && (
+                            {hasSession && reconnectSecondsLeft > 0 && (
                               <motion.div
                                 initial={{ opacity: 0, height: 0 }}
                                 animate={{ opacity: 1, height: "auto" }}
@@ -2723,7 +2836,7 @@ export default function App() {
                                     variant="outline"
                                     className="w-full h-12 rounded-xl border-red-600/50 text-red-400 hover:bg-red-600/10 hover:text-red-300 gap-2"
                                   >
-                                    ↩ Переподключиться к игре
+                                    ↩ Переподключиться к игре ({reconnectSecondsLeft}s)
                                   </Button>
                                 </motion.div>
                               </motion.div>
@@ -3290,6 +3403,7 @@ export default function App() {
                           isHost={player.id === room.hostId}
                           canKick={myId === room.hostId && player.id !== room.hostId}
                           onKick={() => kickPlayerFromRoom(player.id)}
+                          nowTs={nowMs}
                         />
                       ))}
                     </AnimatePresence>
@@ -3761,13 +3875,35 @@ export default function App() {
                   </div>
                   <div className="space-y-1">
                     {game.players.map((p) => (
-                      <div
-                        key={p.id}
-                        className="flex items-center justify-between text-sm"
-                      >
+                      <div key={p.id} className="flex items-center justify-between text-sm">
                         <div className="flex items-center gap-2 min-w-0">
                           <Avatar src={p.avatar ?? null} name={p.name} size={32} />
                           <span className="text-zinc-300 truncate">{p.name}</span>
+                          {typeof p.disconnectedUntil === "number" &&
+                            p.disconnectedUntil > nowMs && (
+                              <motion.span
+                                animate={{ opacity: [0.85, 1, 0.85] }}
+                                transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
+                                className="inline-flex items-center"
+                                title={`Игрок вышел. Осталось ${Math.ceil((p.disconnectedUntil - nowMs) / 1000)} сек.`}
+                              >
+                                <DoorOpen
+                                  className="h-4 w-4"
+                                  style={{
+                                    color: `rgb(${Math.round(
+                                      239 + (113 - 239) *
+                                        (1 - Math.min(1, (p.disconnectedUntil - nowMs) / RECONNECT_GRACE_MS)),
+                                    )}, ${Math.round(
+                                      68 + (113 - 68) *
+                                        (1 - Math.min(1, (p.disconnectedUntil - nowMs) / RECONNECT_GRACE_MS)),
+                                    )}, ${Math.round(
+                                      68 + (122 - 68) *
+                                        (1 - Math.min(1, (p.disconnectedUntil - nowMs) / RECONNECT_GRACE_MS)),
+                                    )})`,
+                                  }}
+                                />
+                              </motion.span>
+                            )}
                         </div>
                         <span className="text-zinc-500">{p.roleTitle}</span>
                       </div>

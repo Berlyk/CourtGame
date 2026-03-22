@@ -11,6 +11,7 @@ import {
   isNameTaken,
   isNameTakenByOther,
   listPublicMatches,
+  markPlayerDisconnected,
   removePlayer,
   startGame,
   revealFact,
@@ -33,6 +34,7 @@ const PREPARATION_STAGE_MARKER = "подготов";
 const CROSS_EXAMINATION_STAGE_MARKERS = ["перекрест", "допрос"];
 const OPENING_STAGE_MARKERS = ["выступлен", "вступительн"];
 const CLOSING_STAGE_MARKERS = ["финальн", "заключительн"];
+const RECONNECT_GRACE_MS = 30_000;
 type SpeechOwnerRole =
   | "plaintiff"
   | "defendant"
@@ -156,15 +158,15 @@ function emitFactRevealPermissions(io: SocketIOServer, room: any) {
   });
 }
 function mapGamePlayers(players: any[]) {
-  return players
-    .filter((p: any) => typeof p?.socketId === "string" && p.socketId.trim().length > 0)
-    .map((p: any) => ({
-      id: p.id,
-      name: p.name,
-      avatar: p.avatar,
-      roleKey: p.roleKey,
-      roleTitle: p.roleTitle
-    }));
+  return players.map((p: any) => ({
+    id: p.id,
+    name: p.name,
+    avatar: p.avatar,
+    roleKey: p.roleKey,
+    roleTitle: p.roleTitle,
+    disconnectedUntil:
+      typeof p?.disconnectedUntil === "number" ? p.disconnectedUntil : undefined,
+  }));
 }
 
 function mapLobbyPlayers(players: any[]) {
@@ -172,6 +174,8 @@ function mapLobbyPlayers(players: any[]) {
     id: p.id,
     name: p.name,
     avatar: p.avatar,
+    disconnectedUntil:
+      typeof p?.disconnectedUntil === "number" ? p.disconnectedUntil : undefined,
   }));
 }
 
@@ -241,7 +245,76 @@ export function setupSocket(httpServer: HttpServer) {
     string,
     { roomCode: string; playerId: string; sessionToken: string }
   >();
+  const reconnectCleanupTimers = new Map<string, ReturnType<typeof setTimeout>>();
   const normalizeRoomCode = (code: string): string => code.trim().toUpperCase();
+  const getReconnectKey = (roomCode: string, playerId: string) =>
+    `${roomCode}:${playerId}`;
+
+  const clearReconnectCleanup = (roomCode: string, playerId: string) => {
+    const key = getReconnectKey(roomCode, playerId);
+    const timeout = reconnectCleanupTimers.get(key);
+    if (timeout) {
+      clearTimeout(timeout);
+      reconnectCleanupTimers.delete(key);
+    }
+  };
+
+  const emitRoomSnapshot = (roomCode: string) => {
+    const room = getRoom(roomCode);
+    if (!room) {
+      emitPublicMatches(io);
+      return;
+    }
+
+    if (room.game) {
+      io.to(roomCode).emit("game_players_updated", {
+        players: mapGamePlayers(room.game.players),
+      });
+    } else {
+      io.to(roomCode).emit("room_updated", {
+        players: mapLobbyPlayers(room.players),
+        hostId: room.hostId,
+        roomName: room.roomName,
+        modeKey: room.modeKey,
+        maxPlayers: room.maxPlayers,
+        isHostJudge: room.isHostJudge,
+        visibility: room.visibility,
+        venueLabel: room.venueLabel,
+        venueUrl: room.venueUrl,
+        requiresPassword: !!room.password,
+        lobbyChat: room.lobbyChat,
+      });
+    }
+    emitPublicMatches(io);
+  };
+
+  const scheduleReconnectCleanup = (roomCode: string, playerId: string) => {
+    clearReconnectCleanup(roomCode, playerId);
+    const key = getReconnectKey(roomCode, playerId);
+    const timeout = setTimeout(() => {
+      reconnectCleanupTimers.delete(key);
+      const room = getRoom(roomCode);
+      if (!room) return;
+
+      const now = Date.now();
+      const player =
+        room.players.find((p: any) => p.id === playerId) ??
+        room.game?.players.find((p: any) => p.id === playerId);
+      if (!player) return;
+      if (player.socketId && player.socketId.trim().length > 0) return;
+      if (
+        typeof player.disconnectedUntil === "number" &&
+        player.disconnectedUntil > now
+      ) {
+        scheduleReconnectCleanup(roomCode, playerId);
+        return;
+      }
+
+      removePlayer(roomCode, playerId);
+      emitRoomSnapshot(roomCode);
+    }, RECONNECT_GRACE_MS + 150);
+    reconnectCleanupTimers.set(key, timeout);
+  };
 
   const findPlayerBySessionToken = (room: any, sessionToken: string) => {
     const token = sessionToken.trim();
@@ -344,6 +417,7 @@ export function setupSocket(httpServer: HttpServer) {
         avatar,
       );
       if (reclaimed) {
+        clearReconnectCleanup(roomCode, reclaimed.playerId);
         socketToRoom.set(socket.id, {
           roomCode,
           playerId: reclaimed.playerId,
@@ -467,6 +541,7 @@ export function setupSocket(httpServer: HttpServer) {
       }
 
       const { room, playerId } = result;
+      clearReconnectCleanup(roomCode, playerId);
       socketToRoom.set(socket.id, { roomCode, playerId, sessionToken });
       socket.join(roomCode);
 
@@ -484,7 +559,22 @@ export function setupSocket(httpServer: HttpServer) {
         io.to(roomCode).emit("game_players_updated", {
           players: mapGamePlayers(room.game.players),
         });
+      } else {
+        io.to(roomCode).emit("room_updated", {
+          players: mapLobbyPlayers(room.players),
+          hostId: room.hostId,
+          roomName: room.roomName,
+          modeKey: room.modeKey,
+          maxPlayers: room.maxPlayers,
+          isHostJudge: room.isHostJudge,
+          visibility: room.visibility,
+          venueLabel: room.venueLabel,
+          venueUrl: room.venueUrl,
+          requiresPassword: !!room.password,
+          lobbyChat: room.lobbyChat,
+        });
       }
+      emitPublicMatches(io);
     });
 
     socket.on("start_game", ({ code, sessionToken }: { code: string; sessionToken?: string }) => {
@@ -739,6 +829,7 @@ export function setupSocket(httpServer: HttpServer) {
         }
 
         const targetSocketId = targetPlayer.socketId;
+        clearReconnectCleanup(roomCode, targetPlayerId);
         const updatedRoom = removePlayer(roomCode, targetPlayerId);
 
         const mappingEntry = [...socketToRoom.entries()].find(
@@ -964,6 +1055,7 @@ export function setupSocket(httpServer: HttpServer) {
       socketToRoom.delete(socketId);
 
       const room = getRoom(info.roomCode);
+      if (!room) return;
       const lobbyPlayer = room?.players.find((p: any) => p.id === info.playerId);
       const gamePlayer = room?.game?.players.find((p: any) => p.id === info.playerId);
       const leavingPlayer = lobbyPlayer || gamePlayer;
@@ -972,21 +1064,33 @@ export function setupSocket(httpServer: HttpServer) {
 
       if (wasInGame) {
         if (preserveForRejoin) {
-          if (lobbyPlayer) lobbyPlayer.socketId = "";
-          if (gamePlayer) gamePlayer.socketId = "";
+          const disconnectedUntil = Date.now() + RECONNECT_GRACE_MS;
+          const updatedRoom =
+            markPlayerDisconnected(info.roomCode, info.playerId, disconnectedUntil) ??
+            room;
+          socket.leave(info.roomCode);
+          socket.emit("reconnect_available", {
+            code: info.roomCode,
+            sessionToken: info.sessionToken,
+            expiresAt: disconnectedUntil,
+            timeoutMs: RECONNECT_GRACE_MS,
+          });
 
           socket.to(info.roomCode).emit("player_left", {
             playerId: info.playerId,
-            playerName: leavingName
+            playerName: leavingName,
+            disconnectedUntil,
           });
 
-          if (room?.game) {
+          if (updatedRoom?.game) {
             io.to(info.roomCode).emit("game_players_updated", {
-              players: mapGamePlayers(room.game.players),
+              players: mapGamePlayers(updatedRoom.game.players),
             });
           }
           emitPublicMatches(io);
+          scheduleReconnectCleanup(info.roomCode, info.playerId);
         } else {
+          clearReconnectCleanup(info.roomCode, info.playerId);
           const updatedRoom = removePlayer(info.roomCode, info.playerId);
 
           socket.to(info.roomCode).emit("player_left", {
@@ -1002,8 +1106,18 @@ export function setupSocket(httpServer: HttpServer) {
           emitPublicMatches(io);
         }
       } else {
-        const updatedRoom = removePlayer(info.roomCode, info.playerId);
-        if (updatedRoom) {
+        if (preserveForRejoin) {
+          const disconnectedUntil = Date.now() + RECONNECT_GRACE_MS;
+          const updatedRoom =
+            markPlayerDisconnected(info.roomCode, info.playerId, disconnectedUntil) ??
+            room;
+          socket.leave(info.roomCode);
+          socket.emit("reconnect_available", {
+            code: info.roomCode,
+            sessionToken: info.sessionToken,
+            expiresAt: disconnectedUntil,
+            timeoutMs: RECONNECT_GRACE_MS,
+          });
           socket.to(info.roomCode).emit("room_updated", {
             players: mapLobbyPlayers(updatedRoom.players),
             hostId: updatedRoom.hostId,
@@ -1017,13 +1131,33 @@ export function setupSocket(httpServer: HttpServer) {
             requiresPassword: !!updatedRoom.password,
             lobbyChat: updatedRoom.lobbyChat,
           });
+          emitPublicMatches(io);
+          scheduleReconnectCleanup(info.roomCode, info.playerId);
+        } else {
+          clearReconnectCleanup(info.roomCode, info.playerId);
+          const updatedRoom = removePlayer(info.roomCode, info.playerId);
+          if (updatedRoom) {
+            socket.to(info.roomCode).emit("room_updated", {
+              players: mapLobbyPlayers(updatedRoom.players),
+              hostId: updatedRoom.hostId,
+              roomName: updatedRoom.roomName,
+              modeKey: updatedRoom.modeKey,
+              maxPlayers: updatedRoom.maxPlayers,
+              isHostJudge: updatedRoom.isHostJudge,
+              visibility: updatedRoom.visibility,
+              venueLabel: updatedRoom.venueLabel,
+              venueUrl: updatedRoom.venueUrl,
+              requiresPassword: !!updatedRoom.password,
+              lobbyChat: updatedRoom.lobbyChat,
+            });
+          }
+          emitPublicMatches(io);
         }
-        emitPublicMatches(io);
       }
     }
 
     socket.on("leave_room", () => {
-      handleLeave(socket.id, false);
+      handleLeave(socket.id, true);
     });
 
     socket.on("disconnect", () => {

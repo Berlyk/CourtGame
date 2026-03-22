@@ -88,6 +88,7 @@ export interface Player {
   name: string;
   socketId: string;
   sessionToken?: string;
+  disconnectedUntil?: number;
   avatar?: string;
   roleKey?: string;
   roleTitle?: string;
@@ -385,12 +386,14 @@ export function rejoinRoom(
     );
     if (player) {
       player.socketId = newSocketId;
+      player.disconnectedUntil = undefined;
       if (avatar !== undefined) {
         player.avatar = normalizedAvatar;
       }
       const lobbyPlayer = room.players.find(p => p.id === player.id);
       if (lobbyPlayer) {
         lobbyPlayer.socketId = newSocketId;
+        lobbyPlayer.disconnectedUntil = undefined;
         if (avatar !== undefined) {
           lobbyPlayer.avatar = normalizedAvatar;
         }
@@ -402,6 +405,7 @@ export function rejoinRoom(
   const player = room.players.find((p) => p.sessionToken === normalizedToken);
   if (player) {
     player.socketId = newSocketId;
+    player.disconnectedUntil = undefined;
     if (avatar !== undefined) {
       player.avatar = normalizedAvatar;
     }
@@ -437,6 +441,7 @@ export function reclaimDisconnectedPlayerByName(
   if (!targetPlayer) return null;
 
   targetPlayer.socketId = newSocketId;
+  targetPlayer.disconnectedUntil = undefined;
   if (avatar !== undefined) {
     targetPlayer.avatar = normalizedAvatar;
   }
@@ -447,6 +452,7 @@ export function reclaimDisconnectedPlayerByName(
   const mirrorLobbyPlayer = room.players.find((p) => p.id === targetPlayer.id);
   if (mirrorLobbyPlayer) {
     mirrorLobbyPlayer.socketId = newSocketId;
+    mirrorLobbyPlayer.disconnectedUntil = undefined;
     mirrorLobbyPlayer.sessionToken = targetPlayer.sessionToken;
     if (avatar !== undefined) {
       mirrorLobbyPlayer.avatar = normalizedAvatar;
@@ -456,6 +462,7 @@ export function reclaimDisconnectedPlayerByName(
   const mirrorGamePlayer = room.game?.players.find((p) => p.id === targetPlayer.id);
   if (mirrorGamePlayer) {
     mirrorGamePlayer.socketId = newSocketId;
+    mirrorGamePlayer.disconnectedUntil = undefined;
     mirrorGamePlayer.sessionToken = targetPlayer.sessionToken;
     if (avatar !== undefined) {
       mirrorGamePlayer.avatar = normalizedAvatar;
@@ -491,6 +498,28 @@ export function removePlayer(code: string, playerId: string): Room | null {
     if (nextHostId) {
       room.hostId = nextHostId;
     }
+  }
+
+  return room;
+}
+
+export function markPlayerDisconnected(
+  code: string,
+  playerId: string,
+  disconnectedUntil: number,
+): Room | null {
+  const room = rooms.get(code);
+  if (!room) return null;
+
+  const applyDisconnected = (player?: Player) => {
+    if (!player) return;
+    player.socketId = "";
+    player.disconnectedUntil = disconnectedUntil;
+  };
+
+  applyDisconnected(room.players.find((p) => p.id === playerId));
+  if (room.game) {
+    applyDisconnected(room.game.players.find((p) => p.id === playerId));
   }
 
   return room;
