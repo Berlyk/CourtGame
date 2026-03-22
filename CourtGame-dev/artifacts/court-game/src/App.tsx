@@ -247,8 +247,8 @@ function getDisconnectProgress(nowTs: number, reconnectExpiresAt?: number | null
 
 function getDisconnectColor(nowTs: number, reconnectExpiresAt?: number | null): string {
   const progress = getDisconnectProgress(nowTs, reconnectExpiresAt);
-  const from = { r: 248, g: 113, b: 113 };
-  const to = { r: 113, g: 113, b: 122 };
+  const from = { r: 255, g: 68, b: 68 };
+  const to = { r: 148, g: 163, b: 184 };
   const mix = (start: number, end: number) =>
     Math.round(start + (end - start) * progress);
   return `rgb(${mix(from.r, to.r)}, ${mix(from.g, to.g)}, ${mix(from.b, to.b)})`;
@@ -1009,6 +1009,14 @@ interface PlayerInfo {
   reconnectExpiresAt?: number | null;
 }
 
+interface DisconnectedGhost {
+  id: string;
+  name: string;
+  avatar?: string;
+  roleTitle?: string;
+  reconnectExpiresAt: number;
+}
+
 interface Fact {
   id: string;
   text: string;
@@ -1349,10 +1357,15 @@ export default function App() {
   );
   const [room, setRoom] = useState<RoomState | null>(null);
   const [game, setGame] = useState<GameState | null>(null);
+  const [disconnectedGhosts, setDisconnectedGhosts] = useState<
+    Record<string, DisconnectedGhost>
+  >({});
   const [showFactHistory, setShowFactHistory] = useState(false);
   const [isHostJudge, setIsHostJudge] = useState(false);
 
   const avatarInputRef = useRef<HTMLInputElement>(null);
+  const roomRef = useRef<RoomState | null>(null);
+  const gameRef = useRef<GameState | null>(null);
   const socket = getSocket();
   const activeRoomCode = room?.code ?? game?.code ?? null;
   const hasStoredSession =
@@ -1375,11 +1388,56 @@ export default function App() {
   const hasDisconnectedPlayers = useMemo(() => {
     const roomPlayers = room?.players ?? [];
     const gamePlayers = game?.players ?? [];
+    const ghostPlayers = Object.values(disconnectedGhosts).map((ghost) => ({
+      isDisconnected: true,
+      reconnectExpiresAt: ghost.reconnectExpiresAt,
+    }));
     return [...roomPlayers, ...gamePlayers].some(
       (player) =>
         player.isDisconnected && (player.reconnectExpiresAt ?? 0) > 0,
+    ) || ghostPlayers.some(
+      (player) =>
+        player.isDisconnected && (player.reconnectExpiresAt ?? 0) > reconnectNow,
     );
-  }, [room?.players, game?.players]);
+  }, [room?.players, game?.players, disconnectedGhosts, reconnectNow]);
+  const roomPlayersForDisplay = useMemo(() => {
+    const roomPlayers = room?.players ?? [];
+    if (!room) return roomPlayers;
+    const roomPlayerIds = new Set(roomPlayers.map((player) => player.id));
+    const ghosts = Object.values(disconnectedGhosts)
+      .filter(
+        (ghost) =>
+          ghost.reconnectExpiresAt > reconnectNow && !roomPlayerIds.has(ghost.id),
+      )
+      .map((ghost) => ({
+        id: ghost.id,
+        name: ghost.name,
+        avatar: ghost.avatar,
+        roleTitle: ghost.roleTitle,
+        isDisconnected: true,
+        reconnectExpiresAt: ghost.reconnectExpiresAt,
+      } as PlayerInfo));
+    return [...roomPlayers, ...ghosts];
+  }, [room, disconnectedGhosts, reconnectNow]);
+  const gamePlayersForDisplay = useMemo(() => {
+    const gamePlayers = game?.players ?? [];
+    if (!game) return gamePlayers;
+    const gamePlayerIds = new Set(gamePlayers.map((player) => player.id));
+    const ghosts = Object.values(disconnectedGhosts)
+      .filter(
+        (ghost) =>
+          ghost.reconnectExpiresAt > reconnectNow && !gamePlayerIds.has(ghost.id),
+      )
+      .map((ghost) => ({
+        id: ghost.id,
+        name: ghost.name,
+        avatar: ghost.avatar,
+        roleTitle: ghost.roleTitle ?? "Вышел",
+        isDisconnected: true,
+        reconnectExpiresAt: ghost.reconnectExpiresAt,
+      } as PlayerInfo));
+    return [...gamePlayers, ...ghosts];
+  }, [game, disconnectedGhosts, reconnectNow]);
   const canReconnect = reconnectWindowActive || hasSession || hasStoredSession;
 
   useEffect(() => {
@@ -1391,6 +1449,7 @@ export default function App() {
       localStorage.removeItem("court_session");
       localStorage.removeItem("court_session_token");
       setReconnectDeadline(null);
+      setManualReconnectDeadline(null);
     }
     if (savedAvatar) setAvatar(savedAvatar);
 
@@ -1414,6 +1473,14 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    roomRef.current = room;
+  }, [room]);
+
+  useEffect(() => {
+    gameRef.current = game;
+  }, [game]);
+
+  useEffect(() => {
     if (screen !== "home") return;
     socket.emit("list_public_matches");
   }, [socket, screen]);
@@ -1435,6 +1502,22 @@ export default function App() {
     }, 1000);
     return () => window.clearInterval(timer);
   }, [effectiveReconnectDeadline, hasDisconnectedPlayers]);
+
+  useEffect(() => {
+    setDisconnectedGhosts((prev) => {
+      const now = Date.now();
+      let changed = false;
+      const next: Record<string, DisconnectedGhost> = {};
+      for (const [id, ghost] of Object.entries(prev)) {
+        if (ghost.reconnectExpiresAt > now) {
+          next[id] = ghost;
+        } else {
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [reconnectNow]);
 
   useEffect(() => {
     if (!effectiveReconnectDeadline) return;
@@ -1469,6 +1552,7 @@ export default function App() {
         localStorage.removeItem(RECONNECT_DEADLINE_KEY);
         setReconnectDeadline(null);
         setManualReconnectDeadline(null);
+        setDisconnectedGhosts({});
         setHasSession(true);
         setStartGameLoading(false);
         setOpenMatchesOpen(false);
@@ -1539,6 +1623,26 @@ export default function App() {
         requiresPassword?: boolean;
         lobbyChat?: LobbyChatMessage[];
       }) => {
+        const previousPlayers = roomRef.current?.players ?? [];
+        const removedPlayers = previousPlayers.filter(
+          (prevPlayer) => !players.some((nextPlayer) => nextPlayer.id === prevPlayer.id),
+        );
+        if (removedPlayers.length > 0) {
+          const inferredDeadline = Date.now() + RECONNECT_GRACE_MS;
+          setDisconnectedGhosts((prev) => {
+            const next = { ...prev };
+            for (const removed of removedPlayers) {
+              next[removed.id] = {
+                id: removed.id,
+                name: removed.name,
+                avatar: removed.avatar,
+                roleTitle: removed.roleTitle ?? "Вышел",
+                reconnectExpiresAt: inferredDeadline,
+              };
+            }
+            return next;
+          });
+        }
         setRoom((prev) => {
           if (!prev) return prev;
           const mergedPlayers = players.map((nextPlayer) => {
@@ -1562,11 +1666,42 @@ export default function App() {
         if (lobbyChat) {
           setLobbyChatMessages(lobbyChat);
         }
+        setDisconnectedGhosts((prev) => {
+          let changed = false;
+          const next = { ...prev };
+          for (const player of players) {
+            if (!player.isDisconnected && next[player.id]) {
+              delete next[player.id];
+              changed = true;
+            }
+          }
+          return changed ? next : prev;
+        });
         if (hj !== undefined) setIsHostJudge(hj);
       },
     );
 
     socket.on("game_players_updated", ({ players }: { players: PlayerInfo[] }) => {
+      const previousPlayers = gameRef.current?.players ?? [];
+      const removedPlayers = previousPlayers.filter(
+        (prevPlayer) => !players.some((nextPlayer) => nextPlayer.id === prevPlayer.id),
+      );
+      if (removedPlayers.length > 0) {
+        const inferredDeadline = Date.now() + RECONNECT_GRACE_MS;
+        setDisconnectedGhosts((prev) => {
+          const next = { ...prev };
+          for (const removed of removedPlayers) {
+            next[removed.id] = {
+              id: removed.id,
+              name: removed.name,
+              avatar: removed.avatar,
+              roleTitle: removed.roleTitle ?? "Вышел",
+              reconnectExpiresAt: inferredDeadline,
+            };
+          }
+          return next;
+        });
+      }
       setGame((prev) => {
         if (!prev) return prev;
         const mergedPlayers = players.map((nextPlayer) => {
@@ -1594,6 +1729,17 @@ export default function App() {
               }
             : prev.me,
         };
+      });
+      setDisconnectedGhosts((prev) => {
+        let changed = false;
+        const next = { ...prev };
+        for (const player of players) {
+          if (!player.isDisconnected && next[player.id]) {
+            delete next[player.id];
+            changed = true;
+          }
+        }
+        return changed ? next : prev;
       });
     });
 
@@ -1646,7 +1792,66 @@ export default function App() {
 
     socket.on(
       "player_left",
-      ({ playerName: name }: { playerId: string; playerName: string }) => {
+      ({
+        playerId,
+        playerName: name,
+        reconnectExpiresAt,
+      }: {
+        playerId: string;
+        playerName: string;
+        reconnectExpiresAt?: number;
+      }) => {
+        const fallbackDeadline = Date.now() + RECONNECT_GRACE_MS;
+        const deadline =
+          reconnectExpiresAt && reconnectExpiresAt > 0
+            ? reconnectExpiresAt
+            : fallbackDeadline;
+        const roomPlayer = roomRef.current?.players.find((p) => p.id === playerId);
+        const gamePlayer = gameRef.current?.players.find((p) => p.id === playerId);
+        const resolvedName = gamePlayer?.name ?? roomPlayer?.name ?? name;
+        const resolvedAvatar = gamePlayer?.avatar ?? roomPlayer?.avatar;
+        const resolvedRoleTitle = gamePlayer?.roleTitle ?? "Вышел";
+
+        setRoom((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            players: prev.players.map((player) =>
+              player.id === playerId
+                ? {
+                    ...player,
+                    isDisconnected: true,
+                    reconnectExpiresAt: deadline,
+                  }
+                : player,
+            ),
+          };
+        });
+        setGame((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            players: prev.players.map((player) =>
+              player.id === playerId
+                ? {
+                    ...player,
+                    isDisconnected: true,
+                    reconnectExpiresAt: deadline,
+                  }
+                : player,
+            ),
+          };
+        });
+        setDisconnectedGhosts((prev) => ({
+          ...prev,
+          [playerId]: {
+            id: playerId,
+            name: resolvedName,
+            avatar: resolvedAvatar,
+            roleTitle: resolvedRoleTitle,
+            reconnectExpiresAt: deadline,
+          },
+        }));
         setDisconnectAlert(`⚠️ ${name} покинул игру`);
         setTimeout(() => setDisconnectAlert(""), 6000);
       },
@@ -1654,7 +1859,29 @@ export default function App() {
 
     socket.on(
       "player_rejoined",
-      ({ playerName: name }: { playerName: string }) => {
+      ({
+        playerId,
+        playerName: name,
+      }: {
+        playerId?: string;
+        playerName: string;
+      }) => {
+        setDisconnectedGhosts((prev) => {
+          if (playerId && prev[playerId]) {
+            const next = { ...prev };
+            delete next[playerId];
+            return next;
+          }
+          const next = { ...prev };
+          let changed = false;
+          for (const [id, ghost] of Object.entries(prev)) {
+            if (ghost.name.trim().toLowerCase() === name.trim().toLowerCase()) {
+              delete next[id];
+              changed = true;
+            }
+          }
+          return changed ? next : prev;
+        });
         setRejoinAlert(`${name} вернулся в игру`);
         setTimeout(() => setRejoinAlert(""), 4000);
       },
@@ -1698,6 +1925,7 @@ export default function App() {
       setAdminHostSessionToken(null);
       setReconnectDeadline(null);
       setManualReconnectDeadline(null);
+      setDisconnectedGhosts({});
       setHasSession(false);
       setLobbyChatMessages([]);
       setHomeTab("play");
@@ -1729,6 +1957,7 @@ export default function App() {
       setProfileMenuOpen(false);
       setReconnectDeadline(null);
       setManualReconnectDeadline(null);
+      setDisconnectedGhosts({});
       setHomeTab("play");
       setScreen("home");
       setKickedAlert(
@@ -1954,6 +2183,8 @@ export default function App() {
       });
       return;
     }
+    setError("Сессия для переподключения не найдена.");
+    setTimeout(() => setError(""), 2500);
     setHasSession(false);
   }, [socket, effectiveReconnectDeadline]);
 
@@ -2125,18 +2356,21 @@ export default function App() {
     const reconnectCode = activeRoomCode ?? localStorage.getItem("court_session");
     const reconnectToken =
       mySessionToken ?? localStorage.getItem("court_session_token");
+    const forcedReconnectDeadline = Date.now() + RECONNECT_GRACE_MS;
+    setManualReconnectDeadline(forcedReconnectDeadline);
+    setReconnectNow(Date.now());
     if (reconnectCode && reconnectToken) {
-      const reconnectDeadlineAt = Date.now() + RECONNECT_GRACE_MS;
       localStorage.setItem("court_session", reconnectCode);
       localStorage.setItem("court_session_token", reconnectToken);
-      localStorage.setItem(RECONNECT_DEADLINE_KEY, String(reconnectDeadlineAt));
-      setReconnectDeadline(reconnectDeadlineAt);
-      setManualReconnectDeadline(reconnectDeadlineAt);
-      setReconnectNow(Date.now());
+      localStorage.setItem(
+        RECONNECT_DEADLINE_KEY,
+        String(forcedReconnectDeadline),
+      );
+      setReconnectDeadline(forcedReconnectDeadline);
+      setManualReconnectDeadline(forcedReconnectDeadline);
     } else {
       localStorage.removeItem(RECONNECT_DEADLINE_KEY);
       setReconnectDeadline(null);
-      setManualReconnectDeadline(null);
     }
 
     if (activeRoomCode) {
@@ -2170,7 +2404,7 @@ export default function App() {
         setReconnectDeadline(leaveDeadline);
         setManualReconnectDeadline(leaveDeadline);
         setReconnectNow(Date.now());
-        setHasSession(true);
+        setHasSession(!!leaveCode && !!leaveToken);
       },
     );
     setScreen("home");
@@ -3005,7 +3239,7 @@ export default function App() {
                   </Button>
                   <TestPlayersPanel
                     roomCode={room.code}
-                    currentPlayers={room.players.length}
+                    currentPlayers={roomPlayersForDisplay.length}
                     isHost={roomControlPlayerId === room.hostId}
                     mode="room"
                     players={room.players.map((p) => ({
@@ -3078,7 +3312,7 @@ export default function App() {
               >
                 <div className="grid gap-3">
                   <AnimatePresence>
-                    {room.players.map((player) => (
+                    {roomPlayersForDisplay.map((player) => (
                       <PlayerCard
                         key={player.id}
                         player={player}
@@ -3089,10 +3323,10 @@ export default function App() {
                       />
                     ))}
                   </AnimatePresence>
-                  {room.players.length < 3 && (
+                  {roomPlayersForDisplay.length < 3 && (
                     <div className="text-sm text-zinc-500 mt-2">
                       Ожидание игроков... (нужно ещё минимум{" "}
-                      {3 - room.players.length})
+                      {3 - roomPlayersForDisplay.length})
                     </div>
                   )}
                 </div>
@@ -3113,16 +3347,16 @@ export default function App() {
                   <div className="flex items-center justify-between">
                     <span>Игроков сейчас</span>
                     <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">
-                      {room.players.length}
+                      {roomPlayersForDisplay.length}
                     </Badge>
                   </div>
                   <Separator />
-                  {room.players.length === 3 && (
+                  {roomPlayersForDisplay.length === 3 && (
                     <div>Гражданский спор, трудовой спор</div>
                   )}
-                  {room.players.length === 4 && <div>Уголовное дело</div>}
-                  {room.players.length === 5 && <div>Уголовное дело</div>}
-                  {room.players.length >= 6 && <div>Суд на компанию</div>}
+                  {roomPlayersForDisplay.length === 4 && <div>Уголовное дело</div>}
+                  {roomPlayersForDisplay.length === 5 && <div>Уголовное дело</div>}
+                  {roomPlayersForDisplay.length >= 6 && <div>Суд на компанию</div>}
                   <div className="text-zinc-400 pt-2">
                     Ведущий запускает игру, сайт случайно выбирает подходящее
                     дело и распределяет роли.
@@ -3566,7 +3800,7 @@ export default function App() {
                     Все участники
                   </div>
                   <div className="space-y-1">
-                    {game.players.map((p) => (
+                    {gamePlayersForDisplay.map((p) => (
                       <div
                         key={p.id}
                         className="flex items-center justify-between text-sm"
@@ -3597,7 +3831,7 @@ export default function App() {
                             </motion.span>
                           )}
                         </div>
-                        <span className="text-zinc-500">{p.roleTitle}</span>
+                        <span className="text-zinc-500">{p.roleTitle ?? "Вышел"}</span>
                       </div>
                     ))}
                   </div>
