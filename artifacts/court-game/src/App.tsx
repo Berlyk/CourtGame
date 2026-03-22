@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+﻿import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import {
   UserX,
   Play,
   Eye,
+  EyeOff,
   Shield,
   AlertCircle,
   Sparkles,
@@ -22,6 +23,13 @@ import {
   Gamepad2,
   Search,
   Wrench,
+  MessageSquare,
+  Lock,
+  Globe,
+  UserCircle2,
+  ChevronDown,
+  DoorOpen,
+  ArrowLeft,
 } from "lucide-react";
 import { getSocket } from "@/lib/socket";
 import { Switch } from "@/components/ui/switch";
@@ -39,12 +47,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import TestPlayersPanel from "@/components/test/TestPlayersPanel";
-import {
-  disconnectTestPlayersFromRoom,
-  getTestPlayerSessionToken,
-  type TestRoleView,
-} from "@/lib/testPlayersHarness";
 
 const DEFAULT_GAME_STAGES = [
   "Подготовка",
@@ -55,6 +57,69 @@ const DEFAULT_GAME_STAGES = [
   "Финальная речь ответчика",
   "Решение судьи",
 ];
+
+type RoomModeKey =
+  | "quick_flex"
+  | "civil_3"
+  | "criminal_4"
+  | "criminal_5"
+  | "company_6";
+
+const ROOM_MODE_OPTIONS: Array<{
+  key: RoomModeKey;
+  title: string;
+  subtitle: string;
+  maxPlayers: number;
+}> = [
+  {
+    key: "civil_3",
+    title: "Гражданский спор / Трудовой спор",
+    subtitle: "Короткий формат на 3 участников.",
+    maxPlayers: 3,
+  },
+  {
+    key: "criminal_4",
+    title: "Уголовное дело (4)",
+    subtitle: "Режим с адвокатом ответчика.",
+    maxPlayers: 4,
+  },
+  {
+    key: "criminal_5",
+    title: "Уголовное дело (5)",
+    subtitle: "Режим с прокурором.",
+    maxPlayers: 5,
+  },
+  {
+    key: "company_6",
+    title: "Суд на компанию",
+    subtitle: "Полный состав сторон.",
+    maxPlayers: 6,
+  },
+];
+
+const QUICK_ROOM_MODE = {
+  key: "quick_flex" as RoomModeKey,
+  title: "Быстрая комната",
+  subtitle: "Свободный набор, старт от 3 до 6 игроков.",
+  maxPlayers: 6,
+};
+const RECONNECT_GRACE_MS = 30_000;
+
+const ROOM_MODE_BY_KEY = Object.fromEntries(
+  [...ROOM_MODE_OPTIONS, QUICK_ROOM_MODE].map((mode) => [mode.key, mode]),
+) as Record<RoomModeKey, { key: RoomModeKey; title: string; subtitle: string; maxPlayers: number }>;
+
+function getRoomModeMeta(modeKey: RoomModeKey | undefined, fallbackMaxPlayers = 6) {
+  if (modeKey && ROOM_MODE_BY_KEY[modeKey]) {
+    return ROOM_MODE_BY_KEY[modeKey];
+  }
+  return {
+    key: "company_6" as RoomModeKey,
+    title: `Режим на ${fallbackMaxPlayers} игроков`,
+    subtitle: "Параметры режима определяются хостом.",
+    maxPlayers: fallbackMaxPlayers,
+  };
+}
 
 
 const PREPARATION_STAGE_MARKER = "подготов";
@@ -229,6 +294,43 @@ const floatingHelpButtonVariants = {
 const HIDE_SCROLLBAR_CLASS =
   "[scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden";
 
+function CourtAtmosphereBackground() {
+  return (
+    <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+      <div className="absolute inset-0 bg-[#0b0b0f]" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_-5%,rgba(255,255,255,0.05),transparent_46%),radial-gradient(ellipse_at_50%_110%,rgba(255,255,255,0.04),transparent_48%)]" />
+
+      <div className="absolute inset-y-0 left-0 w-[20vw] min-w-[74px] max-w-[230px] opacity-[0.14]">
+        <div className="relative h-full w-full bg-[linear-gradient(to_right,rgba(212,212,216,0.11),rgba(212,212,216,0.03)_24%,transparent_72%,rgba(212,212,216,0.05))]">
+          <div className="absolute inset-y-0 left-[22%] w-[15%] bg-zinc-200/10 rounded-t-[28px]" />
+          <div className="absolute inset-y-0 left-[48%] w-[11%] bg-zinc-200/8 rounded-t-[20px]" />
+          <div className="absolute inset-y-0 right-[18%] w-px bg-zinc-100/12" />
+        </div>
+      </div>
+      <div className="absolute inset-y-0 right-0 w-[20vw] min-w-[74px] max-w-[230px] opacity-[0.14]">
+        <div className="relative h-full w-full bg-[linear-gradient(to_left,rgba(212,212,216,0.11),rgba(212,212,216,0.03)_24%,transparent_72%,rgba(212,212,216,0.05))]">
+          <div className="absolute inset-y-0 right-[22%] w-[15%] bg-zinc-200/10 rounded-t-[28px]" />
+          <div className="absolute inset-y-0 right-[48%] w-[11%] bg-zinc-200/8 rounded-t-[20px]" />
+          <div className="absolute inset-y-0 left-[18%] w-px bg-zinc-100/12" />
+        </div>
+      </div>
+
+      <div className="absolute left-[7%] top-[28%] h-[220px] w-[130px] opacity-[0.06]">
+        <div className="absolute left-[54%] top-[42%] h-2 w-24 -translate-x-1/2 rotate-[34deg] rounded-full bg-zinc-300/70" />
+        <div className="absolute left-[66%] top-[30%] h-7 w-16 -translate-x-1/2 rotate-[34deg] rounded-md border border-zinc-300/45 bg-zinc-300/28" />
+        <div className="absolute left-[42%] top-[57%] h-5 w-14 -translate-x-1/2 rotate-[34deg] rounded-md border border-zinc-300/38 bg-zinc-300/20" />
+      </div>
+      <div className="absolute right-[7%] top-[30%] h-[220px] w-[130px] opacity-[0.06]">
+        <div className="absolute left-[46%] top-[42%] h-2 w-24 -translate-x-1/2 -rotate-[34deg] rounded-full bg-zinc-300/70" />
+        <div className="absolute left-[34%] top-[30%] h-7 w-16 -translate-x-1/2 -rotate-[34deg] rounded-md border border-zinc-300/45 bg-zinc-300/28" />
+        <div className="absolute left-[58%] top-[57%] h-5 w-14 -translate-x-1/2 -rotate-[34deg] rounded-md border border-zinc-300/38 bg-zinc-300/20" />
+      </div>
+
+      <div className="absolute inset-0 opacity-[0.05] mix-blend-soft-light bg-[radial-gradient(rgba(255,255,255,0.24)_0.5px,transparent_0.8px)] [background-size:3px_3px]" />
+    </div>
+  );
+}
+
 interface DevLogEntry {
   date: string;
   version: string;
@@ -236,12 +338,30 @@ interface DevLogEntry {
   changes: string[];
 }
 
-const CURRENT_VERSION = "Beta 0.3";
+const CURRENT_VERSION = "Beta 0.4";
 
 const DEVLOG_ENTRIES: DevLogEntry[] = [
   {
-    date: "20.03.2026",
+    date: "22.03.2026",
     version: CURRENT_VERSION,
+    title: "Релиз Beta 0.4: подбор игроков, влияние и переподключение",
+    changes: [
+      "Добавлен раздел «Подбор игроков» с отображением активных комнат и быстрым входом.",
+      "Добавлено расширенное создание матча: выбор режима, лимита игроков, приватности и пароля.",
+      "Добавлены открытые/приватные комнаты, проверка пароля при входе и отображение статуса матча.",
+      "Добавлена и интегрирована система профиля игрока в верхнюю навигацию.",
+      "Проведён крупный редизайн главной страницы, лобби и мобильной версии интерфейса.",
+      "Добавлена система «Влияние» в матче: протест, тишина в зале, предупреждения, заметки.",
+      "Добавлена система предупреждений судьи с возможностью выдавать и снимать предупреждения.",
+      "Переработана система выхода/переподключения: трекинг отключений, таймер удержания, очистка игроков и комнат.",
+      "Проведено исправление визуальных и игровых багов.",
+      "Добавлен приватный чат «адвокат ↔ клиент».",
+      "Добавлен чат лобби.",
+    ],
+  },
+  {
+    date: "20.03.2026",
+    version: "Beta 0.3",
     title: "Релиз Beta 0.3: модульное меню, помощь и этапы",
     changes: [
       "Добавлено модульное верхнее меню навигации с вкладками.",
@@ -266,6 +386,7 @@ const DEVLOG_ENTRIES: DevLogEntry[] = [
     ],
   },
 ];
+const DEVLOG_PAGE_SIZE = 2;
 
 interface HelpTopic {
   id: string;
@@ -980,6 +1101,8 @@ interface PlayerInfo {
   avatar?: string;
   roleKey?: string;
   roleTitle?: string;
+  warningCount?: number;
+  disconnectedUntil?: number;
 }
 
 interface Fact {
@@ -1011,6 +1134,53 @@ interface UsedCard {
   ownerRole: string;
   name: string;
   description: string;
+}
+
+interface LobbyChatMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  senderAvatar?: string;
+  text: string;
+  createdAt: number;
+}
+
+interface LawyerChatMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  text: string;
+  createdAt: number;
+}
+
+interface LawyerChatPartner {
+  id: string;
+  name: string;
+  roleTitle?: string;
+}
+
+interface InfluenceAnnouncement {
+  id: string;
+  kind: "protest" | "silence" | "warning";
+  title: string;
+  subtitle?: string;
+  durationMs?: number;
+}
+
+interface PublicMatchInfo {
+  code: string;
+  roomName?: string;
+  modeKey: RoomModeKey;
+  visibility: "public" | "private";
+  hostName: string;
+  playerCount: number;
+  maxPlayers: number;
+  started: boolean;
+  currentStage?: string;
+  createdAt: number;
+  venueLabel?: string;
+  venueUrl?: string;
+  requiresPassword: boolean;
 }
 
 interface MyPlayer {
@@ -1048,10 +1218,18 @@ interface GameState {
 
 interface RoomState {
   code: string;
+  roomName?: string;
+  modeKey?: RoomModeKey;
+  maxPlayers?: number;
   hostId: string;
   players: PlayerInfo[];
   started: boolean;
   isHostJudge?: boolean;
+  visibility?: "public" | "private";
+  venueLabel?: string;
+  venueUrl?: string;
+  requiresPassword?: boolean;
+  lobbyChat?: LobbyChatMessage[];
 }
 
 function Avatar({
@@ -1089,12 +1267,26 @@ function PlayerCard({
   isHost,
   canKick = false,
   onKick,
+  nowTs,
 }: {
   player: PlayerInfo;
   isHost: boolean;
   canKick?: boolean;
   onKick?: () => void;
+  nowTs: number;
 }) {
+  const disconnectRemainingMs =
+    typeof player.disconnectedUntil === "number"
+      ? Math.max(0, player.disconnectedUntil - nowTs)
+      : 0;
+  const isDisconnected = disconnectRemainingMs > 0;
+  const disconnectProgress = isDisconnected
+    ? 1 - Math.min(1, disconnectRemainingMs / RECONNECT_GRACE_MS)
+    : 1;
+  const red = Math.round(239 + (113 - 239) * disconnectProgress);
+  const green = Math.round(68 + (113 - 68) * disconnectProgress);
+  const blue = Math.round(68 + (122 - 68) * disconnectProgress);
+  const doorColor = `rgb(${red}, ${green}, ${blue})`;
   return (
     <motion.div variants={cardVariants} initial="initial" animate="animate">
       <Card className="rounded-2xl shadow-sm bg-zinc-900/90 border-zinc-800 text-zinc-100">
@@ -1109,6 +1301,24 @@ function PlayerCard({
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {(player.warningCount ?? 0) > 0 && (
+              <Badge className="bg-red-950/70 text-red-300 border border-red-700/70">
+                Предупреждения: {player.warningCount}/3
+              </Badge>
+            )}
+            {isDisconnected && (
+              <motion.div
+                animate={{ opacity: [0.85, 1, 0.85], scale: [1, 1.04, 1] }}
+                transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
+                className="inline-flex items-center gap-1.5 rounded-full border border-zinc-700 bg-zinc-900/80 px-2 py-1"
+                title={`Игрок вышел. Осталось ${Math.ceil(disconnectRemainingMs / 1000)} сек.`}
+              >
+                <DoorOpen className="h-4 w-4" style={{ color: doorColor }} />
+                <span className="text-xs text-zinc-400">
+                  {Math.ceil(disconnectRemainingMs / 1000)}s
+                </span>
+              </motion.div>
+            )}
             <Badge
               className={
                 isHost
@@ -1218,10 +1428,12 @@ function ContextHelp({
 }
 
 export default function App() {
-  const [screen, setScreen] = useState<"setup" | "home" | "room" | "game">(
+  const [screen, setScreen] = useState<"setup" | "home" | "profile" | "room" | "game">(
     "home",
   );
   const [homeTab, setHomeTab] = useState<HomeTab>("play");
+  const [devlogPage, setDevlogPage] = useState(1);
+  const [playView, setPlayView] = useState<"quick" | "matches">("quick");
   const [mainHelpQuery, setMainHelpQuery] = useState("");
   const [contextHelpOpen, setContextHelpOpen] = useState(false);
   const [contextHelpQuery, setContextHelpQuery] = useState("");
@@ -1235,6 +1447,52 @@ export default function App() {
   const [copiedRoomCode, setCopiedRoomCode] = useState(false);
   const [startGameLoading, setStartGameLoading] = useState(false);
   const [hasSession, setHasSession] = useState(false);
+  const [reconnectExpiresAt, setReconnectExpiresAt] = useState<number | null>(() => {
+    const raw = localStorage.getItem("court_reconnect_expires_at");
+    const parsed = raw ? Number(raw) : NaN;
+    return Number.isFinite(parsed) ? parsed : null;
+  });
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [createMatchDialogOpen, setCreateMatchDialogOpen] = useState(false);
+  const [publicMatches, setPublicMatches] = useState<PublicMatchInfo[]>([]);
+  const [joinPasswordDialogOpen, setJoinPasswordDialogOpen] = useState(false);
+  const [joinPasswordDialogMatch, setJoinPasswordDialogMatch] = useState<PublicMatchInfo | null>(null);
+  const [joinPasswordInput, setJoinPasswordInput] = useState("");
+  const [joinPasswordDialogError, setJoinPasswordDialogError] = useState("");
+  const [joinPasswordVisible, setJoinPasswordVisible] = useState(false);
+  const [createRoomName, setCreateRoomName] = useState("");
+  const [createRoomMode, setCreateRoomMode] = useState<RoomModeKey>("civil_3");
+  const [createRoomPrivate, setCreateRoomPrivate] = useState(false);
+  const [createVoiceUrl, setCreateVoiceUrl] = useState("");
+  const [createRoomPassword, setCreateRoomPassword] = useState("");
+  const [createRoomPasswordVisible, setCreateRoomPasswordVisible] = useState(false);
+  const [showChatSeconds, setShowChatSeconds] = useState(
+    () => localStorage.getItem("court_show_chat_seconds") === "1",
+  );
+  const [shareAvatarInProfile, setShareAvatarInProfile] = useState(
+    () => localStorage.getItem("court_share_avatar") !== "0",
+  );
+  const [lobbyChatInput, setLobbyChatInput] = useState("");
+  const [lobbyChatMessages, setLobbyChatMessages] = useState<LobbyChatMessage[]>([]);
+  const [influenceView, setInfluenceView] = useState<
+    "main" | "chat" | "notes" | "verdict" | "warnings"
+  >(
+    "main",
+  );
+  const [lawyerChatPartner, setLawyerChatPartner] = useState<LawyerChatPartner | null>(
+    null,
+  );
+  const [lawyerChatMessages, setLawyerChatMessages] = useState<LawyerChatMessage[]>(
+    [],
+  );
+  const [lawyerChatInput, setLawyerChatInput] = useState("");
+  const [lawyerChatUnreadCount, setLawyerChatUnreadCount] = useState(0);
+  const [influenceNotes, setInfluenceNotes] = useState("");
+  const [protestCooldownEndsAt, setProtestCooldownEndsAt] = useState(0);
+  const [silenceCooldownEndsAt, setSilenceCooldownEndsAt] = useState(0);
+  const [influenceAnnouncement, setInfluenceAnnouncement] =
+    useState<InfluenceAnnouncement | null>(null);
 
   const [myId, setMyId] = useState<string | null>(null);
   const [mySessionToken, setMySessionToken] = useState<string | null>(
@@ -1252,8 +1510,68 @@ export default function App() {
   const [isHostJudge, setIsHostJudge] = useState(false);
 
   const avatarInputRef = useRef<HTMLInputElement>(null);
+  const lobbyChatScrollRef = useRef<HTMLDivElement>(null);
+  const lawyerChatScrollRef = useRef<HTMLDivElement>(null);
+  const joinPasswordDialogOpenRef = useRef(false);
+  const influenceViewRef = useRef<
+    "main" | "chat" | "notes" | "verdict" | "warnings"
+  >("main");
+  const myIdRef = useRef<string | null>(null);
+  const influenceAnnouncementTimerRef = useRef<number | null>(null);
   const socket = getSocket();
   const activeRoomCode = room?.code ?? game?.code ?? null;
+  const sharedAvatar = shareAvatarInProfile ? avatar : null;
+  const selectedCreateMode = getRoomModeMeta(createRoomMode);
+  const reconnectSecondsLeft =
+    reconnectExpiresAt !== null
+      ? Math.max(0, Math.ceil((reconnectExpiresAt - nowMs) / 1000))
+      : 0;
+  const protestCooldownLeft = Math.max(
+    0,
+    Math.ceil((protestCooldownEndsAt - nowMs) / 1000),
+  );
+  const silenceCooldownLeft = Math.max(
+    0,
+    Math.ceil((silenceCooldownEndsAt - nowMs) / 1000),
+  );
+  const devlogTotalPages = Math.max(
+    1,
+    Math.ceil(DEVLOG_ENTRIES.length / DEVLOG_PAGE_SIZE),
+  );
+  const currentDevlogPage = Math.min(devlogPage, devlogTotalPages);
+  const visibleDevlogEntries = DEVLOG_ENTRIES.slice(
+    (currentDevlogPage - 1) * DEVLOG_PAGE_SIZE,
+    currentDevlogPage * DEVLOG_PAGE_SIZE,
+  );
+  const notesStorageKey =
+    game && game.me ? `court_notes_${game.code}_${game.me.id}` : null;
+
+  const clearReconnectWindow = useCallback(() => {
+    localStorage.removeItem("court_reconnect_expires_at");
+    setReconnectExpiresAt(null);
+  }, []);
+
+  const startReconnectWindow = useCallback(
+    (expiresAt?: number | null) => {
+      const fallbackCode = room?.code ?? game?.code ?? localStorage.getItem("court_session");
+      const fallbackToken = mySessionToken ?? localStorage.getItem("court_session_token");
+      if (!fallbackCode || !fallbackToken) {
+        clearReconnectWindow();
+        return;
+      }
+
+      const safeExpiresAt =
+        typeof expiresAt === "number" && Number.isFinite(expiresAt)
+          ? expiresAt
+          : Date.now() + RECONNECT_GRACE_MS;
+      localStorage.setItem("court_session", fallbackCode);
+      localStorage.setItem("court_session_token", fallbackToken);
+      localStorage.setItem("court_reconnect_expires_at", String(safeExpiresAt));
+      setReconnectExpiresAt(safeExpiresAt);
+      setHasSession(true);
+    },
+    [clearReconnectWindow, game?.code, mySessionToken, room?.code],
+  );
 
   useEffect(() => {
     const savedName = localStorage.getItem("court_nickname");
@@ -1280,6 +1598,120 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (screen !== "home") return;
+    socket.emit("list_public_matches");
+  }, [socket, screen]);
+
+  useEffect(() => {
+    if (screen !== "home" || homeTab !== "play" || playView !== "matches") return;
+    socket.emit("list_public_matches");
+  }, [socket, screen, homeTab, playView]);
+
+  useEffect(() => {
+    if (screen !== "home") {
+      setProfileMenuOpen(false);
+    }
+  }, [screen]);
+
+  useEffect(() => {
+    joinPasswordDialogOpenRef.current = joinPasswordDialogOpen;
+  }, [joinPasswordDialogOpen]);
+
+  useEffect(() => {
+    influenceViewRef.current = influenceView;
+    if (influenceView === "chat") {
+      setLawyerChatUnreadCount(0);
+    }
+  }, [influenceView]);
+
+  useEffect(() => {
+    myIdRef.current = myId;
+  }, [myId]);
+
+  useEffect(() => {
+    if (screen !== "game") {
+      setInfluenceView("main");
+      setLawyerChatUnreadCount(0);
+      setLawyerChatMessages([]);
+      setLawyerChatInput("");
+      setLawyerChatPartner(null);
+      setInfluenceNotes("");
+      setProtestCooldownEndsAt(0);
+      setSilenceCooldownEndsAt(0);
+      setInfluenceAnnouncement(null);
+      return;
+    }
+    setInfluenceView("main");
+    setLawyerChatUnreadCount(0);
+  }, [screen, game?.code]);
+
+  useEffect(() => {
+    if (!notesStorageKey) {
+      setInfluenceNotes("");
+      return;
+    }
+    setInfluenceNotes(localStorage.getItem(notesStorageKey) ?? "");
+  }, [notesStorageKey]);
+
+  useEffect(() => {
+    if (!notesStorageKey) return;
+    localStorage.setItem(notesStorageKey, influenceNotes.slice(0, 5000));
+  }, [influenceNotes, notesStorageKey]);
+
+  useEffect(() => {
+    localStorage.setItem("court_show_chat_seconds", showChatSeconds ? "1" : "0");
+  }, [showChatSeconds]);
+
+  useEffect(() => {
+    localStorage.setItem("court_share_avatar", shareAvatarInProfile ? "1" : "0");
+  }, [shareAvatarInProfile]);
+
+  useEffect(() => {
+    if (screen !== "room") return;
+    const container = lobbyChatScrollRef.current;
+    if (!container) return;
+    requestAnimationFrame(() => {
+      container.scrollTop = container.scrollHeight;
+    });
+  }, [lobbyChatMessages, screen, room?.code]);
+
+  useEffect(() => {
+    if (screen !== "game" || influenceView !== "chat") return;
+    const container = lawyerChatScrollRef.current;
+    if (!container) return;
+    requestAnimationFrame(() => {
+      container.scrollTop = container.scrollHeight;
+    });
+  }, [influenceView, lawyerChatMessages, screen, game?.code]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 250);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (reconnectExpiresAt === null) return;
+    if (reconnectExpiresAt > nowMs) return;
+    if (room || game) return;
+
+    clearReconnectWindow();
+    localStorage.removeItem("court_session");
+    localStorage.removeItem("court_session_token");
+    setHasSession(false);
+    setMySessionToken(null);
+  }, [clearReconnectWindow, game, nowMs, reconnectExpiresAt, room]);
+
+  useEffect(() => {
+    if (screen !== "game" || !game || !mySessionToken) return;
+    socket.emit("get_lawyer_chat_state", {
+      code: game.code,
+      sessionToken: mySessionToken,
+    });
+  }, [screen, game?.code, game?.me?.id, mySessionToken, socket]);
+
+  useEffect(() => {
     socket.on(
       "room_joined",
       ({
@@ -1297,19 +1729,27 @@ export default function App() {
           localStorage.setItem("court_session_token", sessionToken);
         }
         localStorage.setItem("court_session", state.code);
+        clearReconnectWindow();
         setHasSession(true);
         setStartGameLoading(false);
+        setCreateMatchDialogOpen(false);
+        setProfileMenuOpen(false);
+        setJoinPasswordDialogOpen(false);
+        setJoinPasswordDialogMatch(null);
+        setJoinPasswordInput("");
+        setJoinPasswordDialogError("");
+        setJoinPasswordVisible(false);
         if (state.hostId === playerId && sessionToken) {
           setAdminHostId(playerId);
           localStorage.setItem("court_admin_host_id", playerId);
           setAdminHostSessionToken(sessionToken);
           localStorage.setItem("court_admin_host_token", sessionToken);
         }
-        if (avatar) {
+        if (sharedAvatar) {
           socket.emit("update_avatar", {
             code: state.code,
             sessionToken,
-            avatar,
+            avatar: sharedAvatar,
           });
         }
         if (state.type === "room") {
@@ -1320,6 +1760,7 @@ export default function App() {
               p.id === playerId && avatar ? { ...p, avatar } : p,
             ),
           });
+          setLobbyChatMessages(roomState.lobbyChat ?? []);
           setIsHostJudge(state.isHostJudge ?? false);
           setGame(null);
           setScreen("room");
@@ -1336,6 +1777,7 @@ export default function App() {
                 : gameState.me,
           });
           setRoom(null);
+          setLobbyChatMessages([]);
           setScreen("game");
         }
       },
@@ -1343,7 +1785,31 @@ export default function App() {
 
     socket.on(
       "room_updated",
-      ({ players, hostId, isHostJudge: hj }: { players: PlayerInfo[]; hostId: string; isHostJudge?: boolean }) => {
+      ({
+        players,
+        hostId,
+        isHostJudge: hj,
+        roomName,
+        modeKey,
+        maxPlayers,
+        visibility,
+        venueLabel,
+        venueUrl,
+        requiresPassword,
+        lobbyChat,
+      }: {
+        players: PlayerInfo[];
+        hostId: string;
+        isHostJudge?: boolean;
+        roomName?: string;
+        modeKey?: RoomModeKey;
+        maxPlayers?: number;
+        visibility?: "public" | "private";
+        venueLabel?: string;
+        venueUrl?: string;
+        requiresPassword?: boolean;
+        lobbyChat?: LobbyChatMessage[];
+      }) => {
         setRoom((prev) => {
           if (!prev) return prev;
           const mergedPlayers = players.map((nextPlayer) => {
@@ -1353,8 +1819,23 @@ export default function App() {
               avatar: nextPlayer.avatar ?? prevPlayer?.avatar,
             };
           });
-          return { ...prev, players: mergedPlayers, hostId };
+          return {
+            ...prev,
+            players: mergedPlayers,
+            hostId,
+            roomName: roomName ?? prev.roomName,
+            modeKey: modeKey ?? prev.modeKey,
+            maxPlayers: maxPlayers ?? prev.maxPlayers,
+            visibility: visibility ?? prev.visibility,
+            venueLabel: venueLabel ?? prev.venueLabel,
+            venueUrl: venueUrl ?? prev.venueUrl,
+            requiresPassword: requiresPassword ?? prev.requiresPassword,
+            lobbyChat: lobbyChat ?? prev.lobbyChat,
+          };
         });
+        if (lobbyChat) {
+          setLobbyChatMessages(lobbyChat);
+        }
         if (hj !== undefined) setIsHostJudge(hj);
       },
     );
@@ -1391,6 +1872,53 @@ export default function App() {
     });
 
     socket.on(
+      "game_profile_updated",
+      ({
+        players,
+        revealedFacts,
+        usedCards,
+      }: {
+        players: PlayerInfo[];
+        revealedFacts: RevealedFact[];
+        usedCards: UsedCard[];
+      }) => {
+        setGame((prev) => {
+          if (!prev) return prev;
+          const updatedMe =
+            prev.me ? players.find((player) => player.id === prev.me!.id) : null;
+          return {
+            ...prev,
+            players,
+            revealedFacts,
+            usedCards,
+            me:
+              prev.me && updatedMe
+                ? {
+                    ...prev.me,
+                    name: updatedMe.name,
+                    avatar: updatedMe.avatar,
+                    roleKey: updatedMe.roleKey ?? prev.me.roleKey,
+                    roleTitle: updatedMe.roleTitle ?? prev.me.roleTitle,
+                  }
+                : prev.me,
+          };
+        });
+      },
+    );
+
+    socket.on("public_matches_updated", ({ matches }: { matches: PublicMatchInfo[] }) => {
+      setPublicMatches(matches);
+    });
+
+    socket.on(
+      "lobby_chat_updated",
+      ({ messages }: { messages: LobbyChatMessage[] }) => {
+        setLobbyChatMessages(messages);
+        setRoom((prev) => (prev ? { ...prev, lobbyChat: messages } : prev));
+      },
+    );
+
+    socket.on(
       "player_left",
       ({ playerName: name }: { playerId: string; playerName: string }) => {
         setDisconnectAlert(`⚠️ ${name} покинул игру`);
@@ -1406,7 +1934,119 @@ export default function App() {
       },
     );
 
+    socket.on(
+      "lawyer_chat_state",
+      ({
+        enabled,
+        partner,
+        messages,
+      }: {
+        enabled: boolean;
+        partner: LawyerChatPartner | null;
+        messages: LawyerChatMessage[];
+      }) => {
+        if (!enabled) {
+          setLawyerChatPartner(null);
+          setLawyerChatMessages([]);
+          setLawyerChatUnreadCount(0);
+          setInfluenceView((prev) => (prev === "chat" ? "main" : prev));
+          return;
+        }
+
+        setLawyerChatPartner(partner);
+        setLawyerChatMessages(messages ?? []);
+        if (influenceViewRef.current === "chat") {
+          setLawyerChatUnreadCount(0);
+        }
+      },
+    );
+
+    socket.on(
+      "lawyer_chat_updated",
+      ({
+        partner,
+        messages,
+      }: {
+        partner: LawyerChatPartner | null;
+        messages: LawyerChatMessage[];
+      }) => {
+        if (partner) {
+          setLawyerChatPartner(partner);
+        }
+        setLawyerChatMessages((prev) => {
+          const nextMessages = messages ?? [];
+          if (influenceViewRef.current !== "chat") {
+            const prevIds = new Set(prev.map((item) => item.id));
+            const me = myIdRef.current;
+            const unreadAdded = nextMessages.filter(
+              (item) => !prevIds.has(item.id) && item.senderId !== me,
+            ).length;
+            if (unreadAdded > 0) {
+              setLawyerChatUnreadCount((value) => value + unreadAdded);
+            }
+          } else {
+            setLawyerChatUnreadCount(0);
+          }
+          return nextMessages;
+        });
+      },
+    );
+
+    socket.on(
+      "influence_cooldown",
+      ({
+        action,
+        cooldownEndsAt,
+      }: {
+        action: "protest" | "silence" | "warning";
+        cooldownEndsAt: number;
+      }) => {
+        if (action === "protest") {
+          setProtestCooldownEndsAt(cooldownEndsAt || 0);
+          return;
+        }
+        if (action === "silence") {
+          setSilenceCooldownEndsAt(cooldownEndsAt || 0);
+          return;
+        }
+      },
+    );
+
+    socket.on("influence_announcement", (announcement: InfluenceAnnouncement) => {
+      setInfluenceAnnouncement(announcement);
+      if (influenceAnnouncementTimerRef.current) {
+        window.clearTimeout(influenceAnnouncementTimerRef.current);
+      }
+      const duration = announcement?.durationMs ?? 3000;
+      influenceAnnouncementTimerRef.current = window.setTimeout(() => {
+        setInfluenceAnnouncement(null);
+      }, duration);
+    });
+
+    socket.on(
+      "reconnect_available",
+      ({
+        code,
+        sessionToken,
+        expiresAt,
+      }: {
+        code?: string;
+        sessionToken?: string;
+        expiresAt?: number;
+      }) => {
+        if (code) {
+          localStorage.setItem("court_session", code);
+        }
+        if (sessionToken) {
+          localStorage.setItem("court_session_token", sessionToken);
+          setMySessionToken(sessionToken);
+        }
+        startReconnectWindow(expiresAt ?? null);
+      },
+    );
+
     socket.on("rejoin_failed", () => {
+      clearReconnectWindow();
       localStorage.removeItem("court_session");
       localStorage.removeItem("court_session_token");
       localStorage.removeItem("court_admin_host_id");
@@ -1415,10 +2055,12 @@ export default function App() {
       setAdminHostId(null);
       setAdminHostSessionToken(null);
       setHasSession(false);
+      setLobbyChatMessages([]);
       setScreen("home");
     });
 
     socket.on("kicked", () => {
+      clearReconnectWindow();
       localStorage.removeItem("court_session");
       localStorage.removeItem("court_session_token");
       setHasSession(false);
@@ -1437,9 +2079,16 @@ export default function App() {
       setIsHostJudge(false);
       setStartGameLoading(false);
       setContextHelpOpen(false);
+      setLobbyChatMessages([]);
+      setJoinPasswordDialogOpen(false);
+      setJoinPasswordDialogMatch(null);
+      setJoinPasswordInput("");
+      setJoinPasswordDialogError("");
+      setJoinPasswordVisible(false);
+      setProfileMenuOpen(false);
       setScreen("home");
       setKickedAlert(
-        "\u0412\u044b \u0431\u044b\u043b\u0438 \u043a\u0438\u043a\u043d\u0443\u0442\u044b \u0438\u0437 \u043a\u043e\u043c\u043d\u0430\u0442\u044b.",
+        "Вы были кикнуты из комнаты.",
       );
       setTimeout(() => setKickedAlert(""), 5000);
     });
@@ -1448,6 +2097,7 @@ export default function App() {
       setStartGameLoading(false);
       setGame(state as GameState);
       setRoom(null);
+      setLobbyChatMessages([]);
       setScreen("game");
     });
 
@@ -1506,16 +2156,34 @@ export default function App() {
 
     socket.on("error", ({ message }: { message: string }) => {
       setStartGameLoading(false);
+      if (message.toLowerCase().includes("парол")) {
+        setJoinPasswordDialogError(message);
+        if (joinPasswordDialogOpenRef.current) {
+          return;
+        }
+      }
       setError(message);
       setTimeout(() => setError(""), 4000);
     });
 
     return () => {
+      if (influenceAnnouncementTimerRef.current) {
+        window.clearTimeout(influenceAnnouncementTimerRef.current);
+        influenceAnnouncementTimerRef.current = null;
+      }
       socket.off("room_joined");
       socket.off("room_updated");
       socket.off("game_players_updated");
+      socket.off("game_profile_updated");
+      socket.off("public_matches_updated");
+      socket.off("lobby_chat_updated");
       socket.off("player_left");
       socket.off("player_rejoined");
+      socket.off("lawyer_chat_state");
+      socket.off("lawyer_chat_updated");
+      socket.off("influence_cooldown");
+      socket.off("influence_announcement");
+      socket.off("reconnect_available");
       socket.off("rejoin_failed");
       socket.off("kicked");
       socket.off("game_started");
@@ -1528,24 +2196,167 @@ export default function App() {
       socket.off("verdict_set");
       socket.off("error");
     };
-  }, [socket, avatar]);
+  }, [socket, avatar, clearReconnectWindow, sharedAvatar, startReconnectWindow]);
 
-  const createRoom = useCallback(() => {
+  const createQuickRoom = useCallback(() => {
     const name = playerName.trim() || "Игрок";
     localStorage.setItem("court_nickname", name);
-    socket.emit("create_room", { playerName: name });
-  }, [socket, playerName]);
-
-  const joinRoom = useCallback(() => {
-    if (!joinCode.trim()) return;
-    const name = playerName.trim() || "Игрок";
-    socket.emit("join_room", {
-      code: joinCode.trim().toUpperCase(),
+    socket.emit("create_room", {
       playerName: name,
+      avatar: sharedAvatar || undefined,
+      options: {
+        visibility: "public",
+        modeKey: "quick_flex",
+      },
     });
-  }, [socket, joinCode, playerName]);
+  }, [socket, playerName, sharedAvatar]);
+
+  const createRoomFromPanel = useCallback(() => {
+    const name = playerName.trim() || "Игрок";
+    if (createRoomPrivate && !createRoomPassword.trim()) {
+      setError("Для приватной комнаты задайте пароль.");
+      setTimeout(() => setError(""), 3000);
+      return false;
+    }
+    localStorage.setItem("court_nickname", name);
+    socket.emit("create_room", {
+      playerName: name,
+      avatar: sharedAvatar || undefined,
+      options: {
+        modeKey: createRoomMode,
+        visibility: createRoomPrivate ? "private" : "public",
+        roomName: createRoomName.trim() || undefined,
+        venueUrl: createVoiceUrl.trim() || undefined,
+        password:
+          createRoomPrivate && createRoomPassword.trim()
+            ? createRoomPassword.trim()
+            : undefined,
+      },
+    });
+    return true;
+  }, [
+    socket,
+    playerName,
+    sharedAvatar,
+    createRoomMode,
+    createRoomPrivate,
+    createRoomName,
+    createVoiceUrl,
+    createRoomPassword,
+  ]);
+
+  const joinRoom = useCallback((options?: { code?: string; password?: string }) => {
+    const targetCode = (options?.code ?? joinCode).trim().toUpperCase();
+    if (!targetCode) return;
+    const password = (options?.password ?? "").trim();
+    const name = playerName.trim() || "Игрок";
+    localStorage.setItem("court_nickname", name);
+    socket.emit("join_room", {
+      code: targetCode,
+      playerName: name,
+      avatar: sharedAvatar || undefined,
+      password: password || undefined,
+    });
+  }, [socket, joinCode, playerName, sharedAvatar]);
+
+  const updateProfile = useCallback(() => {
+    const nextName = playerName.trim();
+    if (!nextName) return;
+
+    localStorage.setItem("court_nickname", nextName);
+    if (avatar) {
+      localStorage.setItem("court_avatar", avatar);
+    } else {
+      localStorage.removeItem("court_avatar");
+    }
+
+    if (activeRoomCode && mySessionToken) {
+      socket.emit("update_profile", {
+        code: activeRoomCode,
+        sessionToken: mySessionToken,
+        name: nextName,
+        avatar: sharedAvatar,
+      });
+    }
+
+    setProfileMenuOpen(false);
+    setScreen("home");
+  }, [socket, activeRoomCode, mySessionToken, playerName, avatar, sharedAvatar]);
+
+  const sendLobbyChatMessage = useCallback(() => {
+    const text = lobbyChatInput.trim();
+    if (!room || !mySessionToken || !text) return;
+    socket.emit("send_lobby_chat", {
+      code: room.code,
+      sessionToken: mySessionToken,
+      text,
+    });
+    setLobbyChatInput("");
+  }, [socket, room, mySessionToken, lobbyChatInput]);
+
+  const joinPublicMatch = useCallback(
+    (match: PublicMatchInfo) => {
+      setJoinPasswordDialogError("");
+      if (match.requiresPassword) {
+        setJoinPasswordDialogMatch(match);
+        setJoinPasswordInput("");
+        setJoinPasswordVisible(false);
+        setJoinPasswordDialogOpen(true);
+        return;
+      }
+      joinRoom({ code: match.code });
+    },
+    [joinRoom],
+  );
+
+  const joinByCodeFromQuickInput = useCallback(() => {
+    const targetCode = joinCode.trim().toUpperCase();
+    if (!targetCode) return;
+    const listedMatch = publicMatches.find((match) => match.code === targetCode);
+    if (listedMatch?.requiresPassword) {
+      setJoinPasswordDialogMatch(listedMatch);
+      setJoinPasswordInput("");
+      setJoinPasswordDialogError("");
+      setJoinPasswordVisible(false);
+      setJoinPasswordDialogOpen(true);
+      return;
+    }
+    joinRoom({ code: targetCode });
+  }, [joinCode, publicMatches, joinRoom]);
+
+  const openVoiceLink = useCallback((url: string | undefined) => {
+    if (!url) return;
+    window.open(url, "_blank", "noopener,noreferrer");
+  }, []);
+
+  const joinPublicMatchWithPassword = useCallback(() => {
+    if (!joinPasswordDialogMatch) return;
+    const password = joinPasswordInput.trim();
+    setJoinPasswordDialogError("");
+    if (!password) {
+      setJoinPasswordDialogError("Введите пароль комнаты.");
+      return;
+    }
+    joinRoom({ code: joinPasswordDialogMatch.code, password });
+  }, [joinPasswordDialogMatch, joinPasswordInput, joinRoom]);
+
+  const openProfileScreen = useCallback(() => {
+    setProfileMenuOpen(false);
+    setScreen("profile");
+  }, []);
+
+  const handlePlayerNameChange = useCallback((value: string) => {
+    setPlayerName(value.slice(0, 20));
+  }, []);
 
   const reconnect = useCallback(() => {
+    if (reconnectExpiresAt !== null && reconnectExpiresAt <= Date.now()) {
+      clearReconnectWindow();
+      localStorage.removeItem("court_session");
+      localStorage.removeItem("court_session_token");
+      setHasSession(false);
+      return;
+    }
     const sessionCode = localStorage.getItem("court_session");
     const sessionToken = localStorage.getItem("court_session_token");
     if (sessionCode && sessionToken) {
@@ -1554,56 +2365,7 @@ export default function App() {
         sessionToken,
       });
     }
-  }, [socket]);
-
-  const takeOverPlayer = useCallback(
-    (nextName: string) => {
-      const name = nextName.trim();
-      if (!name) return;
-      const code = room?.code ?? game?.code ?? localStorage.getItem("court_session");
-      if (!code) return;
-      const normalizedName = name.toLowerCase();
-      const hostName =
-        room?.players.find((player) => player.id === room.hostId)?.name ??
-        game?.players.find((player) => player.id === game.hostId)?.name ??
-        null;
-
-      let targetSessionToken: string | null = null;
-      const currentPlayerName =
-        game?.me?.name ??
-        room?.players.find((player) => player.id === myId)?.name ??
-        null;
-      if (currentPlayerName?.trim().toLowerCase() === normalizedName) {
-        targetSessionToken = mySessionToken;
-      }
-      if (
-        !targetSessionToken &&
-        hostName?.trim().toLowerCase() === normalizedName
-      ) {
-        targetSessionToken = adminHostSessionToken;
-      }
-      if (!targetSessionToken) {
-        targetSessionToken = getTestPlayerSessionToken(code, name);
-      }
-      if (!targetSessionToken) {
-        setError(
-          "Безопасное переключение возможно только для хоста этого браузера и управляемых тест-игроков.",
-        );
-        return;
-      }
-      setError("");
-
-      localStorage.setItem("court_nickname", name);
-      localStorage.setItem("court_session_token", targetSessionToken);
-      setPlayerName(name);
-      setMySessionToken(targetSessionToken);
-      socket.emit("rejoin_room", {
-        code,
-        sessionToken: targetSessionToken,
-      });
-    },
-    [socket, room, game, myId, mySessionToken, adminHostSessionToken],
-  );
+  }, [clearReconnectWindow, reconnectExpiresAt, socket]);
 
   const roomControlPlayerId =
     room && adminHostId === room.hostId ? adminHostId : myId;
@@ -1689,25 +2451,6 @@ export default function App() {
     });
   }, [socket, game, gameControlSessionToken]);
 
-  const jumpToStage = useCallback(
-    (targetIndex: number) => {
-      if (!game || !gameControlSessionToken) return;
-      const maxIndex = Math.max(0, game.stages.length - 1);
-      const clampedTarget = Math.max(0, Math.min(targetIndex, maxIndex));
-      if (clampedTarget === game.stageIndex) return;
-
-      const steps = Math.abs(clampedTarget - game.stageIndex);
-      const eventName = clampedTarget > game.stageIndex ? "next_stage" : "prev_stage";
-      for (let i = 0; i < steps; i += 1) {
-        socket.emit(eventName, {
-          code: game.code,
-          sessionToken: gameControlSessionToken,
-        });
-      }
-    },
-    [socket, game, gameControlSessionToken],
-  );
-
   const submitVerdict = useCallback(
     (verdict: string) => {
       if (!game || !mySessionToken) return;
@@ -1720,21 +2463,95 @@ export default function App() {
     [socket, game, mySessionToken],
   );
 
-  const resetAll = useCallback(() => {
-    if (activeRoomCode) {
-      disconnectTestPlayersFromRoom(activeRoomCode);
+  const triggerProtest = useCallback(() => {
+    if (!game || !mySessionToken) return;
+    socket.emit("trigger_protest", {
+      code: game.code,
+      sessionToken: mySessionToken,
+    });
+  }, [game, mySessionToken, socket]);
+
+  const triggerJudgeSilence = useCallback(() => {
+    if (!game || !mySessionToken) return;
+    socket.emit("trigger_judge_silence", {
+      code: game.code,
+      sessionToken: mySessionToken,
+    });
+  }, [game, mySessionToken, socket]);
+
+  const triggerJudgeWarning = useCallback(
+    (targetPlayerId: string) => {
+      if (!game || !mySessionToken || !targetPlayerId) return;
+      socket.emit("trigger_warning", {
+        code: game.code,
+        targetPlayerId,
+        sessionToken: mySessionToken,
+      });
+    },
+    [game, mySessionToken, socket],
+  );
+
+  const removeJudgeWarning = useCallback(
+    (targetPlayerId: string) => {
+      if (!game || !mySessionToken || !targetPlayerId) return;
+      socket.emit("remove_warning", {
+        code: game.code,
+        targetPlayerId,
+        sessionToken: mySessionToken,
+      });
+    },
+    [game, mySessionToken, socket],
+  );
+
+  const openLawyerChat = useCallback(() => {
+    if (!game || !mySessionToken) return;
+    setLawyerChatUnreadCount(0);
+    setInfluenceView("chat");
+    socket.emit("get_lawyer_chat_state", {
+      code: game.code,
+      sessionToken: mySessionToken,
+    });
+  }, [game, mySessionToken, socket]);
+
+  const sendLawyerChatMessage = useCallback(() => {
+    if (!game || !mySessionToken || !lawyerChatPartner) return;
+    const text = lawyerChatInput.trim();
+    if (!text) return;
+    socket.emit("send_lawyer_chat", {
+      code: game.code,
+      sessionToken: mySessionToken,
+      text,
+    });
+    setLawyerChatInput("");
+  }, [game, lawyerChatInput, lawyerChatPartner, mySessionToken, socket]);
+
+  const returnHomeWithSession = useCallback(() => {
+    const shouldPreserveReconnect =
+      !!game || !!(room && !(myId === room.hostId && room.players.length <= 1));
+    if (shouldPreserveReconnect) {
+      startReconnectWindow();
+    } else {
+      clearReconnectWindow();
+      localStorage.removeItem("court_session");
+      localStorage.removeItem("court_session_token");
+      setHasSession(false);
+      setMySessionToken(null);
     }
-    socket.emit("leave_room");
+    socket.emit("leave_room", { preserveForRejoin: shouldPreserveReconnect });
     setScreen("home");
     setRoom(null);
     setGame(null);
     setMyId(null);
-    setMySessionToken(null);
     setAdminHostId(null);
     localStorage.removeItem("court_admin_host_id");
     setAdminHostSessionToken(null);
     localStorage.removeItem("court_admin_host_token");
     setJoinCode("");
+    setJoinPasswordDialogOpen(false);
+    setJoinPasswordDialogMatch(null);
+    setJoinPasswordInput("");
+    setJoinPasswordDialogError("");
+    setJoinPasswordVisible(false);
     setDisconnectAlert("");
     setRejoinAlert("");
     setKickedAlert("");
@@ -1742,31 +2559,48 @@ export default function App() {
     setIsHostJudge(false);
     setStartGameLoading(false);
     setContextHelpOpen(false);
-  }, [socket, activeRoomCode]);
+    setLobbyChatInput("");
+    setLobbyChatMessages([]);
+    setProfileMenuOpen(false);
+    setCreateMatchDialogOpen(false);
+  }, [clearReconnectWindow, game, myId, room, socket, startReconnectWindow]);
 
   const finalExit = useCallback(() => {
-    if (activeRoomCode) {
-      disconnectTestPlayersFromRoom(activeRoomCode);
+    const shouldPreserveReconnect =
+      !!game || !!(room && !(myId === room.hostId && room.players.length <= 1));
+    if (shouldPreserveReconnect) {
+      startReconnectWindow();
+    } else {
+      clearReconnectWindow();
+      localStorage.removeItem("court_session");
+      localStorage.removeItem("court_session_token");
+      setHasSession(false);
+      setMySessionToken(null);
     }
-    socket.emit("leave_room");
-    localStorage.removeItem("court_session");
-    localStorage.removeItem("court_session_token");
-    setHasSession(false);
+    socket.emit("leave_room", { preserveForRejoin: shouldPreserveReconnect });
     setScreen("home");
     setRoom(null);
     setGame(null);
     setMyId(null);
-    setMySessionToken(null);
     setAdminHostId(null);
     localStorage.removeItem("court_admin_host_id");
     setAdminHostSessionToken(null);
     localStorage.removeItem("court_admin_host_token");
     setJoinCode("");
+    setJoinPasswordDialogOpen(false);
+    setJoinPasswordDialogMatch(null);
+    setJoinPasswordInput("");
+    setJoinPasswordDialogError("");
+    setJoinPasswordVisible(false);
     setKickedAlert("");
     setCopiedRoomCode(false);
     setStartGameLoading(false);
     setContextHelpOpen(false);
-  }, [socket, activeRoomCode]);
+    setLobbyChatInput("");
+    setLobbyChatMessages([]);
+    setProfileMenuOpen(false);
+    setCreateMatchDialogOpen(false);
+  }, [clearReconnectWindow, game, myId, room, socket, startReconnectWindow]);
 
   const setupNickname = useCallback(() => {
     const name = playerName.trim();
@@ -1845,8 +2679,9 @@ export default function App() {
         initial="initial"
         animate="animate"
         exit="exit"
-        className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center p-6"
+        className="relative isolate min-h-screen bg-[#0b0b0f] text-zinc-100 flex items-center justify-center p-6"
       >
+        <CourtAtmosphereBackground />
         <div className="w-full max-w-sm space-y-4">
           <Card className="rounded-[28px] border-zinc-800 bg-zinc-900/95 text-zinc-100">
             <CardContent className="p-8 space-y-6">
@@ -1887,7 +2722,7 @@ export default function App() {
                 <label className="text-sm font-medium">Ваш никнейм</label>
                 <Input
                   value={playerName}
-                  onChange={(e) => setPlayerName(e.target.value)}
+                  onChange={(e) => handlePlayerNameChange(e.target.value)}
                   placeholder="Например: Артём"
                   className="h-12 rounded-xl bg-zinc-100 text-zinc-950 placeholder:text-zinc-400 border-0 focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-0"
                   onKeyDown={(e) => e.key === "Enter" && setupNickname()}
@@ -1913,6 +2748,144 @@ export default function App() {
     );
   }
 
+  if (screen === "profile") {
+    return (
+      <motion.div
+        key="profile"
+        variants={pageVariants}
+        initial="initial"
+        animate="animate"
+        exit="exit"
+        className="relative isolate min-h-screen overflow-y-auto bg-[#0b0b0f] text-zinc-100 p-6 md:p-10"
+      >
+        <CourtAtmosphereBackground />
+        <div className="max-w-4xl mx-auto">
+          <Card className="rounded-[28px] border-zinc-800 bg-zinc-900/95 text-zinc-100">
+            <CardContent className="p-8 md:p-10">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="text-sm uppercase tracking-[0.16em] text-zinc-500">
+                    Профиль
+                  </div>
+                  <h2 className="text-3xl font-bold mt-2">Личные настройки</h2>
+                  <p className="text-zinc-400 mt-2">
+                    Настройте профиль игрока и внешний вид лобби.
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  className="rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                  onClick={() => setScreen("home")}
+                >
+                  Назад
+                </Button>
+              </div>
+
+              <div className="mt-7 grid gap-6 lg:grid-cols-[260px_1fr]">
+                <Card className="rounded-2xl border-zinc-800 bg-zinc-950/70 text-zinc-100">
+                  <CardContent className="p-5 space-y-4">
+                    <div className="text-sm font-medium text-zinc-300">Аватар профиля</div>
+                    <div className="flex justify-center">
+                      <div
+                        className="relative cursor-pointer group"
+                        onClick={() => avatarInputRef.current?.click()}
+                      >
+                        <Avatar src={avatar} name={playerName || "?"} size={128} />
+                        <div className="absolute inset-0 rounded-full bg-black/55 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Camera className="w-7 h-7 text-white" />
+                        </div>
+                      </div>
+                    </div>
+                    <input
+                      ref={avatarInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleAvatarChange}
+                    />
+                    <div className="grid gap-2">
+                      <Button
+                        variant="outline"
+                        className="rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                        onClick={() => avatarInputRef.current?.click()}
+                      >
+                        Загрузить аватар
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                        onClick={() => setAvatar(null)}
+                      >
+                        Удалить аватар
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4">
+                    <label className="text-sm font-medium text-zinc-300">Никнейм</label>
+                    <Input
+                      value={playerName}
+                      onChange={(e) => handlePlayerNameChange(e.target.value)}
+                      placeholder="Например: Berly"
+                      className="mt-2 h-11 rounded-xl bg-zinc-100 text-zinc-950 placeholder:text-zinc-400 border-0 focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-0"
+                    />
+                    <div className="mt-2 text-xs text-zinc-500">
+                      До 20 символов, отображается в подборе и лобби.
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4">
+                      <div className="text-sm font-medium text-zinc-100">Показывать аватар</div>
+                      <div className="text-xs text-zinc-500 mt-1">
+                        Если выключено, другие увидят только инициалы.
+                      </div>
+                      <div className="mt-3">
+                        <Switch
+                          checked={shareAvatarInProfile}
+                          onCheckedChange={setShareAvatarInProfile}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4">
+                      <div className="text-sm font-medium text-zinc-100">Секунды в чате</div>
+                      <div className="text-xs text-zinc-500 mt-1">
+                        Показывать секунды у времени сообщений в лобби.
+                      </div>
+                      <div className="mt-3">
+                        <Switch checked={showChatSeconds} onCheckedChange={setShowChatSeconds} />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 pt-1">
+                    <Button
+                      variant="outline"
+                      className="flex-1 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                      onClick={() => setScreen("home")}
+                    >
+                      Отмена
+                    </Button>
+                    <Button
+                      className="flex-1 rounded-xl bg-red-600 hover:bg-red-500 text-white border-0"
+                      onClick={updateProfile}
+                      disabled={!playerName.trim()}
+                    >
+                      Сохранить
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </motion.div>
+    );
+  }
+
   if (screen === "home") {
     return (
       <motion.div
@@ -1921,8 +2894,9 @@ export default function App() {
         initial="initial"
         animate="animate"
         exit="exit"
-        className="min-h-screen bg-zinc-950 text-zinc-100 p-6 md:p-10"
+        className="relative isolate min-h-screen bg-[#0b0b0f] text-zinc-100 p-4 sm:p-6 md:p-10 overflow-x-hidden"
       >
+        <CourtAtmosphereBackground />
         <AnimatePresence>
           {kickedAlert && (
             <motion.div
@@ -1937,242 +2911,622 @@ export default function App() {
           )}
         </AnimatePresence>
 
-        <div className="max-w-6xl mx-auto mb-6 flex justify-center">
-          <div className="inline-flex items-center gap-1 rounded-full border border-zinc-800 bg-zinc-900/90 p-1.5 shadow-sm shadow-black/30">
-            <Button
-              variant="ghost"
-              onClick={() => setHomeTab("play")}
-              className={`h-9 rounded-full px-4 gap-2 ${
-                homeTab === "play"
-                  ? "bg-red-600 text-white hover:bg-red-500"
-                  : "text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800"
-              }`}
-            >
-              <Gamepad2 className="w-4 h-4" />
-              Играть
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={() => setHomeTab("development")}
-              className={`h-9 rounded-full px-4 gap-2 ${
-                homeTab === "development"
-                  ? "bg-red-600 text-white hover:bg-red-500"
-                  : "text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800"
-              }`}
-            >
-              <Wrench className="w-4 h-4" />
-              Разработка
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={() => setHomeTab("help")}
-              className={`h-9 rounded-full px-4 gap-2 ${
-                homeTab === "help"
-                  ? "bg-red-600 text-white hover:bg-red-500"
-                  : "text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800"
-              }`}
-            >
-              <CircleHelp className="w-4 h-4" />
-              Помощь
-            </Button>
+        <div className="max-w-6xl mx-auto mb-8 flex justify-center">
+          <div className="relative w-full sm:w-auto min-w-0">
+            <div className="w-full sm:w-auto rounded-[28px] border border-zinc-800 bg-zinc-900/90 p-1.5 shadow-sm shadow-black/30">
+              <div className="sm:flex sm:items-center sm:gap-1">
+                <div className="grid grid-cols-3 gap-1.5 sm:flex sm:items-center sm:gap-1">
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setHomeTab("play");
+                      setProfileMenuOpen(false);
+                    }}
+                    className={`h-10 rounded-full px-2 sm:px-4 gap-1.5 sm:gap-2 text-[13px] sm:text-sm transition-all duration-200 hover:-translate-y-0.5 ${
+                      homeTab === "play"
+                        ? "bg-red-600 text-white hover:bg-red-500"
+                        : "text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800"
+                    }`}
+                  >
+                    <Gamepad2 className="w-4 h-4" />
+                    Играть
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setHomeTab("development");
+                      setProfileMenuOpen(false);
+                    }}
+                    className={`h-10 rounded-full px-2 sm:px-4 gap-1.5 sm:gap-2 text-[13px] sm:text-sm transition-all duration-200 hover:-translate-y-0.5 ${
+                      homeTab === "development"
+                        ? "bg-red-600 text-white hover:bg-red-500"
+                        : "text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800"
+                    }`}
+                  >
+                    <Wrench className="w-4 h-4" />
+                    Разработка
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setHomeTab("help");
+                      setProfileMenuOpen(false);
+                    }}
+                    className={`h-10 rounded-full px-2 sm:px-4 gap-1.5 sm:gap-2 text-[13px] sm:text-sm transition-all duration-200 hover:-translate-y-0.5 ${
+                      homeTab === "help"
+                        ? "bg-red-600 text-white hover:bg-red-500"
+                        : "text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800"
+                    }`}
+                  >
+                    <CircleHelp className="w-4 h-4" />
+                    Помощь
+                  </Button>
+                </div>
+
+                <div className="mt-1.5 border-t border-zinc-800/80 pt-1.5 sm:mt-0 sm:pt-0 sm:border-t-0 sm:ml-1 sm:pl-2 sm:border-l sm:border-zinc-700/80">
+                  <Button
+                    variant="outline"
+                    onClick={() => setProfileMenuOpen((prev) => !prev)}
+                    className="h-10 w-full sm:w-auto rounded-full border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100 px-3.5 gap-2 transition-all duration-200 hover:-translate-y-0.5"
+                  >
+                    <Avatar src={avatar} name={playerName || "Игрок"} size={32} />
+                    <span className="max-w-[130px] truncate text-sm">{playerName || "Игрок"}</span>
+                    <ChevronDown className="w-4 h-4 text-zinc-400" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <AnimatePresence>
+              {profileMenuOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -8, scale: 0.96 }}
+                  className="absolute right-0 top-full mt-2 w-56 rounded-2xl border border-zinc-800 bg-zinc-900/95 shadow-2xl shadow-black/50 p-2 z-30"
+                >
+                  <button
+                    type="button"
+                    onClick={openProfileScreen}
+                    className="w-full rounded-xl px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-800 flex items-center gap-2"
+                  >
+                    <UserCircle2 className="w-4 h-4" />
+                    Открыть профиль
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
 
         {homeTab === "play" && (
-        <div className="max-w-6xl mx-auto grid lg:grid-cols-2 gap-6 items-stretch">
-          <motion.div
-            custom={0}
-            variants={cardVariants}
-            initial="initial"
-            animate="animate"
-          >
-            <Card className="rounded-[28px] shadow-sm border border-zinc-800 bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950 h-full text-zinc-100">
-              <CardContent className="p-8 md:p-10 h-full flex flex-col justify-between gap-8">
-                <div className="space-y-5">
-                  <Badge className="rounded-full px-3 py-1 text-sm bg-red-600/90 hover:bg-red-600 text-white border-0">
-                    Made By Berly
-                  </Badge>
-                  <div className="space-y-3">
-                    <h1 className="text-4xl md:text-5xl font-bold tracking-tight">
-                      СУД
-                    </h1>
-                    <p className="text-base md:text-lg text-zinc-400 max-w-xl">
-                      Ролевая настольная игра о судебных разбирательствах.
-                      Получите роль, изучите факты дела и попробуйте убедить
-                      судью в своей правоте.
-                    </p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  {[
-                    { title: "3–6 игроков", sub: "Разные роли и режимы" },
-                    { title: "Карты Механик", sub: "Дают особые возможности" },
-                    { title: "Улики", sub: "Объективные и общие" },
-                    { title: "Факты", sub: "Раскрываются по ходу суда" },
-                  ].map((item, i) => (
-                    <motion.div
-                      key={item.title}
-                      custom={i + 1}
-                      variants={cardVariants}
-                      initial="initial"
-                      animate="animate"
-                    >
-                      <Card className="rounded-2xl bg-zinc-900/90 border-zinc-800 text-zinc-100">
-                        <CardContent className="p-4">
-                          <div className="font-semibold">{item.title}</div>
-                          <div className="text-zinc-400 mt-1">{item.sub}</div>
-                        </CardContent>
-                      </Card>
-                    </motion.div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
+          <div className="w-full max-w-6xl mx-auto space-y-6 min-w-0">
+            <div className="mx-auto grid w-full max-w-md grid-cols-2 gap-2">
+              <Button
+                variant={playView === "quick" ? "secondary" : "outline"}
+                onClick={() => setPlayView("quick")}
+                className={
+                  playView === "quick"
+                    ? "w-full rounded-full bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0 transition-all duration-200 hover:-translate-y-0.5"
+                    : "w-full rounded-full border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100 transition-all duration-200 hover:-translate-y-0.5"
+                }
+              >
+                Быстрый вход
+              </Button>
+              <Button
+                variant={playView === "matches" ? "secondary" : "outline"}
+                onClick={() => {
+                  setPlayView("matches");
+                  socket.emit("list_public_matches");
+                }}
+                className={
+                  playView === "matches"
+                    ? "w-full rounded-full bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0 gap-2 transition-all duration-200 hover:-translate-y-0.5"
+                    : "w-full rounded-full border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100 gap-2 transition-all duration-200 hover:-translate-y-0.5"
+                }
+              >
+                <Globe className="w-4 h-4" />
+                Подбор игроков
+              </Button>
+            </div>
 
-          <motion.div
-            custom={1}
-            variants={cardVariants}
-            initial="initial"
-            animate="animate"
-          >
-            <Card className="rounded-[28px] shadow-sm h-full bg-zinc-900/95 border-zinc-800 text-zinc-100">
-              <CardContent className="p-8 md:p-10 space-y-6">
-                <AnimatePresence>
-                  {error && (
-                    <motion.div
-                      key="err"
-                      initial={{ opacity: 0, y: -8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -8 }}
-                      className="bg-red-600/20 border border-red-600/40 text-red-400 rounded-xl px-4 py-3 text-sm"
-                    >
-                      {error}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-
-                <div className="flex items-center gap-4">
-                  <div
-                    className="relative cursor-pointer group flex-shrink-0"
-                    onClick={() => avatarInputRef.current?.click()}
-                  >
-                    <Avatar src={avatar} name={playerName} size={52} />
-                    <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Camera className="w-4 h-4 text-white" />
-                    </div>
-                  </div>
-                  <input
-                    ref={avatarInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleAvatarChange}
-                  />
-                  <div className="flex-1 space-y-2">
-                    <label className="text-sm font-medium">Ваш никнейм</label>
-                    <Input
-                      value={playerName}
-                      onChange={(e) => {
-                        setPlayerName(e.target.value);
-                        if (e.target.value.trim())
-                          localStorage.setItem(
-                            "court_nickname",
-                            e.target.value.trim(),
-                          );
-                      }}
-                      placeholder="Например: Артём"
-                      className="h-11 rounded-xl bg-zinc-100 text-zinc-950 placeholder:text-zinc-400 border-0 focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-0"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid gap-3">
+            <AnimatePresence mode="wait">
+              {playView === "quick" ? (
+                <motion.div
+                  key="play-quick"
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  className="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-6 lg:gap-3 items-stretch w-full min-w-0 max-w-full lg:max-w-[1120px] mx-auto"
+                >
                   <motion.div
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.97 }}
+                    custom={0}
+                    variants={cardVariants}
+                    initial="initial"
+                    animate="animate"
+                    className="min-w-0 lg:max-w-[540px] lg:justify-self-end"
                   >
-                    <Button
-                      onClick={createRoom}
-                      className="w-full h-12 rounded-xl text-base gap-2 bg-red-600 hover:bg-red-500 text-white border-0"
-                    >
-                      <UserPlus className="w-4 h-4" />
-                      Создать комнату
-                    </Button>
+                    <Card className="w-full min-w-0 rounded-[28px] shadow-sm border border-zinc-800 bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950 h-full text-zinc-100">
+                      <CardContent className="p-6 sm:p-8 md:p-10 h-full flex flex-col justify-between gap-8">
+                        <div className="space-y-5">
+                          <Badge className="rounded-full px-3 py-1 text-sm bg-red-600/90 hover:bg-red-600 text-white border-0">
+                            Made By Berly
+                          </Badge>
+                          <div className="space-y-3">
+                            <h1 className="text-4xl md:text-5xl font-bold tracking-tight">СУД</h1>
+                            <p className="text-base md:text-lg text-zinc-400 max-w-xl">
+                              Ролевая настольная игра о судебных разбирательствах. Получите роль,
+                              изучите факты дела и попробуйте убедить судью в своей правоте.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                          {[
+                            { title: "3-6 игроков", sub: "Разные роли и режимы" },
+                            { title: "Карты механик", sub: "Дают особые возможности" },
+                            { title: "Улики", sub: "Объективные и общие" },
+                            { title: "Факты", sub: "Раскрываются по ходу суда" },
+                          ].map((item, i) => (
+                            <motion.div
+                              key={item.title}
+                              custom={i + 1}
+                              variants={cardVariants}
+                              initial="initial"
+                              animate="animate"
+                              whileHover={{ y: -2 }}
+                              whileTap={{ scale: 0.995 }}
+                            >
+                              <Card className="rounded-2xl bg-zinc-900/90 border-zinc-800 text-zinc-100">
+                                <CardContent className="p-4">
+                                  <div className="font-semibold">{item.title}</div>
+                                  <div className="text-zinc-400 mt-1">{item.sub}</div>
+                                </CardContent>
+                              </Card>
+                            </motion.div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
                   </motion.div>
 
-                  <div className="flex gap-3">
-                    <Input
-                      value={joinCode}
-                      onChange={(e) =>
-                        setJoinCode(e.target.value.toUpperCase())
-                      }
-                      placeholder="Код комнаты"
-                      className="h-12 rounded-xl bg-zinc-100 text-zinc-950 placeholder:text-zinc-400 border-0 focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-0"
-                      onKeyDown={(e) => e.key === "Enter" && joinRoom()}
-                    />
-                    <motion.div
-                      whileHover={{ scale: 1.04 }}
-                      whileTap={{ scale: 0.97 }}
-                    >
-                      <Button
-                        onClick={joinRoom}
-                        variant="secondary"
-                        disabled={!joinCode.trim()}
-                        className="h-12 rounded-xl px-6 bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0"
-                      >
-                        Войти
-                      </Button>
-                    </motion.div>
-                  </div>
+                  <motion.div
+                    custom={1}
+                    variants={cardVariants}
+                    initial="initial"
+                    animate="animate"
+                    className="min-w-0 lg:max-w-[620px] lg:justify-self-start"
+                  >
+                    <Card className="w-full min-w-0 rounded-[28px] shadow-sm h-full bg-gradient-to-br from-zinc-900/95 via-zinc-900/92 to-zinc-800/85 border-zinc-800 text-zinc-100">
+                      <CardContent className="p-6 sm:p-8 md:p-10 space-y-6">
+                        <AnimatePresence>
+                          {error && (
+                            <motion.div
+                              key="err"
+                              initial={{ opacity: 0, y: -8 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -8 }}
+                              className="bg-red-600/20 border border-red-600/40 text-red-400 rounded-xl px-4 py-3 text-sm"
+                            >
+                              {error}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
 
-                  <AnimatePresence>
-                    {hasSession && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: "auto" }}
-                        exit={{ opacity: 0, height: 0 }}
-                        transition={{ duration: 0.28 }}
-                      >
-                        <motion.div
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.97 }}
-                        >
-                          <Button
-                            onClick={reconnect}
-                            variant="outline"
-                            className="w-full h-12 rounded-xl border-red-600/50 text-red-400 hover:bg-red-600/10 hover:text-red-300 gap-2"
+                        <div className="grid gap-4">
+                          <motion.div
+                            initial={{ opacity: 0.85, y: 6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.32, ease: "easeOut" }}
+                            className="rounded-2xl border border-zinc-700/90 bg-gradient-to-br from-zinc-900/85 via-zinc-900/74 to-zinc-800/62 px-4 py-5 sm:px-6 sm:py-6 space-y-4"
                           >
-                            ↩ Переподключиться к игре
+                            <motion.div className="px-1" whileHover={{ y: -1 }} whileTap={{ scale: 0.985 }}>
+                              <Button
+                                onClick={createQuickRoom}
+                                className="w-full h-16 rounded-2xl text-4xl gap-2 bg-red-600 hover:bg-red-600 text-white border-0 text-[33px] font-bold tracking-tight shadow-[0_8px_28px_rgba(220,38,38,0.35)] transition-transform duration-200 hover:-translate-y-0.5"
+                              >
+                                Создать игру
+                              </Button>
+                            </motion.div>
+                            <Separator className="bg-zinc-800" />
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div className="h-12 flex-1 min-w-0 rounded-xl border border-zinc-700 bg-zinc-900/80 px-3 flex items-center gap-2">
+                                <span className="text-zinc-400 font-semibold">#</span>
+                                <Input
+                                  value={joinCode}
+                                  onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                                  placeholder="Введите код"
+                                  className="h-10 bg-transparent border-0 p-0 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-0 focus-visible:ring-offset-0"
+                                  onKeyDown={(e) =>
+                                    e.key === "Enter" && joinByCodeFromQuickInput()
+                                  }
+                                />
+                              </div>
+                              <Button
+                                onClick={joinByCodeFromQuickInput}
+                                disabled={!joinCode.trim()}
+                                className="h-12 min-w-[100px] rounded-xl bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0 text-lg transition-all duration-200 hover:-translate-y-0.5"
+                              >
+                                Войти
+                              </Button>
+                            </div>
+                          </motion.div>
+
+                          <AnimatePresence>
+                            {hasSession && reconnectSecondsLeft > 0 && (
+                              <motion.div
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: "auto" }}
+                                exit={{ opacity: 0, height: 0 }}
+                                transition={{ duration: 0.28 }}
+                              >
+                                <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
+                                  <Button
+                                    onClick={reconnect}
+                                    variant="outline"
+                                    className="w-full h-12 rounded-xl border-red-600/50 text-red-400 hover:bg-red-600/10 hover:text-red-300 gap-2"
+                                  >
+                                    ↩ Переподключиться к игре ({reconnectSecondsLeft}s)
+                                  </Button>
+                                </motion.div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+
+                        <Separator className="bg-zinc-800" />
+
+                        <div className="space-y-3">
+                          <div className="font-semibold">Функционал</div>
+                          <div className="grid gap-2 text-sm text-zinc-400">
+                            <div>• создайте комнату и поделитесь кодом с игроками</div>
+                            <div>• выберите режим и фиксированный лимит участников</div>
+                            <div>• приватные комнаты защищаются паролем</div>
+                            <div>• в лобби доступен общий чат и управление этапами</div>
+                          </div>
+                        </div>
+
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="play-matches"
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                >
+                  <Card className="rounded-[28px] border-zinc-800 bg-zinc-900/95 text-zinc-100">
+                    <CardContent className="p-6 md:p-8 space-y-5">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="space-y-1">
+                          <h2 className="text-2xl font-semibold tracking-tight">Подбор игроков</h2>
+                          <p className="text-sm text-zinc-400">
+                            Выберите комнату для входа или создайте свою.
+                          </p>
+                        </div>
+                        <div className="flex w-full sm:w-auto items-center">
+                          <Button
+                            onClick={() => setCreateMatchDialogOpen(true)}
+                            className="w-full sm:w-auto h-14 rounded-xl bg-red-600 hover:bg-red-600 text-white border-0 gap-2 px-9 text-lg font-semibold transition-all duration-200 hover:-translate-y-0.5 shadow-[0_0_0_1px_rgba(239,68,68,0.5),0_10px_28px_rgba(220,38,38,0.35)] hover:shadow-[0_0_0_1px_rgba(248,113,113,0.7),0_16px_36px_rgba(220,38,38,0.45)]"
+                          >
+                            <UserPlus className="w-4 h-4" />
+                            Создать матч
                           </Button>
-                        </motion.div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
+                        </div>
+                      </div>
 
-                <Separator />
+                      <AnimatePresence>
+                        {error && (
+                          <motion.div
+                            key="matches-err"
+                            initial={{ opacity: 0, y: -8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -8 }}
+                            className="bg-red-600/20 border border-red-600/40 text-red-400 rounded-xl px-4 py-3 text-sm"
+                          >
+                            {error}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
 
-                <div className="space-y-3">
-                  <div className="font-semibold">Функционал</div>
-                  <div className="grid gap-2 text-sm text-zinc-400">
-                    <div>• создайте комнату и поделитесь кодом с игроками</div>
-                    <div>
-                      • ведущий запускает игру и роли раздаются автоматически
+                      <div className="space-y-3">
+                        {publicMatches.length === 0 && (
+                          <div className="text-sm text-zinc-500">
+                            Сейчас нет доступных комнат.
+                          </div>
+                        )}
+                        {publicMatches.map((match) => {
+                          const modeMeta = getRoomModeMeta(match.modeKey, match.maxPlayers);
+                          const roomTitle = match.roomName?.trim() || `Комната ${match.hostName}`;
+                          const hasLock = match.requiresPassword;
+                          const showLockBadge = hasLock || match.visibility === "private";
+                          const roomTypeLabel =
+                            match.visibility === "private" ? "Приватная" : "Публичная";
+                          const statusLabel = match.started
+                            ? "Матч уже идёт"
+                            : "Лобби набирает игроков";
+                          return (
+                            <motion.div
+                              key={match.code}
+                              layout
+                              initial={{ opacity: 0, y: 8 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              whileHover={{ y: -2 }}
+                              className="rounded-2xl border border-zinc-800 bg-zinc-950/70 px-4 py-4 md:px-5"
+                            >
+                              <div className="flex flex-col gap-4 md:gap-5 lg:flex-row lg:items-center lg:justify-between">
+                                <div className="min-w-0 space-y-2">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <h3 className="text-base font-semibold text-zinc-100 truncate">
+                                      {roomTitle}
+                                    </h3>
+                                    <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">
+                                      {match.playerCount}/{match.maxPlayers}
+                                    </Badge>
+                                    <Badge className="bg-zinc-800 text-zinc-200 border border-zinc-700">
+                                      {roomTypeLabel}
+                                    </Badge>
+                                    {showLockBadge && (
+                                      <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700 gap-1">
+                                        <Lock className="w-3.5 h-3.5" />
+                                        {hasLock ? "С паролем" : "Закрытая"}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-zinc-400">
+                                    <span>Хост: {match.hostName}</span>
+                                    <span>{statusLabel}</span>
+                                    <span className="text-zinc-300">
+                                      Режим: {modeMeta.title}
+                                    </span>
+                                    {match.currentStage && (
+                                      <span className="text-zinc-300">
+                                        Этап: {match.currentStage}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0 w-full lg:w-auto">
+                                  <Button
+                                    className="h-11 w-full lg:w-auto lg:min-w-[128px] rounded-xl bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0 text-base font-semibold"
+                                    onClick={() => joinPublicMatch(match)}
+                                  >
+                                    Войти
+                                  </Button>
+                                  {match.venueUrl && (
+                                    <Button
+                                      variant="outline"
+                                      className="h-11 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                                      onClick={() => openVoiceLink(match.venueUrl)}
+                                    >
+                                      Войс
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                            </motion.div>
+                          );
+                        })}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <Dialog
+              open={createMatchDialogOpen}
+              onOpenChange={(open) => {
+                setCreateMatchDialogOpen(open);
+                if (!open) {
+                  setCreateRoomPasswordVisible(false);
+                }
+              }}
+            >
+              <DialogContent
+                className={`w-[calc(100vw-1rem)] sm:w-[calc(100vw-2rem)] max-w-2xl max-h-[88vh] overflow-y-auto border-zinc-800 bg-zinc-950 text-zinc-100 p-4 sm:p-6 ${HIDE_SCROLLBAR_CLASS} [&>button]:h-12 [&>button]:w-12 [&>button>svg]:h-7 [&>button>svg]:w-7 [&>button]:top-2 [&>button]:right-2`}
+              >
+                <DialogHeader className="space-y-1">
+                  <DialogTitle>Создать матч</DialogTitle>
+                  <DialogDescription className="text-zinc-400">
+                    Настройте комнату для раздела «Подбор игроков».
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-5">
+                  <div className="rounded-2xl border border-zinc-800 bg-gradient-to-r from-zinc-900 via-zinc-900/80 to-zinc-900 px-4 py-3">
+                    <div className="text-xs uppercase tracking-[0.12em] text-zinc-400">
+                      Выбранный режим
                     </div>
-                    <div>• каждый видит только свои факты и карты механик</div>
-                    <div>
-                      • раскрытые факты и использованные карты видят все
+                    <div className="mt-1 text-sm font-semibold text-zinc-100">
+                      {selectedCreateMode.title}
                     </div>
-                    <div>• судья меняет этапы и выносит финальный вердикт</div>
+                    <div className="mt-1 text-xs text-zinc-400">
+                      На {selectedCreateMode.maxPlayers} игроков
+                    </div>
                   </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2 md:col-span-2">
+                      <label className="text-sm text-zinc-300">Название комнаты</label>
+                      <Input
+                        value={createRoomName}
+                        onChange={(e) => setCreateRoomName(e.target.value)}
+                        placeholder="Например: Вечерний суд #1"
+                        className="h-11 rounded-xl bg-zinc-900 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
+                      />
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <label className="text-sm text-zinc-300">Ссылка на войс (опционально)</label>
+                      <Input
+                        value={createVoiceUrl}
+                        onChange={(e) => setCreateVoiceUrl(e.target.value)}
+                        placeholder="https://discord.gg/... или другая ссылка"
+                        className="h-11 rounded-xl bg-zinc-900 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
+                      />
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <label className="text-sm text-zinc-300">Режим матча</label>
+                      <div className="grid gap-2 md:grid-cols-2">
+                        {ROOM_MODE_OPTIONS.map((mode) => (
+                          <button
+                            key={mode.key}
+                            type="button"
+                            onClick={() => setCreateRoomMode(mode.key)}
+                            className={`text-left rounded-xl border px-3 py-3 transition-colors ${
+                              createRoomMode === mode.key
+                                ? "border-red-500/70 bg-red-600/15"
+                                : "border-zinc-700 bg-zinc-900 hover:bg-zinc-800"
+                            }`}
+                          >
+                            <div className="text-sm font-semibold text-zinc-100">
+                              {mode.title}
+                            </div>
+                            <div className="text-xs text-zinc-400 mt-1">
+                              {mode.subtitle}
+                            </div>
+                            <div className="text-xs text-zinc-500 mt-2">
+                              На {mode.maxPlayers} игроков
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="md:col-span-2 rounded-xl border border-zinc-800 bg-zinc-900/70 p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-medium text-zinc-100">
+                            Приватная комната
+                          </div>
+                          <div className="text-xs text-zinc-500">
+                            В приватную комнату можно зайти только по коду и паролю.
+                          </div>
+                        </div>
+                        <Switch
+                          checked={createRoomPrivate}
+                          onCheckedChange={(checked) => {
+                            setCreateRoomPrivate(checked);
+                            if (!checked) {
+                              setCreateRoomPassword("");
+                              setCreateRoomPasswordVisible(false);
+                            }
+                          }}
+                        />
+                      </div>
+                    </div>
+                    {createRoomPrivate && (
+                      <div className="space-y-2 md:col-span-2">
+                        <label className="text-sm text-zinc-300">Пароль комнаты</label>
+                        <div className="relative">
+                          <Input
+                            value={createRoomPassword}
+                            type={createRoomPasswordVisible ? "text" : "password"}
+                            onChange={(e) => setCreateRoomPassword(e.target.value)}
+                            placeholder="Введите пароль для входа"
+                            className="h-11 rounded-xl bg-zinc-900 border-zinc-700 text-zinc-100 placeholder:text-zinc-500 pr-11"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setCreateRoomPasswordVisible((prev) => !prev)}
+                            className="absolute inset-y-0 right-0 w-11 inline-flex items-center justify-center text-zinc-400 hover:text-zinc-200"
+                          >
+                            {createRoomPasswordVisible ? (
+                              <EyeOff className="w-4 h-4" />
+                            ) : (
+                              <Eye className="w-4 h-4" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <Button
+                    onClick={() => {
+                      const created = createRoomFromPanel();
+                      if (!created) return;
+                      setCreateMatchDialogOpen(false);
+                      setCreateRoomName("");
+                      setCreateVoiceUrl("");
+                      setCreateRoomPassword("");
+                      setCreateRoomPrivate(false);
+                      setCreateRoomPasswordVisible(false);
+                      setCreateRoomMode("civil_3");
+                    }}
+                    className="w-full h-11 rounded-xl bg-red-600 hover:bg-red-500 text-white border-0 gap-2"
+                  >
+                    <UserPlus className="w-4 h-4" />
+                    Создать комнату
+                  </Button>
                 </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        </div>
-        )}
+              </DialogContent>
+            </Dialog>
 
+            <Dialog
+              open={joinPasswordDialogOpen}
+              onOpenChange={(open) => {
+                setJoinPasswordDialogOpen(open);
+                if (!open) {
+                  setJoinPasswordDialogMatch(null);
+                  setJoinPasswordInput("");
+                  setJoinPasswordDialogError("");
+                  setJoinPasswordVisible(false);
+                }
+              }}
+            >
+              <DialogContent className="max-w-md border-zinc-800 bg-zinc-950 text-zinc-100">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <Lock className="w-4 h-4" />
+                    Вход в закрытую комнату
+                  </DialogTitle>
+                  <DialogDescription className="text-zinc-400">
+                    {joinPasswordDialogMatch
+                      ? `Введите пароль для комнаты ${joinPasswordDialogMatch.code}.`
+                      : "Введите пароль комнаты."}
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-3">
+                  <div className="relative">
+                    <Input
+                      type={joinPasswordVisible ? "text" : "password"}
+                      value={joinPasswordInput}
+                      onChange={(e) => {
+                        setJoinPasswordInput(e.target.value);
+                        if (joinPasswordDialogError) {
+                          setJoinPasswordDialogError("");
+                        }
+                      }}
+                      onKeyDown={(e) => e.key === "Enter" && joinPublicMatchWithPassword()}
+                      placeholder="Пароль комнаты"
+                      className="h-11 rounded-xl bg-zinc-900 border-zinc-700 text-zinc-100 placeholder:text-zinc-500 pr-11"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setJoinPasswordVisible((prev) => !prev)}
+                      className="absolute inset-y-0 right-0 w-11 inline-flex items-center justify-center text-zinc-400 hover:text-zinc-200"
+                    >
+                      {joinPasswordVisible ? (
+                        <EyeOff className="w-4 h-4" />
+                      ) : (
+                        <Eye className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                  {joinPasswordDialogError && (
+                    <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                      {joinPasswordDialogError}
+                    </div>
+                  )}
+                  <Button
+                    onClick={joinPublicMatchWithPassword}
+                    className="w-full h-11 rounded-xl bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0"
+                  >
+                    Войти
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+        )}
         {homeTab === "development" && (
           <div className="max-w-6xl mx-auto">
             <Card className="rounded-[28px] border-zinc-800 bg-zinc-900/95 text-zinc-100">
@@ -2189,10 +3543,10 @@ export default function App() {
                 </div>
 
                 <div className="space-y-4">
-                  {DEVLOG_ENTRIES.map((entry, index) => (
+                  {visibleDevlogEntries.map((entry, index) => (
                     <motion.div
                       key={`${entry.date}-${entry.title}`}
-                      custom={index}
+                      custom={(currentDevlogPage - 1) * DEVLOG_PAGE_SIZE + index}
                       variants={cardVariants}
                       initial="initial"
                       animate="animate"
@@ -2218,6 +3572,29 @@ export default function App() {
                     </motion.div>
                   ))}
                 </div>
+                <div className="pt-2 flex items-center justify-center gap-3">
+                  <Button
+                    variant="outline"
+                    className="rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100 disabled:opacity-40"
+                    onClick={() => setDevlogPage((prev) => Math.max(1, prev - 1))}
+                    disabled={currentDevlogPage <= 1}
+                  >
+                    ← Пред.
+                  </Button>
+                  <div className="text-sm text-zinc-400 min-w-[120px] text-center">
+                    Страница {currentDevlogPage} из {devlogTotalPages}
+                  </div>
+                  <Button
+                    variant="outline"
+                    className="rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100 disabled:opacity-40"
+                    onClick={() =>
+                      setDevlogPage((prev) => Math.min(devlogTotalPages, prev + 1))
+                    }
+                    disabled={currentDevlogPage >= devlogTotalPages}
+                  >
+                    След. →
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -2240,6 +3617,15 @@ export default function App() {
   }
 
   if (screen === "room" && room) {
+    const roomModeMeta = getRoomModeMeta(room.modeKey, room.maxPlayers ?? 6);
+    const roomMaxPlayers = room.maxPlayers ?? roomModeMeta.maxPlayers;
+    const isQuickRoomMode = room.modeKey === "quick_flex";
+    const canStartRoomNow = isQuickRoomMode
+      ? room.players.length >= 3 && room.players.length <= roomMaxPlayers
+      : room.players.length === roomMaxPlayers;
+    const neededPlayersForStart = isQuickRoomMode
+      ? Math.max(0, 3 - room.players.length)
+      : Math.max(0, roomMaxPlayers - room.players.length);
     return (
       <motion.div
         key="room"
@@ -2247,8 +3633,9 @@ export default function App() {
         initial="initial"
         animate="animate"
         exit="exit"
-        className="min-h-screen bg-zinc-950 text-zinc-100 p-6 md:p-10"
+        className="relative isolate min-h-screen bg-[#0b0b0f] text-zinc-100 p-4 sm:p-6 md:p-10"
       >
+        <CourtAtmosphereBackground />
         <div className="max-w-6xl mx-auto space-y-6">
           <AnimatePresence>
             {error && (
@@ -2277,11 +3664,40 @@ export default function App() {
                     <Scale className="w-4 h-4" />
                     Код комнаты
                   </div>
+                  {room.roomName && (
+                    <div className="text-base font-semibold text-zinc-100">
+                      {room.roomName}
+                    </div>
+                  )}
                   <div className="text-3xl font-bold tracking-[0.25em] text-red-400">
                     {room.code}
                   </div>
                   <div className="text-sm text-zinc-400">
-                    Поделитесь кодом с другими игроками • 3–6 участников
+                    Поделитесь кодом с другими игроками •{" "}
+                    {isQuickRoomMode ? "3–6 участников" : `${roomMaxPlayers} участников`}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">
+                      {roomModeMeta.title}
+                    </Badge>
+                    <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">
+                      {room.visibility === "private" ? "Приватная" : "Публичная"}
+                    </Badge>
+                    {room.requiresPassword && (
+                      <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">
+                        С паролем
+                      </Badge>
+                    )}
+                    {room.venueUrl && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 rounded-lg border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800 hover:text-zinc-100 gap-1"
+                        onClick={() => openVoiceLink(room.venueUrl)}
+                      >
+                        Войс
+                      </Button>
+                    )}
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-3">
@@ -2293,48 +3709,10 @@ export default function App() {
                     <Copy className="w-4 h-4" />
                     {copiedRoomCode ? "Скопировано" : "Скопировать"}
                   </Button>
-                  <TestPlayersPanel
-                    roomCode={room.code}
-                    currentPlayers={room.players.length}
-                    isHost={roomControlPlayerId === room.hostId}
-                    mode="room"
-                    players={room.players.map((p) => ({
-                      id: p.id,
-                      name: p.name,
-                      isHost: p.id === room.hostId,
-                    }))}
-                    currentPlayerId={myId}
-                    onTakeOverPlayer={takeOverPlayer}
-                    onStartGame={startGame}
-                    canStartGame={
-                      !startGameLoading &&
-                      room.players.length >= 3 &&
-                      room.players.length <= 6
-                    }
-                  />
-                  {myId === room.hostId && (
-                    <motion.div
-                      whileHover={{ scale: 1.03 }}
-                      whileTap={{ scale: 0.97 }}
-                    >
-                      <Button
-                        className="rounded-xl gap-2 bg-red-600 hover:bg-red-500 text-white border-0 disabled:bg-zinc-800 disabled:text-zinc-500"
-                        onClick={startGame}
-                        disabled={
-                          startGameLoading ||
-                          room.players.length < 3 ||
-                          room.players.length > 6
-                        }
-                      >
-                        <Play className="w-4 h-4" />
-                        {startGameLoading ? "\u0417\u0430\u043f\u0443\u0441\u043a..." : "\u041d\u0430\u0447\u0430\u0442\u044c \u0438\u0433\u0440\u0443"}
-                      </Button>
-                    </motion.div>
-                  )}
                   <Button
                     variant="outline"
                     className="rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
-                    onClick={resetAll}
+                    onClick={returnHomeWithSession}
                   >
                     Выйти
                   </Button>
@@ -2354,34 +3732,37 @@ export default function App() {
                 title="Игроки в комнате"
                 icon={<UserPlus className="w-5 h-5" />}
                 action={myId === room.hostId ? (
-                  <div className="flex items-center gap-3 px-3 py-1.5 rounded-xl border border-zinc-700 bg-zinc-800/60">
-                    <label htmlFor="host-judge" className="text-sm font-medium text-zinc-200 cursor-pointer select-none">
+                  <div className="flex items-center gap-3 px-4 py-2.5 rounded-2xl border border-zinc-700 bg-zinc-800/70">
+                    <label htmlFor="host-judge" className="text-base font-semibold text-zinc-200 cursor-pointer select-none">
                       Я - Судья
                     </label>
                     <Switch
                       id="host-judge"
                       checked={isHostJudge}
                       onCheckedChange={toggleHostJudge}
+                      className="scale-110"
                     />
                   </div>
                 ) : undefined}
               >
-                <div className="grid gap-3">
-                  <AnimatePresence>
-                    {room.players.map((player) => (
-                      <PlayerCard
-                        key={player.id}
-                        player={player}
-                        isHost={player.id === room.hostId}
-                        canKick={myId === room.hostId && player.id !== room.hostId}
-                        onKick={() => kickPlayerFromRoom(player.id)}
-                      />
-                    ))}
-                  </AnimatePresence>
-                  {room.players.length < 3 && (
-                    <div className="text-sm text-zinc-500 mt-2">
-                      Ожидание игроков... (нужно ещё минимум{" "}
-                      {3 - room.players.length})
+                <div className="relative flex min-h-[460px] lg:min-h-[660px] flex-col pb-12">
+                  <div className="grid gap-3">
+                    <AnimatePresence>
+                      {room.players.map((player) => (
+                        <PlayerCard
+                          key={player.id}
+                          player={player}
+                          isHost={player.id === room.hostId}
+                          canKick={myId === room.hostId && player.id !== room.hostId}
+                          onKick={() => kickPlayerFromRoom(player.id)}
+                          nowTs={nowMs}
+                        />
+                      ))}
+                    </AnimatePresence>
+                  </div>
+                  {neededPlayersForStart > 0 && (
+                    <div className="absolute inset-x-0 bottom-1 text-center text-sm text-zinc-500">
+                      Ожидание игроков... (нужно ещё минимум {neededPlayersForStart})
                     </div>
                   )}
                 </div>
@@ -2394,30 +3775,115 @@ export default function App() {
               initial="initial"
               animate="animate"
             >
-              <InfoBlock
-                title="Доступные режимы"
-                icon={<Gavel className="w-5 h-5" />}
-              >
-                <div className="space-y-3 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span>Игроков сейчас</span>
-                    <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">
-                      {room.players.length}
-                    </Badge>
+              <div className="space-y-6">
+                <InfoBlock
+                  title="Доступные режимы"
+                  icon={<Gavel className="w-5 h-5" />}
+                >
+                  <div className="space-y-3 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span>Игроков сейчас</span>
+                      <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">
+                        {room.players.length}/{roomMaxPlayers}
+                      </Badge>
+                    </div>
+                    <Separator />
+                    <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2">
+                      <div className="text-xs uppercase tracking-[0.12em] text-zinc-500">
+                        Выбранный режим
+                      </div>
+                      <div className="text-zinc-100 font-medium mt-1">
+                        {roomModeMeta.title}
+                      </div>
+                      <div className="text-xs text-zinc-400 mt-1">{roomModeMeta.subtitle}</div>
+                    </div>
+                    <div className="text-zinc-400 pt-2">
+                      Ведущий запускает игру, сайт случайно выбирает подходящее
+                      дело и распределяет роли.
+                    </div>
+                    {myId === room.hostId && (
+                      <Button
+                        className="mt-3 h-10 rounded-xl gap-2 bg-red-600 hover:bg-red-500 text-white border-0 disabled:bg-zinc-800 disabled:text-zinc-500"
+                        onClick={startGame}
+                        disabled={
+                          startGameLoading || !canStartRoomNow
+                        }
+                      >
+                        <Play className="w-4 h-4" />
+                        {startGameLoading ? "Запуск..." : "Запустить матч"}
+                      </Button>
+                    )}
                   </div>
-                  <Separator />
-                  {room.players.length === 3 && (
-                    <div>Гражданский спор, трудовой спор</div>
-                  )}
-                  {room.players.length === 4 && <div>Уголовное дело</div>}
-                  {room.players.length === 5 && <div>Уголовное дело</div>}
-                  {room.players.length >= 6 && <div>Суд на компанию</div>}
-                  <div className="text-zinc-400 pt-2">
-                    Ведущий запускает игру, сайт случайно выбирает подходящее
-                    дело и распределяет роли.
+                </InfoBlock>
+
+                <InfoBlock
+                  title="Чат лобби"
+                  icon={<MessageSquare className="w-5 h-5" />}
+                >
+                  <div className="space-y-3">
+                    <div
+                      ref={lobbyChatScrollRef}
+                      className={`rounded-2xl border border-zinc-800 bg-zinc-950/70 p-3 h-[360px] overflow-y-auto overflow-x-hidden ${HIDE_SCROLLBAR_CLASS}`}
+                    >
+                      <div className="space-y-2">
+                        {lobbyChatMessages.length === 0 && (
+                          <div className="text-sm text-zinc-500">
+                            Сообщений пока нет.
+                          </div>
+                        )}
+                        {lobbyChatMessages.map((message) => (
+                          <div
+                            key={message.id}
+                            className="rounded-xl border border-zinc-800 bg-zinc-900/55 p-3"
+                          >
+                            <div className="flex items-start gap-3 min-w-0">
+                              <Avatar
+                                src={message.senderAvatar ?? null}
+                                name={message.senderName}
+                                size={30}
+                              />
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-2 text-zinc-400 text-xs">
+                                  <span className="text-sm font-semibold text-zinc-100">
+                                    {message.senderName}
+                                  </span>
+                                  <span>•</span>
+                                  <span>
+                                    {new Date(message.createdAt).toLocaleTimeString([], {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                      second: showChatSeconds ? "2-digit" : undefined,
+                                    })}
+                                  </span>
+                                </div>
+                                <div className="mt-1 text-zinc-200 text-sm whitespace-pre-wrap break-all overflow-hidden">
+                                  {message.text}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Input
+                        value={lobbyChatInput}
+                        onChange={(e) => setLobbyChatInput(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && sendLobbyChatMessage()}
+                        placeholder="Сообщение в лобби..."
+                        className="h-10 rounded-xl bg-zinc-900 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
+                      />
+                      <Button
+                        onClick={sendLobbyChatMessage}
+                        className="h-10 rounded-xl bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0"
+                        disabled={!lobbyChatInput.trim()}
+                      >
+                        Отправить
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              </InfoBlock>
+                </InfoBlock>
+              </div>
             </motion.div>
           </div>
           <ContextHelp
@@ -2441,36 +3907,43 @@ export default function App() {
     const isJudge = game.me.roleKey === "judge";
     const isWitness = game.me.roleKey === "witness";
     const isObserverRole = isJudge || isWitness;
-    const judgePlayer = game.players.find((p) => p.roleKey === "judge");
     const visibleFacts = game.revealedFacts.slice(-3);
     const visibleCards = game.usedCards.slice(-3);
+    const latestRevealedFactId =
+      game.revealedFacts.length > 0
+        ? game.revealedFacts[game.revealedFacts.length - 1].id
+        : null;
     const latestUsedCardId =
       game.usedCards.length > 0
         ? game.usedCards[game.usedCards.length - 1].id
         : null;
     const isPreparationStage = isPreparationStageName(currentStage);
+    const isCrossExaminationStage = isCrossExaminationStageName(currentStage);
+    const isVerdictStage = game.stageIndex >= gameStages.length - 1;
+    const normalizedMyRoleKey = (game.me.roleKey ?? "").toLowerCase();
+    const isLawyerRole =
+      normalizedMyRoleKey.includes("lawyer") ||
+      (game.me.roleTitle ?? "").toLowerCase().includes("адвокат");
+    const lawyerChatButtonLabel = isLawyerRole
+      ? "Чат с клиентом"
+      : "Чат с адвокатом";
     const canRevealFactsAtCurrentStage = game.me.canRevealFactsNow === true;
-    const selfRoleView: TestRoleView = {
-      playerId: game.me.id,
-      playerName: game.me.name,
-      roleKey: game.me.roleKey,
-      roleTitle: game.me.roleTitle,
-      goal: game.me.goal,
-      facts: game.me.facts,
-      cards: game.me.cards,
-      canRevealFactsNow: game.me.canRevealFactsNow === true,
-      stageIndex: game.stageIndex,
-      stages: gameStages,
-    };
-
+    const canUseProtest =
+      !isJudge && !game.finished && isCrossExaminationStage && protestCooldownLeft <= 0;
+    const canUseJudgeSilence = isJudge && !game.finished && silenceCooldownLeft <= 0;
+    const canUseJudgeWarning = isJudge && !game.finished;
+    const warningTargets = game.players.filter(
+      (player) => player.id !== game.me!.id && player.roleKey !== "judge",
+    );
     return (
       <motion.div
         key="game"
         variants={pageVariants}
         initial="initial"
         animate="animate"
-        className="min-h-screen bg-zinc-950 text-zinc-100 p-6 md:p-10"
+        className="relative isolate min-h-screen bg-[#0b0b0f] text-zinc-100 p-4 sm:p-6 md:p-10"
       >
+        <CourtAtmosphereBackground />
         <AnimatePresence>
           {showFactHistory && (
             <motion.div
@@ -2680,6 +4153,36 @@ export default function App() {
             )}
           </AnimatePresence>
 
+          <AnimatePresence>
+            {influenceAnnouncement && (
+              <motion.div
+                key={`${influenceAnnouncement.id}-text`}
+                initial={{ opacity: 0, scale: 0.86, y: 16 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 1.03, y: -10 }}
+                transition={{ duration: 0.24, ease: "easeOut" }}
+                className="fixed inset-0 z-[70] pointer-events-none flex items-center justify-center px-4"
+              >
+                <div className="w-full max-w-3xl text-center">
+                  <div className="inline-flex max-w-full flex-col items-center rounded-2xl border border-zinc-700/70 bg-zinc-950/88 px-8 py-5 shadow-[0_18px_64px_rgba(0,0,0,0.7)]">
+                    <motion.div
+                      animate={{ textShadow: ["0 0 18px rgba(239,68,68,0.35)", "0 0 34px rgba(239,68,68,0.85)", "0 0 20px rgba(239,68,68,0.45)"] }}
+                      transition={{ duration: 1.05, repeat: Infinity, ease: "easeInOut" }}
+                      className="text-[clamp(2.1rem,7vw,4.9rem)] font-black tracking-[0.05em] whitespace-nowrap leading-none text-red-500 uppercase"
+                    >
+                      {influenceAnnouncement.title}
+                    </motion.div>
+                    {influenceAnnouncement.subtitle && (
+                      <div className="mt-3 rounded-lg border border-zinc-600/60 bg-black/30 px-4 py-2 text-base md:text-lg text-zinc-100 font-semibold">
+                        {influenceAnnouncement.subtitle}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           <Card className="rounded-[28px] shadow-sm border border-zinc-800 bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950 text-zinc-100">
             <CardContent className="p-8 space-y-6">
               <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6">
@@ -2714,25 +4217,6 @@ export default function App() {
                     className="h-3 bg-zinc-800 [&>div]:bg-red-600 [&>div]:transition-all [&>div]:duration-500"
                   />
                   <div className="flex flex-wrap gap-3">
-                    <TestPlayersPanel
-                      roomCode={game.code}
-                      currentPlayers={game.players.length}
-                      isHost={hasGameAdminAccess}
-                      mode="game"
-                      players={game.players.map((p) => ({
-                        id: p.id,
-                        name: p.name,
-                        roleTitle: p.roleTitle,
-                        isHost: p.id === game.hostId,
-                      }))}
-                      currentPlayerId={myId}
-                      onTakeOverPlayer={takeOverPlayer}
-                      stages={gameStages}
-                      currentStageIndex={game.stageIndex}
-                      onJumpToStage={jumpToStage}
-                      canControlStages={hasGameAdminAccess || isJudge}
-                      selfRoleView={selfRoleView}
-                    />
                     {(isHost || isJudge) && (
                       <>
                         <Button
@@ -2759,7 +4243,7 @@ export default function App() {
                     <Button
                       variant="outline"
                       className="rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
-                      onClick={resetAll}
+                      onClick={returnHomeWithSession}
                     >
                       Выйти
                     </Button>
@@ -2792,13 +4276,40 @@ export default function App() {
                   </div>
                   <div className="space-y-1">
                     {game.players.map((p) => (
-                      <div
-                        key={p.id}
-                        className="flex items-center justify-between text-sm"
-                      >
+                      <div key={p.id} className="flex items-center justify-between text-sm">
                         <div className="flex items-center gap-2 min-w-0">
                           <Avatar src={p.avatar ?? null} name={p.name} size={32} />
                           <span className="text-zinc-300 truncate">{p.name}</span>
+                          {(p.warningCount ?? 0) > 0 && (
+                            <Badge className="bg-red-950/70 text-red-300 border border-red-700/70">
+                              {p.warningCount}/3
+                            </Badge>
+                          )}
+                          {typeof p.disconnectedUntil === "number" &&
+                            p.disconnectedUntil > nowMs && (
+                              <motion.span
+                                animate={{ opacity: [0.85, 1, 0.85] }}
+                                transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
+                                className="inline-flex items-center"
+                                title={`Игрок вышел. Осталось ${Math.ceil((p.disconnectedUntil - nowMs) / 1000)} сек.`}
+                              >
+                                <DoorOpen
+                                  className="h-4 w-4"
+                                  style={{
+                                    color: `rgb(${Math.round(
+                                      239 + (113 - 239) *
+                                        (1 - Math.min(1, (p.disconnectedUntil - nowMs) / RECONNECT_GRACE_MS)),
+                                    )}, ${Math.round(
+                                      68 + (113 - 68) *
+                                        (1 - Math.min(1, (p.disconnectedUntil - nowMs) / RECONNECT_GRACE_MS)),
+                                    )}, ${Math.round(
+                                      68 + (122 - 68) *
+                                        (1 - Math.min(1, (p.disconnectedUntil - nowMs) / RECONNECT_GRACE_MS)),
+                                    )})`,
+                                  }}
+                                />
+                              </motion.span>
+                            )}
                         </div>
                         <span className="text-zinc-500">{p.roleTitle}</span>
                       </div>
@@ -2826,20 +4337,124 @@ export default function App() {
               </div>
             </InfoBlock>
 
-            <InfoBlock title="Вердикт" icon={<Gavel className="w-5 h-5" />}>
+            <InfoBlock title="Влияние" icon={<Gavel className="w-5 h-5" />}>
               <div className="space-y-3">
-                {isJudge ? (
-                  <>
-                    <div
-                      className={`text-sm ${game.stageIndex < gameStages.length - 1 ? "text-zinc-500" : "text-zinc-400"}`}
-                    >
-                      {game.stageIndex < gameStages.length - 1
-                        ? `Доступно на этапе «${gameStages[gameStages.length - 1]}»`
-                        : "Финальный этап. Вынесите решение."}
+                {influenceView === "chat" && lawyerChatPartner ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm text-zinc-300">
+                        Чат с {lawyerChatPartner.name}
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 rounded-lg text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
+                        onClick={() => setInfluenceView("main")}
+                      >
+                        <ArrowLeft className="h-4 w-4 mr-1" />
+                        Назад
+                      </Button>
                     </div>
-                    {(
-                      ["Виновен", "Не виновен", "Частично виновен"] as const
-                    ).map((v, i) => (
+                    <div
+                      ref={lawyerChatScrollRef}
+                      className={`rounded-xl border border-zinc-800 bg-zinc-950/70 p-3 h-[220px] overflow-y-auto overflow-x-hidden ${HIDE_SCROLLBAR_CLASS}`}
+                    >
+                      <div className="space-y-2 min-w-0">
+                        {lawyerChatMessages.length === 0 && (
+                          <div className="text-sm text-zinc-500">
+                            Пока нет сообщений.
+                          </div>
+                        )}
+                        {lawyerChatMessages.map((message) => {
+                          const own = message.senderId === myId;
+                          return (
+                            <div
+                              key={message.id}
+                              className={`flex min-w-0 ${own ? "justify-end" : "justify-start"}`}
+                            >
+                              <div
+                                className={`max-w-full md:max-w-[85%] min-w-0 rounded-xl px-3 py-2 text-sm ${
+                                  own ? "bg-red-600 text-white" : "bg-zinc-800 text-zinc-200"
+                                }`}
+                              >
+                                <div className="text-[11px] opacity-75 mb-1">
+                                  {message.senderName} ·{" "}
+                                  {new Date(message.createdAt).toLocaleTimeString([], {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                    second: showChatSeconds ? "2-digit" : undefined,
+                                  })}
+                                </div>
+                                <div className="whitespace-pre-wrap break-all">
+                                  {message.text}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Input
+                        value={lawyerChatInput}
+                        onChange={(e) => setLawyerChatInput(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && sendLawyerChatMessage()}
+                        placeholder="Сообщение адвокату..."
+                        className="h-10 rounded-xl bg-zinc-900 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
+                      />
+                      <Button
+                        className="h-10 rounded-xl bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0"
+                        onClick={sendLawyerChatMessage}
+                        disabled={!lawyerChatInput.trim()}
+                      >
+                        Отправить
+                      </Button>
+                    </div>
+                  </div>
+                ) : influenceView === "notes" ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm text-zinc-300">Личные заметки</div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 rounded-lg text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
+                        onClick={() => setInfluenceView("main")}
+                      >
+                        <ArrowLeft className="h-4 w-4 mr-1" />
+                        Назад
+                      </Button>
+                    </div>
+                    <textarea
+                      value={influenceNotes}
+                      onChange={(e) => setInfluenceNotes(e.target.value)}
+                      placeholder="Записывайте мысли по делу..."
+                      className={`w-full h-[220px] resize-none rounded-xl border border-zinc-700 bg-zinc-950/75 p-3 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none focus:ring-1 focus:ring-red-500/60 ${HIDE_SCROLLBAR_CLASS}`}
+                    />
+                    <div className="text-xs text-zinc-500">
+                      Заметки видите только вы. Сохраняются до конца матча.
+                    </div>
+                  </div>
+                ) : influenceView === "verdict" && isJudge ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm text-zinc-300">Вердикт</div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 rounded-lg text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
+                        onClick={() => setInfluenceView("main")}
+                      >
+                        <ArrowLeft className="h-4 w-4 mr-1" />
+                        Назад
+                      </Button>
+                    </div>
+                    <div className={`text-sm ${isVerdictStage ? "text-zinc-400" : "text-zinc-500"}`}>
+                      {isVerdictStage
+                        ? "Финальный этап. Вынесите решение."
+                        : `Доступно на этапе «${gameStages[gameStages.length - 1]}»`}
+                    </div>
+                    {(["Виновен", "Не виновен", "Частично виновен"] as const).map((v, i) => (
                       <motion.div
                         key={v}
                         custom={i}
@@ -2850,25 +4465,178 @@ export default function App() {
                         whileTap={{ scale: 0.97 }}
                       >
                         <Button
-                          className={`w-full rounded-xl border-0 disabled:bg-zinc-800 disabled:text-zinc-500 ${i === 0 ? "bg-red-600 hover:bg-red-500 text-white" : i === 1 ? "bg-zinc-100 text-zinc-950 hover:bg-zinc-200" : "bg-zinc-800 text-zinc-100 hover:bg-zinc-700"}`}
+                          className={`w-full rounded-xl border-0 disabled:bg-zinc-800 disabled:text-zinc-500 ${
+                            i === 0
+                              ? "bg-red-600 hover:bg-red-500 text-white"
+                              : i === 1
+                                ? "bg-zinc-100 text-zinc-950 hover:bg-zinc-200"
+                                : "bg-zinc-800 text-zinc-100 hover:bg-zinc-700"
+                          }`}
                           onClick={() => submitVerdict(v)}
-                          disabled={
-                            game.stageIndex < gameStages.length - 1 || game.finished
-                          }
+                          disabled={!isVerdictStage || game.finished}
                         >
                           {v}
                         </Button>
                       </motion.div>
                     ))}
-                  </>
+                  </div>
+                ) : influenceView === "warnings" && isJudge ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm text-zinc-300">Предупреждения</div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 rounded-lg text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
+                        onClick={() => setInfluenceView("main")}
+                      >
+                        <ArrowLeft className="h-4 w-4 mr-1" />
+                        Назад
+                      </Button>
+                    </div>
+                    <div className="text-xs text-zinc-500">
+                      Лимит: максимум 3 предупреждения на игрока.
+                    </div>
+                    <div className="space-y-2">
+                      {warningTargets.length === 0 ? (
+                        <div className="text-sm text-zinc-500">
+                          Нет игроков для предупреждения.
+                        </div>
+                      ) : (
+                        warningTargets.map((player) => {
+                          const warningCount = player.warningCount ?? 0;
+                          const reachedLimit = warningCount >= 3;
+                          const canWarn = canUseJudgeWarning && !reachedLimit;
+                          const canRemove = canUseJudgeWarning && warningCount > 0;
+                          return (
+                            <div
+                              key={player.id}
+                              className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-3 space-y-2"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="min-w-0">
+                                  <div className="text-sm font-semibold truncate">{player.name}</div>
+                                  <div className="text-xs text-zinc-500 truncate">{player.roleTitle}</div>
+                                </div>
+                                <Badge className="bg-red-950/70 text-red-300 border border-red-700/70">
+                                  {warningCount}/3
+                                </Badge>
+                              </div>
+                              <div className={`grid gap-2 ${warningCount > 0 ? "sm:grid-cols-2" : "grid-cols-1"}`}>
+                                <Button
+                                  className={`w-full rounded-xl border-0 h-auto min-h-[44px] py-2 px-3 whitespace-normal break-words text-center text-sm leading-tight ${
+                                    canWarn
+                                      ? "bg-red-600 text-white hover:bg-red-500"
+                                      : "bg-zinc-800 text-zinc-400 hover:bg-zinc-800"
+                                  }`}
+                                  disabled={!canWarn}
+                                  onClick={() => triggerJudgeWarning(player.id)}
+                                >
+                                  {warningCount === 0 ? "Выдать предупреждение" : "Добавить"}
+                                </Button>
+                                {warningCount > 0 && (
+                                  <Button
+                                    variant="outline"
+                                    className={`w-full rounded-xl border-zinc-700 h-auto min-h-[44px] py-2 px-3 whitespace-normal break-words text-center text-sm leading-tight ${
+                                      canRemove
+                                        ? "bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                                        : "bg-zinc-800 text-zinc-400 hover:bg-zinc-800"
+                                    }`}
+                                    disabled={!canRemove}
+                                    onClick={() => removeJudgeWarning(player.id)}
+                                  >
+                                    Убрать
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
                 ) : (
-                  <div className="text-sm text-zinc-400">
-                    Вердикт выносит судья
-                    {judgePlayer ? ` — ${judgePlayer.name}` : ""}.
-                    {game.stageIndex < gameStages.length - 1 && (
-                      <span className="block mt-1 text-zinc-500">
-                        Дождитесь последнего этапа.
-                      </span>
+                  <div className="space-y-3">
+                    {isJudge ? (
+                      <>
+                        <Button
+                          className={`w-full h-12 rounded-xl border-0 text-base font-bold ${
+                            isVerdictStage
+                              ? "bg-red-600 text-white hover:bg-red-500 shadow-[0_0_20px_rgba(239,68,68,0.45)]"
+                              : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                          }`}
+                          onClick={() => setInfluenceView("verdict")}
+                        >
+                          Вердикт
+                        </Button>
+                        <Button
+                          className={`w-full h-12 rounded-xl border-0 ${
+                            canUseJudgeSilence
+                              ? "bg-red-600 text-white hover:bg-red-500 shadow-[0_0_18px_rgba(239,68,68,0.38)]"
+                              : "bg-zinc-800 text-zinc-400 hover:bg-zinc-800"
+                          }`}
+                          disabled={!canUseJudgeSilence}
+                          onClick={triggerJudgeSilence}
+                          title="Тишина в зале!"
+                        >
+                          <span className="whitespace-nowrap">
+                            Тишина в зале!
+                            {silenceCooldownLeft > 0 ? ` (${silenceCooldownLeft}s)` : ""}
+                          </span>
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="w-full h-12 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                          onClick={() => setInfluenceView("warnings")}
+                        >
+                          Предупреждение
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="w-full h-12 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                          onClick={() => setInfluenceView("notes")}
+                        >
+                          Заметки
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <Button
+                          className={`w-full h-14 rounded-xl border-0 text-lg font-black tracking-[0.05em] transition-all ${
+                            canUseProtest
+                              ? "bg-red-600 text-white hover:bg-red-500 shadow-[0_0_28px_rgba(239,68,68,0.58)]"
+                              : "bg-zinc-800 text-zinc-400 hover:bg-zinc-800"
+                          }`}
+                          onClick={triggerProtest}
+                          disabled={!canUseProtest}
+                        >
+                          ПРОТЕСТУЮ
+                          {protestCooldownLeft > 0 ? ` (${protestCooldownLeft}s)` : ""}
+                        </Button>
+                        {lawyerChatPartner && (
+                          <Button
+                            variant="outline"
+                            className={`w-full h-12 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100 ${
+                              lawyerChatUnreadCount > 0 ? "animate-pulse" : ""
+                            }`}
+                            onClick={openLawyerChat}
+                          >
+                            {lawyerChatButtonLabel}
+                            {lawyerChatUnreadCount > 0 && (
+                              <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 text-xs text-white">
+                                {lawyerChatUnreadCount}
+                              </span>
+                            )}
+                          </Button>
+                        )}
+                        <Button
+                          variant="outline"
+                          className="w-full h-12 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                          onClick={() => setInfluenceView("notes")}
+                        >
+                          Заметки
+                        </Button>
+                      </>
                     )}
                   </div>
                 )}
@@ -2903,6 +4671,7 @@ export default function App() {
                 ) : (
                   <AnimatePresence mode="popLayout">
                     {visibleFacts.map((fact) => {
+                      const isLatestFact = fact.id === latestRevealedFactId;
                       const ownerPlayer = game.players.find(
                         (p) => p.id === fact.ownerId,
                       );
@@ -2915,7 +4684,13 @@ export default function App() {
                         exit="exit"
                         layout
                       >
-                        <Card className="rounded-2xl border-dashed border-zinc-700 bg-zinc-900/80 text-zinc-100">
+                        <Card
+                          className={
+                            isLatestFact
+                              ? "rounded-2xl border border-red-500/35 bg-red-950/15 text-zinc-100 ring-1 ring-red-500/20 shadow-[0_0_10px_rgba(220,38,38,0.12)]"
+                              : "rounded-2xl border-dashed border-zinc-700 bg-zinc-900/80 text-zinc-100"
+                          }
+                        >
                           <CardContent className="p-4 min-h-[120px]">
                             <div className="flex items-center justify-between gap-3 mb-2">
                               <div className="flex items-center gap-2 min-w-0">
@@ -2928,7 +4703,13 @@ export default function App() {
                                   {fact.owner}
                                 </div>
                               </div>
-                              <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">
+                              <Badge
+                                className={
+                                  isLatestFact
+                                    ? "bg-red-600/20 text-red-100 border border-red-500/30"
+                                    : "bg-zinc-800 text-zinc-100 border border-zinc-700"
+                                }
+                              >
                                 {fact.ownerRole}
                               </Badge>
                             </div>
@@ -3150,3 +4931,4 @@ export default function App() {
     </div>
   );
 }
+
