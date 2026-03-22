@@ -958,27 +958,45 @@ export function setupSocket(httpServer: HttpServer) {
       });
     });
 
-    function handleLeave(socketId: string): {
+    function handleLeave(
+      socketId: string,
+      fallback?: {
+        code?: string;
+        sessionToken?: string;
+        playerId?: string;
+      },
+    ): {
       code: string;
       sessionToken: string;
       reconnectExpiresAt: number;
     } | null {
-      const info = socketToRoom.get(socketId);
-      if (!info) return null;
+      const mappedInfo = socketToRoom.get(socketId) ?? null;
+      const fallbackCode = normalizeRoomCode((fallback?.code ?? "").trim());
+      const roomCode = mappedInfo?.roomCode ?? fallbackCode;
+      const fallbackToken = (fallback?.sessionToken ?? "").trim();
+      const fallbackPlayerId = (fallback?.playerId ?? "").trim();
+
+      if (!roomCode) return null;
 
       socketToRoom.delete(socketId);
-      socket.leave(info.roomCode);
+      socket.leave(roomCode);
 
-      const room = getRoom(info.roomCode);
+      const room = getRoom(roomCode);
       if (!room) return null;
 
-      let leavingLobbyPlayer =
-        room.players.find((p: any) => p.id === info.playerId) ?? null;
-      let leavingGamePlayer =
-        room.game?.players.find((p: any) => p.id === info.playerId) ?? null;
+      const effectiveSessionToken =
+        mappedInfo?.sessionToken ?? fallbackToken;
+      const effectiveMappedPlayerId =
+        mappedInfo?.playerId ?? fallbackPlayerId;
 
-      if ((!leavingLobbyPlayer || !leavingGamePlayer) && info.sessionToken) {
-        const byToken = findPlayerBySessionToken(room, info.sessionToken);
+      let leavingLobbyPlayer =
+        room.players.find((p: any) => p.id === effectiveMappedPlayerId) ?? null;
+      let leavingGamePlayer =
+        room.game?.players.find((p: any) => p.id === effectiveMappedPlayerId) ??
+        null;
+
+      if ((!leavingLobbyPlayer || !leavingGamePlayer) && effectiveSessionToken) {
+        const byToken = findPlayerBySessionToken(room, effectiveSessionToken);
         if (byToken) {
           leavingLobbyPlayer =
             leavingLobbyPlayer ??
@@ -992,7 +1010,17 @@ export function setupSocket(httpServer: HttpServer) {
       }
 
       const effectivePlayerId =
-        leavingLobbyPlayer?.id ?? leavingGamePlayer?.id ?? info.playerId;
+        leavingLobbyPlayer?.id ??
+        leavingGamePlayer?.id ??
+        effectiveMappedPlayerId;
+      const reconnectSessionToken =
+        effectiveSessionToken ||
+        leavingLobbyPlayer?.sessionToken ||
+        leavingGamePlayer?.sessionToken ||
+        "";
+      if (!effectivePlayerId || !reconnectSessionToken) {
+        return null;
+      }
       const leavingName = leavingLobbyPlayer?.name || leavingGamePlayer?.name || "Guest";
       const disconnectedUntil = Date.now() + RECONNECT_GRACE_MS;
 
@@ -1006,15 +1034,15 @@ export function setupSocket(httpServer: HttpServer) {
       }
 
       const reconnectPayload = {
-        code: info.roomCode,
-        sessionToken: info.sessionToken,
+        code: roomCode,
+        sessionToken: reconnectSessionToken,
         reconnectExpiresAt: disconnectedUntil,
       };
 
       io.to(socketId).emit("reconnect_available", reconnectPayload);
 
       if (room.game) {
-        io.to(info.roomCode).emit("player_left", {
+        io.to(roomCode).emit("player_left", {
           playerId: effectivePlayerId,
           playerName: leavingName,
           reconnectExpiresAt: disconnectedUntil,
@@ -1024,21 +1052,41 @@ export function setupSocket(httpServer: HttpServer) {
         emitRoomUpdated(room);
       }
 
-      scheduleDisconnectCleanup(info.roomCode, effectivePlayerId);
+      scheduleDisconnectCleanup(roomCode, effectivePlayerId);
       emitPublicMatches(io);
       return reconnectPayload;
     }
 
-    socket.on("leave_room", (ack?: (payload: {
-      code: string;
-      sessionToken: string;
-      reconnectExpiresAt: number;
-    } | null) => void) => {
-      const reconnectPayload = handleLeave(socket.id);
-      if (typeof ack === "function") {
-        ack(reconnectPayload);
+    socket.on(
+      "leave_room",
+      (
+        payload?:
+          | {
+              code?: string;
+              sessionToken?: string;
+              playerId?: string;
+            }
+          | ((payload: {
+              code: string;
+              sessionToken: string;
+              reconnectExpiresAt: number;
+            } | null) => void),
+        ack?: (payload: {
+          code: string;
+          sessionToken: string;
+          reconnectExpiresAt: number;
+        } | null) => void,
+      ) => {
+      const maybePayload =
+        typeof payload === "function" || !payload ? undefined : payload;
+      const maybeAck =
+        typeof payload === "function" ? payload : ack;
+      const reconnectPayload = handleLeave(socket.id, maybePayload);
+      if (typeof maybeAck === "function") {
+        maybeAck(reconnectPayload);
       }
-    });
+    },
+    );
 
     socket.on("disconnect", () => {
       handleLeave(socket.id);

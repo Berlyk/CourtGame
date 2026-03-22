@@ -2127,6 +2127,11 @@ export default function App() {
     }
     socket.emit(
       "leave_room",
+      {
+        code: reconnectCode ?? undefined,
+        sessionToken: reconnectToken ?? undefined,
+        playerId: myId ?? undefined,
+      },
       (payload?: {
         code?: string;
         sessionToken?: string;
@@ -2174,7 +2179,7 @@ export default function App() {
     setOpenMatchesOpen(false);
     setHomeTab("play");
     setHasSession(!!reconnectCode && !!reconnectToken);
-  }, [socket, activeRoomCode, mySessionToken]);
+  }, [socket, activeRoomCode, mySessionToken, myId]);
 
   const finalExit = useCallback(() => {
     resetAll();
