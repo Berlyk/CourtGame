@@ -386,6 +386,7 @@ const DEVLOG_ENTRIES: DevLogEntry[] = [
     ],
   },
 ];
+const DEVLOG_PAGE_SIZE = 2;
 
 interface HelpTopic {
   id: string;
@@ -1431,6 +1432,7 @@ export default function App() {
     "home",
   );
   const [homeTab, setHomeTab] = useState<HomeTab>("play");
+  const [devlogPage, setDevlogPage] = useState(1);
   const [playView, setPlayView] = useState<"quick" | "matches">("quick");
   const [mainHelpQuery, setMainHelpQuery] = useState("");
   const [contextHelpOpen, setContextHelpOpen] = useState(false);
@@ -1531,6 +1533,15 @@ export default function App() {
   const silenceCooldownLeft = Math.max(
     0,
     Math.ceil((silenceCooldownEndsAt - nowMs) / 1000),
+  );
+  const devlogTotalPages = Math.max(
+    1,
+    Math.ceil(DEVLOG_ENTRIES.length / DEVLOG_PAGE_SIZE),
+  );
+  const currentDevlogPage = Math.min(devlogPage, devlogTotalPages);
+  const visibleDevlogEntries = DEVLOG_ENTRIES.slice(
+    (currentDevlogPage - 1) * DEVLOG_PAGE_SIZE,
+    currentDevlogPage * DEVLOG_PAGE_SIZE,
   );
   const notesStorageKey =
     game && game.me ? `court_notes_${game.code}_${game.me.id}` : null;
@@ -3532,10 +3543,10 @@ export default function App() {
                 </div>
 
                 <div className="space-y-4">
-                  {DEVLOG_ENTRIES.map((entry, index) => (
+                  {visibleDevlogEntries.map((entry, index) => (
                     <motion.div
                       key={`${entry.date}-${entry.title}`}
-                      custom={index}
+                      custom={(currentDevlogPage - 1) * DEVLOG_PAGE_SIZE + index}
                       variants={cardVariants}
                       initial="initial"
                       animate="animate"
@@ -3560,6 +3571,29 @@ export default function App() {
                       </Card>
                     </motion.div>
                   ))}
+                </div>
+                <div className="pt-2 flex items-center justify-center gap-3">
+                  <Button
+                    variant="outline"
+                    className="rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100 disabled:opacity-40"
+                    onClick={() => setDevlogPage((prev) => Math.max(1, prev - 1))}
+                    disabled={currentDevlogPage <= 1}
+                  >
+                    ← Пред.
+                  </Button>
+                  <div className="text-sm text-zinc-400 min-w-[120px] text-center">
+                    Страница {currentDevlogPage} из {devlogTotalPages}
+                  </div>
+                  <Button
+                    variant="outline"
+                    className="rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100 disabled:opacity-40"
+                    onClick={() =>
+                      setDevlogPage((prev) => Math.min(devlogTotalPages, prev + 1))
+                    }
+                    disabled={currentDevlogPage >= devlogTotalPages}
+                  >
+                    След. →
+                  </Button>
                 </div>
               </CardContent>
             </Card>
