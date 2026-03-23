@@ -4195,14 +4195,20 @@ export default function App() {
                 className="fixed inset-0 z-[70] pointer-events-none flex items-center justify-center px-4"
               >
                 <div className="w-full text-center flex justify-center">
-                  <div className="inline-flex max-w-[min(92vw,980px)] flex-col items-center rounded-2xl border border-zinc-700/70 bg-zinc-950/88 px-5 py-4 sm:px-7 sm:py-5 shadow-[0_18px_64px_rgba(0,0,0,0.7)]">
+                  <div
+                    className={`inline-flex flex-col items-center rounded-2xl border border-zinc-700/70 bg-zinc-950/88 px-5 py-4 shadow-[0_18px_64px_rgba(0,0,0,0.7)] ${
+                      isCardAnnouncement
+                        ? "max-w-[min(84vw,620px)] sm:px-6 sm:py-4"
+                        : "max-w-[min(92vw,980px)] sm:px-7 sm:py-5"
+                    }`}
+                  >
                     <motion.div
                       animate={{
                         textShadow: isCardAnnouncement
                           ? [
-                              "0 0 18px rgba(59,130,246,0.35)",
-                              "0 0 34px rgba(59,130,246,0.85)",
-                              "0 0 20px rgba(59,130,246,0.45)",
+                              "0 0 14px rgba(244,63,94,0.28)",
+                              "0 0 24px rgba(244,63,94,0.5)",
+                              "0 0 16px rgba(244,63,94,0.32)",
                             ]
                           : isProtestAcceptedAnnouncement
                             ? [
@@ -4217,20 +4223,24 @@ export default function App() {
                             ],
                       }}
                       transition={{ duration: 1.05, repeat: Infinity, ease: "easeInOut" }}
-                      className={`max-w-full break-words [text-wrap:balance] text-[clamp(1.9rem,6.1vw,4.6rem)] font-black tracking-[0.02em] leading-[0.92] uppercase ${
+                      className={`max-w-full break-words [text-wrap:balance] font-black uppercase ${
                         isCardAnnouncement
-                          ? "text-blue-400"
+                          ? "text-[clamp(1.2rem,3.2vw,2rem)] tracking-[0.025em] leading-[1.02] text-rose-300"
                           : isProtestAcceptedAnnouncement
-                            ? "text-emerald-400"
+                            ? "text-[clamp(1.9rem,6.1vw,4.6rem)] tracking-[0.02em] leading-[0.92] text-emerald-400"
                             : isProtestRejectedAnnouncement
-                              ? "text-red-500"
-                              : "text-red-500"
+                              ? "text-[clamp(1.9rem,6.1vw,4.6rem)] tracking-[0.02em] leading-[0.92] text-red-500"
+                              : "text-[clamp(1.9rem,6.1vw,4.6rem)] tracking-[0.02em] leading-[0.92] text-red-500"
                       }`}
                     >
                       {influenceAnnouncement.title}
                     </motion.div>
                     {influenceAnnouncement.subtitle && (
-                      <div className="mt-3 rounded-lg border border-zinc-600/60 bg-black/30 px-4 py-2 text-base md:text-lg text-zinc-100 font-semibold">
+                      <div
+                        className={`mt-3 rounded-lg border border-zinc-600/60 bg-black/30 px-4 py-2 text-zinc-100 font-semibold ${
+                          isCardAnnouncement ? "text-sm md:text-base" : "text-base md:text-lg"
+                        }`}
+                      >
                         {influenceAnnouncement.subtitle}
                       </div>
                     )}
@@ -4540,7 +4550,7 @@ export default function App() {
                     ))}
                   </div>
                 ) : influenceView === "warnings" && isJudge ? (
-                  <div className="space-y-3">
+                  <div className="space-y-3 min-w-0 overflow-hidden">
                     <div className="flex items-center justify-between">
                       <div className="text-sm text-zinc-300">Предупреждения</div>
                       <Button
@@ -4557,7 +4567,7 @@ export default function App() {
                       Лимит: максимум 3 предупреждения на игрока.
                     </div>
                     <div
-                      className={`space-y-2 max-h-[360px] overflow-y-auto overflow-x-hidden pr-1 ${HIDE_SCROLLBAR_CLASS}`}
+                      className={`space-y-2.5 max-h-[340px] overflow-y-auto overflow-x-hidden pr-1 ${HIDE_SCROLLBAR_CLASS}`}
                     >
                       {warningTargets.length === 0 ? (
                         <div className="text-sm text-zinc-500">
@@ -4572,9 +4582,9 @@ export default function App() {
                           return (
                             <div
                               key={player.id}
-                              className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-2.5 overflow-hidden"
+                              className="rounded-xl border border-zinc-800/90 bg-gradient-to-r from-zinc-950/75 via-zinc-900/55 to-zinc-950/75 p-3 overflow-hidden"
                             >
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-start gap-3">
                                 <div className="min-w-0 flex-1">
                                   <div className="text-sm font-semibold truncate">
                                     {player.name}
@@ -4583,42 +4593,56 @@ export default function App() {
                                     {player.roleTitle}
                                   </div>
                                 </div>
-                                <Badge className="bg-red-950/70 text-red-300 border border-red-700/70">
-                                  {warningCount}/3
-                                </Badge>
+                                <div className="shrink-0 flex flex-col items-end gap-1">
+                                  <Badge className="bg-red-950/70 text-red-300 border border-red-700/70">
+                                    {warningCount}/3
+                                  </Badge>
+                                  <div className="flex items-center gap-1">
+                                    {[0, 1, 2].map((idx) => (
+                                      <span
+                                        key={`${player.id}-warn-dot-${idx}`}
+                                        className={`h-1.5 w-4 rounded-full ${
+                                          idx < warningCount ? "bg-red-500" : "bg-zinc-700"
+                                        }`}
+                                      />
+                                    ))}
+                                  </div>
+                                </div>
                               </div>
-                              <div className="mt-2 flex items-center gap-2">
+                              <div className="mt-2.5 min-w-0 flex items-center gap-2">
                                 {warningCount === 0 ? (
                                   <Button
-                                    className={`h-8 w-full min-w-0 rounded-lg border-0 px-3 text-xs font-semibold ${
+                                    className={`h-8 w-full min-w-0 rounded-lg px-3 text-xs font-semibold ${
                                       canWarn
-                                        ? "bg-red-600 text-white hover:bg-red-500"
-                                        : "bg-zinc-800 text-zinc-400 hover:bg-zinc-800"
+                                        ? "border-red-500/45 bg-red-500/16 text-red-200 hover:bg-red-500/26 hover:text-red-100"
+                                        : "border-zinc-700 bg-zinc-900 text-zinc-400 hover:bg-zinc-900"
                                     }`}
                                     disabled={!canWarn}
                                     onClick={() => triggerJudgeWarning(player.id)}
+                                    variant="outline"
                                   >
                                     <span className="truncate">Выдать предупреждение</span>
                                   </Button>
                                 ) : (
                                   <>
                                     <Button
-                                      className={`h-8 min-w-0 flex-1 rounded-lg border-0 px-3 text-xs font-semibold ${
+                                      className={`h-8 min-w-0 flex-1 rounded-lg px-3 text-xs font-semibold ${
                                         canWarn
-                                          ? "bg-red-600 text-white hover:bg-red-500"
-                                          : "bg-zinc-800 text-zinc-400 hover:bg-zinc-800"
+                                          ? "border-red-500/45 bg-red-500/16 text-red-200 hover:bg-red-500/26 hover:text-red-100"
+                                          : "border-zinc-700 bg-zinc-900 text-zinc-400 hover:bg-zinc-900"
                                       }`}
                                       disabled={!canWarn}
                                       onClick={() => triggerJudgeWarning(player.id)}
+                                      variant="outline"
                                     >
                                       <span className="truncate">Добавить</span>
                                     </Button>
                                     <Button
                                       variant="outline"
-                                      className={`h-8 min-w-0 flex-1 rounded-lg border-zinc-700 px-3 text-xs font-semibold ${
+                                      className={`h-8 min-w-0 flex-1 rounded-lg px-3 text-xs font-semibold ${
                                         canRemove
-                                          ? "bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
-                                          : "bg-zinc-800 text-zinc-400 hover:bg-zinc-800"
+                                          ? "border-zinc-600 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                                          : "border-zinc-700 bg-zinc-900 text-zinc-500 hover:bg-zinc-900"
                                       }`}
                                       disabled={!canRemove}
                                       onClick={() => removeJudgeWarning(player.id)}
