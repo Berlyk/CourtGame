@@ -115,6 +115,14 @@ export interface UsedCard {
   description: string;
 }
 
+export interface ActiveProtest {
+  id: string;
+  actorId: string;
+  actorName: string;
+  actorRoleTitle: string;
+  createdAt: number;
+}
+
 export interface GameState {
   caseData: any;
   players: Player[];
@@ -122,6 +130,7 @@ export interface GameState {
   stageIndex: number;
   revealedFacts: RevealedFact[];
   usedCards: UsedCard[];
+  activeProtest: ActiveProtest | null;
   finished: boolean;
   verdict: string;
   verdictEvaluation: string;
@@ -195,6 +204,7 @@ const ROOM_MODE_MAX_PLAYERS: Record<RoomModeKey, number> = {
 };
 
 const rooms = new Map<string, Room>();
+const ROOM_HARD_TTL_MS = 24 * 60 * 60 * 1000;
 
 function normalizeVisibility(value: string | undefined): "public" | "private" {
   if (value === "public") return "public";
@@ -526,6 +536,7 @@ export function markPlayerDisconnected(
 }
 
 export function listPublicMatches(): PublicMatchInfo[] {
+  cleanupStaleRooms();
   return [...rooms.values()]
     .map((room) => {
       const hostPlayer =
@@ -555,6 +566,99 @@ export function listPublicMatches(): PublicMatchInfo[] {
       };
     })
     .sort((a, b) => b.createdAt - a.createdAt);
+}
+
+function isPlayerConnected(player: Player): boolean {
+  return typeof player?.socketId === "string" && player.socketId.trim().length > 0;
+}
+
+function canStillReconnect(player: Player, nowMs: number): boolean {
+  return (
+    !isPlayerConnected(player) &&
+    typeof player?.disconnectedUntil === "number" &&
+    player.disconnectedUntil > nowMs
+  );
+}
+
+function normalizePlayersForRoom(room: Room, nowMs: number) {
+  const shouldKeep = (player: Player) => isPlayerConnected(player) || canStillReconnect(player, nowMs);
+
+  if (!room.game) {
+    room.players = room.players.filter(shouldKeep);
+  } else {
+    const nextLobbyPlayers = room.players.filter(shouldKeep);
+    const nextGamePlayers = room.game.players.filter(shouldKeep);
+    const keepIds = new Set<string>([
+      ...nextLobbyPlayers.map((p) => p.id),
+      ...nextGamePlayers.map((p) => p.id),
+    ]);
+    room.players = room.players.filter((p) => keepIds.has(p.id));
+    room.game.players = room.game.players.filter((p) => keepIds.has(p.id));
+  }
+
+  const hostStillExists =
+    room.players.some((p) => p.id === room.hostId) ||
+    !!room.game?.players.some((p) => p.id === room.hostId);
+  if (!hostStillExists) {
+    const nextHostId = room.players[0]?.id ?? room.game?.players[0]?.id;
+    if (nextHostId) {
+      room.hostId = nextHostId;
+    }
+  }
+}
+
+export function cleanupStaleRooms(nowMs = Date.now()): number {
+  let removedCount = 0;
+
+  for (const [code, room] of rooms.entries()) {
+    normalizePlayersForRoom(room, nowMs);
+
+    const roomAgeMs = nowMs - room.createdAt;
+    const hardExpired = roomAgeMs > ROOM_HARD_TTL_MS;
+    const sourcePlayers = room.game ? room.game.players : room.players;
+    const hasConnectedPlayers = sourcePlayers.some((player) => isPlayerConnected(player));
+    const hasReconnectWindow = sourcePlayers.some((player) => canStillReconnect(player, nowMs));
+    const finishedWithoutPeople = !!room.game?.finished && !hasConnectedPlayers && !hasReconnectWindow;
+    const emptyRoom = sourcePlayers.length === 0;
+    const disconnectedAndExpired = !hasConnectedPlayers && !hasReconnectWindow;
+
+    if (hardExpired || finishedWithoutPeople || emptyRoom || disconnectedAndExpired) {
+      rooms.delete(code);
+      removedCount += 1;
+    }
+  }
+
+  return removedCount;
+}
+
+export function markMissingSocketPlayersDisconnected(
+  isSocketAlive: (socketId: string) => boolean,
+  nowMs = Date.now(),
+  reconnectGraceMs = 30_000,
+): number {
+  let updatedPlayers = 0;
+
+  const normalizePlayer = (player: Player) => {
+    const socketId = player.socketId?.trim() ?? "";
+    if (!socketId) return;
+    if (isSocketAlive(socketId)) return;
+
+    player.socketId = "";
+    if (
+      typeof player.disconnectedUntil !== "number" ||
+      player.disconnectedUntil < nowMs
+    ) {
+      player.disconnectedUntil = nowMs + reconnectGraceMs;
+    }
+    updatedPlayers += 1;
+  };
+
+  for (const room of rooms.values()) {
+    room.players.forEach(normalizePlayer);
+    room.game?.players.forEach(normalizePlayer);
+  }
+
+  return updatedPlayers;
 }
 
 export function addLobbyChatMessage(
@@ -709,6 +813,7 @@ const stages = buildStagesByPlayerCount(count);
     stageIndex: 0,
     revealedFacts: [],
     usedCards: [],
+    activeProtest: null,
     finished: false,
     verdict: "",
     verdictEvaluation: ""

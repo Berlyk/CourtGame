@@ -103,6 +103,7 @@ const QUICK_ROOM_MODE = {
   subtitle: "Свободный набор, старт от 3 до 6 игроков.",
   maxPlayers: 6,
 };
+const DISCORD_INVITE_URL = "https://discord.gg/6UZ7xDxnhR";
 const RECONNECT_GRACE_MS = 30_000;
 
 const ROOM_MODE_BY_KEY = Object.fromEntries(
@@ -338,12 +339,27 @@ interface DevLogEntry {
   changes: string[];
 }
 
-const CURRENT_VERSION = "Beta 0.4";
+const CURRENT_VERSION = "Beta 0.4.5";
 
 const DEVLOG_ENTRIES: DevLogEntry[] = [
   {
-    date: "22.03.2026",
+    date: "24.03.2026",
     version: CURRENT_VERSION,
+    title: "Релиз Beta 0.4.5: стабильность комнат, протесты и интерфейс",
+    changes: [
+      "Добавлена серверная очистка зависших/старых комнат.",
+      "Переработана механика протестов: активный протест, решение судьи (Принять/Отклонить), блокировка параллельных протестов.",
+      "Свидетелям отключена кнопка «Протестую».",
+      "Добавлены уведомления о применении карты механики.",
+      "Полностью переработан блок «Предупреждения» у судьи.",
+      "Улучшен приватный чат адвокат ↔ клиент (размер, верстка, стабильность длинных сообщений).",
+      "На главную добавлена кнопка «Поиск игроков» с переходом в Discord.",
+      "На страницу «Разработка» добавлена кнопка «Сообщить о баге» с переходом в Discord.",
+    ],
+  },
+  {
+    date: "22.03.2026",
+    version: "Beta 0.4",
     title: "Релиз Beta 0.4: подбор игроков, влияние и переподключение",
     changes: [
       "Добавлен раздел «Подбор игроков» с отображением активных комнат и быстрым входом.",
@@ -1161,10 +1177,18 @@ interface LawyerChatPartner {
 
 interface InfluenceAnnouncement {
   id: string;
-  kind: "protest" | "silence" | "warning";
+  kind: "protest" | "silence" | "warning" | "card";
   title: string;
   subtitle?: string;
   durationMs?: number;
+}
+
+interface ActiveProtest {
+  id: string;
+  actorId: string;
+  actorName: string;
+  actorRoleTitle: string;
+  createdAt: number;
 }
 
 interface PublicMatchInfo {
@@ -1208,6 +1232,7 @@ interface GameState {
   stageIndex: number;
   revealedFacts: RevealedFact[];
   usedCards: UsedCard[];
+  activeProtest: ActiveProtest | null;
   finished: boolean;
   verdict: string;
   verdictEvaluation: string;
@@ -1441,8 +1466,6 @@ export default function App() {
   const [avatar, setAvatar] = useState<string | null>(null);
   const [joinCode, setJoinCode] = useState("");
   const [error, setError] = useState("");
-  const [disconnectAlert, setDisconnectAlert] = useState("");
-  const [rejoinAlert, setRejoinAlert] = useState("");
   const [kickedAlert, setKickedAlert] = useState("");
   const [copiedRoomCode, setCopiedRoomCode] = useState(false);
   const [startGameLoading, setStartGameLoading] = useState(false);
@@ -1919,22 +1942,6 @@ export default function App() {
     );
 
     socket.on(
-      "player_left",
-      ({ playerName: name }: { playerId: string; playerName: string }) => {
-        setDisconnectAlert(`⚠️ ${name} покинул игру`);
-        setTimeout(() => setDisconnectAlert(""), 6000);
-      },
-    );
-
-    socket.on(
-      "player_rejoined",
-      ({ playerName: name }: { playerName: string }) => {
-        setRejoinAlert(`${name} вернулся в игру`);
-        setTimeout(() => setRejoinAlert(""), 4000);
-      },
-    );
-
-    socket.on(
       "lawyer_chat_state",
       ({
         enabled,
@@ -2024,6 +2031,15 @@ export default function App() {
     });
 
     socket.on(
+      "protest_state_updated",
+      ({ activeProtest }: { activeProtest: ActiveProtest | null }) => {
+        setGame((prev) =>
+          prev ? { ...prev, activeProtest: activeProtest ?? null } : prev,
+        );
+      },
+    );
+
+    socket.on(
       "reconnect_available",
       ({
         code,
@@ -2073,8 +2089,6 @@ export default function App() {
       setAdminHostSessionToken(null);
       localStorage.removeItem("court_admin_host_token");
       setJoinCode("");
-      setDisconnectAlert("");
-      setRejoinAlert("");
       setCopiedRoomCode(false);
       setIsHostJudge(false);
       setStartGameLoading(false);
@@ -2183,6 +2197,7 @@ export default function App() {
       socket.off("lawyer_chat_updated");
       socket.off("influence_cooldown");
       socket.off("influence_announcement");
+      socket.off("protest_state_updated");
       socket.off("reconnect_available");
       socket.off("rejoin_failed");
       socket.off("kicked");
@@ -2471,6 +2486,18 @@ export default function App() {
     });
   }, [game, mySessionToken, socket]);
 
+  const resolveProtest = useCallback(
+    (resolution: "accepted" | "rejected") => {
+      if (!game || !mySessionToken) return;
+      socket.emit("resolve_protest", {
+        code: game.code,
+        sessionToken: mySessionToken,
+        resolution,
+      });
+    },
+    [game, mySessionToken, socket],
+  );
+
   const triggerJudgeSilence = useCallback(() => {
     if (!game || !mySessionToken) return;
     socket.emit("trigger_judge_silence", {
@@ -2552,8 +2579,6 @@ export default function App() {
     setJoinPasswordInput("");
     setJoinPasswordDialogError("");
     setJoinPasswordVisible(false);
-    setDisconnectAlert("");
-    setRejoinAlert("");
     setKickedAlert("");
     setCopiedRoomCode(false);
     setIsHostJudge(false);
@@ -2894,7 +2919,7 @@ export default function App() {
         initial="initial"
         animate="animate"
         exit="exit"
-        className="relative isolate min-h-screen bg-[#0b0b0f] text-zinc-100 p-4 sm:p-6 md:p-10 overflow-x-hidden"
+        className="relative isolate h-screen bg-[#0b0b0f] text-zinc-100 p-4 sm:p-6 md:p-10 overflow-x-hidden overflow-y-scroll [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
       >
         <CourtAtmosphereBackground />
         <AnimatePresence>
@@ -3060,7 +3085,7 @@ export default function App() {
                             </p>
                           </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div className="grid grid-cols-2 auto-rows-fr gap-3 text-sm">
                           {[
                             { title: "3-6 игроков", sub: "Разные роли и режимы" },
                             { title: "Карты механик", sub: "Дают особые возможности" },
@@ -3075,11 +3100,12 @@ export default function App() {
                               animate="animate"
                               whileHover={{ y: -2 }}
                               whileTap={{ scale: 0.995 }}
+                              className="h-full"
                             >
-                              <Card className="rounded-2xl bg-zinc-900/90 border-zinc-800 text-zinc-100">
-                                <CardContent className="p-4">
+                              <Card className="h-full rounded-2xl bg-zinc-900/90 border-zinc-800 text-zinc-100">
+                                <CardContent className="h-full p-4 space-y-1.5">
                                   <div className="font-semibold">{item.title}</div>
-                                  <div className="text-zinc-400 mt-1">{item.sub}</div>
+                                  <div className="text-zinc-400">{item.sub}</div>
                                 </CardContent>
                               </Card>
                             </motion.div>
@@ -3149,6 +3175,26 @@ export default function App() {
                                 Войти
                               </Button>
                             </div>
+                            <motion.a
+                              href={DISCORD_INVITE_URL}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              whileHover={{ y: -1 }}
+                              whileTap={{ scale: 0.99 }}
+                              className="block"
+                            >
+                              <div className="h-12 w-full rounded-xl border border-zinc-700/80 bg-zinc-900/70 px-4 flex items-center justify-center gap-2 text-zinc-100 hover:bg-zinc-800/90 transition-colors">
+                                <svg
+                                  viewBox="0 0 16 16"
+                                  aria-hidden="true"
+                                  className="h-5 w-5 shrink-0"
+                                  fill="currentColor"
+                                >
+                                  <path d="M13.545 2.907A13.227 13.227 0 0 0 10.227 2c-.158.287-.34.666-.465.965a12.19 12.19 0 0 0-3.523 0A10.809 10.809 0 0 0 5.772 2a13.14 13.14 0 0 0-3.319.907C.353 6.057-.212 9.13.067 12.16c1.391 1.03 2.739 1.656 4.063 2.071.328-.447.62-.918.874-1.417a8.925 8.925 0 0 1-1.377-.662c.116-.084.23-.171.34-.26 2.651 1.257 5.523 1.257 8.142 0 .11.09.224.176.34.26-.439.257-.9.48-1.378.662.257.5.55.97.878 1.417 1.327-.415 2.676-1.04 4.066-2.071.327-3.513-.563-6.559-2.47-9.254ZM5.349 10.478c-.797 0-1.45-.732-1.45-1.632 0-.9.64-1.634 1.45-1.634.816 0 1.456.741 1.45 1.634 0 .9-.64 1.632-1.45 1.632Zm5.302 0c-.797 0-1.45-.732-1.45-1.632 0-.9.64-1.634 1.45-1.634.816 0 1.456.741 1.45 1.634 0 .9-.634 1.632-1.45 1.632Z" />
+                                </svg>
+                                <span className="font-semibold">Поиск игроков</span>
+                              </div>
+                            </motion.a>
                           </motion.div>
 
                           <AnimatePresence>
@@ -3530,7 +3576,23 @@ export default function App() {
         {homeTab === "development" && (
           <div className="max-w-6xl mx-auto">
             <Card className="rounded-[28px] border-zinc-800 bg-zinc-900/95 text-zinc-100">
-              <CardContent className="p-8 md:p-10 space-y-6">
+              <CardContent className="relative p-8 md:p-10 space-y-6">
+                <motion.a
+                  href={DISCORD_INVITE_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  whileHover={{ y: -1 }}
+                  whileTap={{ scale: 0.99 }}
+                  className="absolute right-8 top-8 md:right-10 md:top-10 z-10"
+                >
+                  <Button
+                    variant="outline"
+                    className="h-10 rounded-xl border-red-500/35 bg-red-950/20 text-red-100 hover:bg-red-900/30 hover:text-white gap-2 px-4"
+                  >
+                    <AlertCircle className="w-4 h-4" />
+                    <span>Сообщить о баге</span>
+                  </Button>
+                </motion.a>
                 <div className="flex justify-center">
                   <div className="w-full max-w-md rounded-3xl border border-red-500/35 bg-gradient-to-br from-red-950/50 via-zinc-900 to-zinc-900 px-6 py-5 text-center shadow-[0_16px_40px_rgba(185,28,28,0.25)]">
                     <div className="text-[11px] uppercase tracking-[0.22em] text-red-300/80">
@@ -3928,10 +3990,22 @@ export default function App() {
       ? "Чат с клиентом"
       : "Чат с адвокатом";
     const canRevealFactsAtCurrentStage = game.me.canRevealFactsNow === true;
+    const hasActiveProtest = !!game.activeProtest;
     const canUseProtest =
-      !isJudge && !game.finished && isCrossExaminationStage && protestCooldownLeft <= 0;
+      !isJudge &&
+      !isWitness &&
+      !game.finished &&
+      !hasActiveProtest &&
+      isCrossExaminationStage &&
+      protestCooldownLeft <= 0;
     const canUseJudgeSilence = isJudge && !game.finished && silenceCooldownLeft <= 0;
     const canUseJudgeWarning = isJudge && !game.finished;
+    const isCardAnnouncement = influenceAnnouncement?.kind === "card";
+    const announcementTitle = influenceAnnouncement?.title ?? "";
+    const isProtestAcceptedAnnouncement =
+      influenceAnnouncement?.kind === "protest" && /ПРИНЯТ/i.test(announcementTitle);
+    const isProtestRejectedAnnouncement =
+      influenceAnnouncement?.kind === "protest" && /ОТКЛОНЕН/i.test(announcementTitle);
     const warningTargets = game.players.filter(
       (player) => player.id !== game.me!.id && player.roleKey !== "judge",
     );
@@ -3941,7 +4015,7 @@ export default function App() {
         variants={pageVariants}
         initial="initial"
         animate="animate"
-        className="relative isolate min-h-screen bg-[#0b0b0f] text-zinc-100 p-4 sm:p-6 md:p-10"
+        className="relative isolate min-h-screen overflow-x-hidden bg-[#0b0b0f] text-zinc-100 p-4 sm:p-6 md:p-10"
       >
         <CourtAtmosphereBackground />
         <AnimatePresence>
@@ -4129,31 +4203,40 @@ export default function App() {
                 {error}
               </motion.div>
             )}
-            {disconnectAlert && (
-              <motion.div
-                key="disc"
-                initial={{ opacity: 0, y: -8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                className="bg-yellow-500/15 border border-yellow-500/40 text-yellow-300 rounded-xl px-4 py-3 text-sm font-medium"
-              >
-                {disconnectAlert}
-              </motion.div>
-            )}
-            {rejoinAlert && (
-              <motion.div
-                key="rej"
-                initial={{ opacity: 0, y: -8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                className="bg-green-500/15 border border-green-500/40 text-green-300 rounded-xl px-4 py-3 text-sm font-medium"
-              >
-                ✓ {rejoinAlert}
-              </motion.div>
-            )}
           </AnimatePresence>
 
           <AnimatePresence>
+            {hasActiveProtest && (
+              <motion.div
+                key={`active-protest-${game.activeProtest!.id}`}
+                initial={{ opacity: 0, scale: 0.86, y: 16 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 1.03, y: -10 }}
+                transition={{ duration: 0.24, ease: "easeOut" }}
+                className="fixed inset-0 z-[69] pointer-events-none flex items-center justify-center px-4"
+              >
+                <div className="w-full max-w-3xl text-center">
+                  <div className="inline-flex max-w-full flex-col items-center rounded-2xl border border-zinc-700/70 bg-zinc-950/88 px-8 py-5 shadow-[0_18px_64px_rgba(0,0,0,0.7)]">
+                    <motion.div
+                      animate={{
+                        textShadow: [
+                          "0 0 18px rgba(239,68,68,0.35)",
+                          "0 0 34px rgba(239,68,68,0.85)",
+                          "0 0 20px rgba(239,68,68,0.45)",
+                        ],
+                      }}
+                      transition={{ duration: 1.05, repeat: Infinity, ease: "easeInOut" }}
+                      className="text-[clamp(2.1rem,7vw,4.9rem)] font-black tracking-[0.04em] whitespace-nowrap leading-none text-red-500 uppercase"
+                    >
+                      ПРОТЕСТУЮ!
+                    </motion.div>
+                    <div className="mt-3 rounded-lg border border-zinc-600/60 bg-black/30 px-4 py-2 text-base md:text-lg text-zinc-100 font-semibold">
+                      {game.activeProtest?.actorRoleTitle}
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
             {influenceAnnouncement && (
               <motion.div
                 key={`${influenceAnnouncement.id}-text`}
@@ -4163,17 +4246,58 @@ export default function App() {
                 transition={{ duration: 0.24, ease: "easeOut" }}
                 className="fixed inset-0 z-[70] pointer-events-none flex items-center justify-center px-4"
               >
-                <div className="w-full max-w-3xl text-center">
-                  <div className="inline-flex max-w-full flex-col items-center rounded-2xl border border-zinc-700/70 bg-zinc-950/88 px-8 py-5 shadow-[0_18px_64px_rgba(0,0,0,0.7)]">
+                <div className="w-full text-center flex justify-center">
+                  <div
+                    className={`inline-flex flex-col items-center rounded-2xl border border-zinc-700/70 bg-zinc-950/88 px-5 py-4 shadow-[0_18px_64px_rgba(0,0,0,0.7)] ${
+                      isCardAnnouncement
+                        ? "max-w-[min(90vw,760px)] sm:px-8 sm:py-5"
+                        : "max-w-[min(92vw,980px)] sm:px-7 sm:py-5"
+                    }`}
+                  >
+                    {isCardAnnouncement && (
+                      <div className="mb-2 text-[11px] sm:text-xs font-semibold uppercase tracking-[0.11em] text-zinc-400">
+                        Использована карта механики
+                      </div>
+                    )}
                     <motion.div
-                      animate={{ textShadow: ["0 0 18px rgba(239,68,68,0.35)", "0 0 34px rgba(239,68,68,0.85)", "0 0 20px rgba(239,68,68,0.45)"] }}
+                      animate={{
+                        textShadow: isCardAnnouncement
+                          ? [
+                              "0 0 14px rgba(244,63,94,0.28)",
+                              "0 0 24px rgba(244,63,94,0.5)",
+                              "0 0 16px rgba(244,63,94,0.32)",
+                            ]
+                          : isProtestAcceptedAnnouncement
+                            ? [
+                                "0 0 18px rgba(16,185,129,0.35)",
+                                "0 0 34px rgba(16,185,129,0.85)",
+                                "0 0 20px rgba(16,185,129,0.45)",
+                              ]
+                          : [
+                              "0 0 18px rgba(239,68,68,0.35)",
+                              "0 0 34px rgba(239,68,68,0.85)",
+                              "0 0 20px rgba(239,68,68,0.45)",
+                            ],
+                      }}
                       transition={{ duration: 1.05, repeat: Infinity, ease: "easeInOut" }}
-                      className="text-[clamp(2.1rem,7vw,4.9rem)] font-black tracking-[0.05em] whitespace-nowrap leading-none text-red-500 uppercase"
+                      className={`max-w-full break-words [text-wrap:balance] font-black uppercase ${
+                        isCardAnnouncement
+                          ? "text-[clamp(1.55rem,4.2vw,2.7rem)] tracking-[0.018em] leading-[0.98] text-rose-300"
+                          : isProtestAcceptedAnnouncement
+                            ? "text-[clamp(1.9rem,6.1vw,4.6rem)] tracking-[0.02em] leading-[0.92] text-emerald-400"
+                            : isProtestRejectedAnnouncement
+                              ? "text-[clamp(1.9rem,6.1vw,4.6rem)] tracking-[0.02em] leading-[0.92] text-red-500"
+                              : "text-[clamp(1.9rem,6.1vw,4.6rem)] tracking-[0.02em] leading-[0.92] text-red-500"
+                      }`}
                     >
                       {influenceAnnouncement.title}
                     </motion.div>
-                    {influenceAnnouncement.subtitle && (
-                      <div className="mt-3 rounded-lg border border-zinc-600/60 bg-black/30 px-4 py-2 text-base md:text-lg text-zinc-100 font-semibold">
+                    {influenceAnnouncement.subtitle && !isCardAnnouncement && (
+                      <div
+                        className={`mt-3 rounded-lg border border-zinc-600/60 bg-black/30 px-4 py-2 text-zinc-100 font-semibold ${
+                          isCardAnnouncement ? "text-sm md:text-base" : "text-base md:text-lg"
+                        }`}
+                      >
                         {influenceAnnouncement.subtitle}
                       </div>
                     )}
@@ -4357,7 +4481,7 @@ export default function App() {
                     </div>
                     <div
                       ref={lawyerChatScrollRef}
-                      className={`rounded-xl border border-zinc-800 bg-zinc-950/70 p-3 h-[220px] overflow-y-auto overflow-x-hidden ${HIDE_SCROLLBAR_CLASS}`}
+                      className={`rounded-xl border border-zinc-800 bg-zinc-950/70 p-3 h-[280px] md:h-[320px] overflow-y-auto overflow-x-hidden ${HIDE_SCROLLBAR_CLASS}`}
                     >
                       <div className="space-y-2 min-w-0">
                         {lawyerChatMessages.length === 0 && (
@@ -4385,7 +4509,7 @@ export default function App() {
                                     second: showChatSeconds ? "2-digit" : undefined,
                                   })}
                                 </div>
-                                <div className="whitespace-pre-wrap break-all">
+                                <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
                                   {message.text}
                                 </div>
                               </div>
@@ -4394,12 +4518,14 @@ export default function App() {
                         })}
                       </div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="mt-3 flex gap-2">
                       <Input
                         value={lawyerChatInput}
                         onChange={(e) => setLawyerChatInput(e.target.value)}
                         onKeyDown={(e) => e.key === "Enter" && sendLawyerChatMessage()}
-                        placeholder="Сообщение адвокату..."
+                        placeholder={
+                          isLawyerRole ? "Сообщение клиенту..." : "Сообщение адвокату..."
+                        }
                         className="h-10 rounded-xl bg-zinc-900 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
                       />
                       <Button
@@ -4481,7 +4607,7 @@ export default function App() {
                     ))}
                   </div>
                 ) : influenceView === "warnings" && isJudge ? (
-                  <div className="space-y-3">
+                  <div className="space-y-3 min-w-0 overflow-hidden">
                     <div className="flex items-center justify-between">
                       <div className="text-sm text-zinc-300">Предупреждения</div>
                       <Button
@@ -4494,10 +4620,9 @@ export default function App() {
                         Назад
                       </Button>
                     </div>
-                    <div className="text-xs text-zinc-500">
-                      Лимит: максимум 3 предупреждения на игрока.
-                    </div>
-                    <div className="space-y-2">
+                    <div
+                      className={`space-y-2.5 max-h-[340px] overflow-y-auto overflow-x-hidden pr-1 ${HIDE_SCROLLBAR_CLASS}`}
+                    >
                       {warningTargets.length === 0 ? (
                         <div className="text-sm text-zinc-500">
                           Нет игроков для предупреждения.
@@ -4511,42 +4636,64 @@ export default function App() {
                           return (
                             <div
                               key={player.id}
-                              className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-3 space-y-2"
+                              className="rounded-xl border border-zinc-800/90 bg-gradient-to-r from-zinc-950/75 via-zinc-900/55 to-zinc-950/75 p-3 overflow-hidden"
                             >
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="min-w-0">
-                                  <div className="text-sm font-semibold truncate">{player.name}</div>
-                                  <div className="text-xs text-zinc-500 truncate">{player.roleTitle}</div>
+                              <div className="flex items-start gap-3">
+                                <div className="min-w-0 flex-1">
+                                  <div className="text-sm font-semibold truncate">
+                                    {player.name}
+                                  </div>
+                                  <div className="text-xs text-zinc-500 truncate">
+                                    {player.roleTitle}
+                                  </div>
                                 </div>
-                                <Badge className="bg-red-950/70 text-red-300 border border-red-700/70">
-                                  {warningCount}/3
-                                </Badge>
+                                <div className="shrink-0 flex flex-col items-end gap-1">
+                                  <Badge className="bg-red-950/70 text-red-300 border border-red-700/70">
+                                    {warningCount}/3
+                                  </Badge>
+                                </div>
                               </div>
-                              <div className={`grid gap-2 ${warningCount > 0 ? "sm:grid-cols-2" : "grid-cols-1"}`}>
-                                <Button
-                                  className={`w-full rounded-xl border-0 h-auto min-h-[44px] py-2 px-3 whitespace-normal break-words text-center text-sm leading-tight ${
-                                    canWarn
-                                      ? "bg-red-600 text-white hover:bg-red-500"
-                                      : "bg-zinc-800 text-zinc-400 hover:bg-zinc-800"
-                                  }`}
-                                  disabled={!canWarn}
-                                  onClick={() => triggerJudgeWarning(player.id)}
-                                >
-                                  {warningCount === 0 ? "Выдать предупреждение" : "Добавить"}
-                                </Button>
-                                {warningCount > 0 && (
+                              <div className="mt-2.5 min-w-0 flex items-center gap-2">
+                                {warningCount === 0 ? (
                                   <Button
-                                    variant="outline"
-                                    className={`w-full rounded-xl border-zinc-700 h-auto min-h-[44px] py-2 px-3 whitespace-normal break-words text-center text-sm leading-tight ${
-                                      canRemove
-                                        ? "bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
-                                        : "bg-zinc-800 text-zinc-400 hover:bg-zinc-800"
+                                    className={`h-8 w-full min-w-0 rounded-lg px-3 text-xs font-semibold ${
+                                      canWarn
+                                        ? "border-red-500/45 bg-red-500/16 text-red-200 hover:bg-red-500/26 hover:text-red-100"
+                                        : "border-zinc-700 bg-zinc-900 text-zinc-400 hover:bg-zinc-900"
                                     }`}
-                                    disabled={!canRemove}
-                                    onClick={() => removeJudgeWarning(player.id)}
+                                    disabled={!canWarn}
+                                    onClick={() => triggerJudgeWarning(player.id)}
+                                    variant="outline"
                                   >
-                                    Убрать
+                                    <span className="truncate">Выдать предупреждение</span>
                                   </Button>
+                                ) : (
+                                  <>
+                                    <Button
+                                      className={`h-8 min-w-0 flex-1 rounded-lg px-3 text-xs font-semibold ${
+                                        canWarn
+                                          ? "border-red-500/45 bg-red-500/16 text-red-200 hover:bg-red-500/26 hover:text-red-100"
+                                          : "border-zinc-700 bg-zinc-900 text-zinc-400 hover:bg-zinc-900"
+                                      }`}
+                                      disabled={!canWarn}
+                                      onClick={() => triggerJudgeWarning(player.id)}
+                                      variant="outline"
+                                    >
+                                      <span className="truncate">Добавить</span>
+                                    </Button>
+                                    <Button
+                                      variant="outline"
+                                      className={`h-8 min-w-0 flex-1 rounded-lg px-3 text-xs font-semibold ${
+                                        canRemove
+                                          ? "border-zinc-600 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                                          : "border-zinc-700 bg-zinc-900 text-zinc-500 hover:bg-zinc-900"
+                                      }`}
+                                      disabled={!canRemove}
+                                      onClick={() => removeJudgeWarning(player.id)}
+                                    >
+                                      <span className="truncate">Убрать</span>
+                                    </Button>
+                                  </>
                                 )}
                               </div>
                             </div>
@@ -4559,6 +4706,32 @@ export default function App() {
                   <div className="space-y-3">
                     {isJudge ? (
                       <>
+                        {hasActiveProtest && (
+                          <div className="rounded-xl border border-zinc-800 bg-zinc-950/75 p-3 space-y-2.5">
+                            <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-zinc-400">
+                              Активный протест
+                            </div>
+                            <div className="text-sm font-semibold text-zinc-100">
+                              {game.activeProtest?.actorRoleTitle}
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <Button
+                                variant="outline"
+                                className="h-10 rounded-xl border-emerald-500/50 bg-emerald-500/12 text-emerald-300 hover:bg-emerald-500/20 hover:text-emerald-200"
+                                onClick={() => resolveProtest("accepted")}
+                              >
+                                Принять
+                              </Button>
+                              <Button
+                                variant="outline"
+                                className="h-10 rounded-xl border-red-500/50 bg-red-500/10 text-red-300 hover:bg-red-500/18 hover:text-red-200"
+                                onClick={() => resolveProtest("rejected")}
+                              >
+                                Отклонить
+                              </Button>
+                            </div>
+                          </div>
+                        )}
                         <Button
                           className={`w-full h-12 rounded-xl border-0 text-base font-bold ${
                             isVerdictStage
@@ -4601,18 +4774,22 @@ export default function App() {
                       </>
                     ) : (
                       <>
-                        <Button
-                          className={`w-full h-14 rounded-xl border-0 text-lg font-black tracking-[0.05em] transition-all ${
-                            canUseProtest
-                              ? "bg-red-600 text-white hover:bg-red-500 shadow-[0_0_28px_rgba(239,68,68,0.58)]"
-                              : "bg-zinc-800 text-zinc-400 hover:bg-zinc-800"
-                          }`}
-                          onClick={triggerProtest}
-                          disabled={!canUseProtest}
-                        >
-                          ПРОТЕСТУЮ
-                          {protestCooldownLeft > 0 ? ` (${protestCooldownLeft}s)` : ""}
-                        </Button>
+                        {!isWitness && (
+                          <Button
+                            className={`w-full h-14 rounded-xl border-0 text-lg font-black tracking-[0.05em] transition-all ${
+                              canUseProtest
+                                ? "bg-red-600 text-white hover:bg-red-500 shadow-[0_0_28px_rgba(239,68,68,0.58)]"
+                                : "bg-zinc-800 text-zinc-400 hover:bg-zinc-800"
+                            }`}
+                            onClick={triggerProtest}
+                            disabled={!canUseProtest}
+                          >
+                            {hasActiveProtest ? "ПРОТЕСТ АКТИВЕН" : "ПРОТЕСТУЮ"}
+                            {!hasActiveProtest && protestCooldownLeft > 0
+                              ? ` (${protestCooldownLeft}s)`
+                              : ""}
+                          </Button>
+                        )}
                         {lawyerChatPartner && (
                           <Button
                             variant="outline"

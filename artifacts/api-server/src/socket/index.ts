@@ -1,4 +1,4 @@
-import { Server as SocketIOServer } from "socket.io";
+﻿import { Server as SocketIOServer } from "socket.io";
 import type { Server as HttpServer } from "http";
 import {
   addLobbyChatMessage,
@@ -23,6 +23,8 @@ import {
   setHostJudge,
   updatePlayerAvatar,
   updatePlayerProfile,
+  cleanupStaleRooms,
+  markMissingSocketPlayersDisconnected,
   type CreateRoomOptions,
 } from "./roomManager.js";
 
@@ -120,7 +122,7 @@ function resolveSpeechOwnerRole(stageName: string): SpeechOwnerRole | null {
   const normalizedStageName = normalizeStageName(stageName);
   if (!normalizedStageName) return null;
   const hasLawyer = normalizedStageName.includes("адвокат");
-  const hasPlaintiff = normalizedStageName.includes("истц");
+  const hasPlaintiff = normalizedStageName.includes("истец");
   const hasDefendant = normalizedStageName.includes("ответчик");
   const hasProsecutor = normalizedStageName.includes("прокурор");
 
@@ -258,6 +260,7 @@ function getRoomState(room: any, playerId: string) {
     stageIndex: room.game.stageIndex,
     revealedFacts: room.game.revealedFacts,
     usedCards: room.game.usedCards,
+    activeProtest: room.game.activeProtest ?? null,
     finished: room.game.finished,
     verdict: room.game.verdict,
     verdictEvaluation: room.game.verdictEvaluation,
@@ -277,6 +280,8 @@ function getRoomState(room: any, playerId: string) {
 }
 
 function emitPublicMatches(io: SocketIOServer) {
+  markMissingSocketPlayersDisconnected((socketId) => io.sockets.sockets.has(socketId));
+  cleanupStaleRooms();
   io.emit("public_matches_updated", {
     matches: listPublicMatches(),
   });
@@ -324,6 +329,13 @@ export function setupSocket(httpServer: HttpServer) {
         }
         reconnectCleanupTimers.delete(key);
       });
+  };
+
+  const emitProtestState = (roomCode: string, room?: any) => {
+    const targetRoom = room ?? getRoom(roomCode);
+    io.to(roomCode).emit("protest_state_updated", {
+      activeProtest: targetRoom?.game?.activeProtest ?? null,
+    });
   };
 
   const resolveLawyerPair = (room: any, playerId: string) => {
@@ -520,8 +532,17 @@ export function setupSocket(httpServer: HttpServer) {
     return socketInfo.playerId;
   };
 
+  setInterval(() => {
+    markMissingSocketPlayersDisconnected((socketId) => io.sockets.sockets.has(socketId));
+    const removed = cleanupStaleRooms();
+    if (removed > 0) {
+      emitPublicMatches(io);
+    }
+  }, 60_000);
+
   io.on("connection", (socket) => {
     socket.on("list_public_matches", () => {
+      markMissingSocketPlayersDisconnected((socketId) => io.sockets.sockets.has(socketId));
       socket.emit("public_matches_updated", {
         matches: listPublicMatches(),
       });
@@ -1091,14 +1112,34 @@ export function setupSocket(httpServer: HttpServer) {
 
         const actor = room.game.players.find((p: any) => p.id === actorId);
         if (!actor) return;
-        if (normalizeRoleKey(actor.roleKey) === "judge") {
-          socket.emit("error", { message: "Судья не использует кнопку «Протестую»." });
+
+        const actorRole = normalizeRoleKey(actor.roleKey);
+        if (actorRole === "judge") {
+          socket.emit("error", {
+            message: "Судья не использует кнопку «Протестую».",
+          });
+          return;
+        }
+        if (actorRole === "witness") {
+          socket.emit("error", {
+            message: "Свидетель не может заявлять протест.",
+          });
+          return;
+        }
+        if (room.game.activeProtest) {
+          socket.emit("error", {
+            message:
+              "В матче уже есть активный протест. Дождитесь решения судьи.",
+          });
           return;
         }
 
         const stageName = getCurrentStageName(room.game.stages, room.game.stageIndex);
         if (!isCrossExaminationStage(stageName)) {
-          socket.emit("error", { message: "Протест доступен только на этапе «Перекрестный допрос»." });
+          socket.emit("error", {
+            message:
+              "Протест доступен только на этапе «Перекрестный допрос».",
+          });
           return;
         }
 
@@ -1119,16 +1160,71 @@ export function setupSocket(httpServer: HttpServer) {
           action: "protest",
           cooldownEndsAt: nextCooldownEndsAt,
         });
+
+        room.game.activeProtest = {
+          id: crypto.randomUUID(),
+          actorId: actor.id,
+          actorName: actor.name,
+          actorRoleTitle: actor.roleTitle || actor.name,
+          createdAt: now,
+        };
+        emitProtestState(roomCode, room);
+      },
+    );
+
+    socket.on(
+      "resolve_protest",
+      ({
+        code,
+        resolution,
+        sessionToken,
+      }: {
+        code: string;
+        resolution: "accepted" | "rejected";
+        sessionToken?: string;
+      }) => {
+        const roomCode = normalizeRoomCode(code);
+        const room = getRoom(roomCode);
+        if (!room?.game || room.game.finished) return;
+
+        const actorId = resolveActorId({
+          socketId: socket.id,
+          roomCode,
+          room,
+          sessionToken,
+        });
+        if (!actorId) return;
+
+        const actor = room.game.players.find((p: any) => p.id === actorId);
+        if (!actor || normalizeRoleKey(actor.roleKey) !== "judge") {
+          socket.emit("error", {
+            message: "Принимать или отклонять протест может только судья.",
+          });
+          return;
+        }
+
+        const active = room.game.activeProtest;
+        if (!active) {
+          socket.emit("error", {
+            message: "В матче нет активного протеста.",
+          });
+          return;
+        }
+
+        room.game.activeProtest = null;
+        emitProtestState(roomCode, room);
+
         io.to(roomCode).emit("influence_announcement", {
           id: crypto.randomUUID(),
           kind: "protest",
-          title: "ПРОТЕСТУЮ!",
-          subtitle: actor.roleTitle || actor.name,
+          title:
+            resolution === "accepted"
+              ? "ПРОТЕСТ ПРИНЯТ"
+              : "ПРОТЕСТ ОТКЛОНЕН",
           durationMs: INFLUENCE_ANNOUNCEMENT_DURATION_MS,
         });
       },
     );
-
     socket.on(
       "trigger_judge_silence",
       ({ code, sessionToken }: { code: string; sessionToken?: string }) => {
@@ -1260,22 +1356,22 @@ export function setupSocket(httpServer: HttpServer) {
 
         const actor = room.game.players.find((p: any) => p.id === actorId);
         if (!actor || normalizeRoleKey(actor.roleKey) !== "judge") {
-          socket.emit("error", { message: "РЎРЅРёРјР°С‚СЊ РїСЂРµРґСѓРїСЂРµР¶РґРµРЅРёСЏ РјРѕР¶РµС‚ С‚РѕР»СЊРєРѕ СЃСѓРґСЊСЏ." });
+          socket.emit("error", { message: "Снимать предупреждения может только судья." });
           return;
         }
 
         if (!targetPlayerId || targetPlayerId === actorId) {
-          socket.emit("error", { message: "РќРµР»СЊР·СЏ РёР·РјРµРЅРёС‚СЊ РїСЂРµРґСѓРїСЂРµР¶РґРµРЅРёРµ СЌС‚РѕРјСѓ РёРіСЂРѕРєСѓ." });
+          socket.emit("error", { message: "Нельзя изменить предупреждение этому игроку." });
           return;
         }
 
         const targetPlayer = room.game.players.find((p: any) => p.id === targetPlayerId);
         if (!targetPlayer) {
-          socket.emit("error", { message: "РРіСЂРѕРє РЅРµ РЅР°Р№РґРµРЅ." });
+          socket.emit("error", { message: "Игрок не найден." });
           return;
         }
         if (normalizeRoleKey(targetPlayer.roleKey) === "judge") {
-          socket.emit("error", { message: "РЎСѓРґСЊСЋ РЅРµР»СЊР·СЏ РёР·РјРµРЅСЏС‚СЊ РїСЂРµРґСѓРїСЂРµР¶РґРµРЅРёСЏ." });
+          socket.emit("error", { message: "Судью нельзя изменять предупреждения." });
           return;
         }
 
@@ -1283,7 +1379,7 @@ export function setupSocket(httpServer: HttpServer) {
         if (!result) return;
         if (!result.changed) {
           socket.emit("error", {
-            message: "РЈ СЌС‚РѕРіРѕ РёРіСЂРѕРєР° РЅРµС‚ РїСЂРµРґСѓРїСЂРµР¶РґРµРЅРёР№.",
+            message: "У этого игрока нет предупреждений.",
           });
           return;
         }
@@ -1462,12 +1558,22 @@ export function setupSocket(httpServer: HttpServer) {
         usedCards: updatedRoom.game!.usedCards
       });
 
+      const latestUsedCard =
+        updatedRoom.game!.usedCards[updatedRoom.game!.usedCards.length - 1];
+      if (latestUsedCard) {
+        io.to(roomCode).emit("influence_announcement", {
+          id: crypto.randomUUID(),
+          kind: "card",
+          title: latestUsedCard.name || "CARD",
+          durationMs: INFLUENCE_ANNOUNCEMENT_DURATION_MS,
+        });
+      }
+
       const myPlayer = updatedRoom.game!.players.find((p: any) => p.id === actorId);
       if (myPlayer) {
         io.to(myPlayer.socketId).emit("my_cards_updated", { cards: myPlayer.cards });
       }
     });
-
     socket.on("next_stage", ({ code, sessionToken }: { code: string; sessionToken?: string }) => {
       const roomCode = normalizeRoomCode(code);
       const room = getRoom(roomCode);
