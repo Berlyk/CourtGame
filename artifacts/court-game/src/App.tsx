@@ -3561,24 +3561,23 @@ export default function App() {
         {homeTab === "development" && (
           <div className="max-w-6xl mx-auto">
             <Card className="rounded-[28px] border-zinc-800 bg-zinc-900/95 text-zinc-100">
-              <CardContent className="p-8 md:p-10 space-y-6">
-                <div className="flex justify-end">
-                  <motion.a
-                    href={DISCORD_INVITE_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    whileHover={{ y: -1 }}
-                    whileTap={{ scale: 0.99 }}
+              <CardContent className="relative p-8 md:p-10 space-y-6">
+                <motion.a
+                  href={DISCORD_INVITE_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  whileHover={{ y: -1 }}
+                  whileTap={{ scale: 0.99 }}
+                  className="absolute right-8 top-8 md:right-10 md:top-10 z-10"
+                >
+                  <Button
+                    variant="outline"
+                    className="h-10 rounded-xl border-red-500/35 bg-red-950/20 text-red-100 hover:bg-red-900/30 hover:text-white gap-2 px-4"
                   >
-                    <Button
-                      variant="outline"
-                      className="h-10 rounded-xl border-red-500/35 bg-red-950/20 text-red-100 hover:bg-red-900/30 hover:text-white gap-2 px-4"
-                    >
-                      <AlertCircle className="w-4 h-4" />
-                      <span>Сообщить о баге</span>
-                    </Button>
-                  </motion.a>
-                </div>
+                    <AlertCircle className="w-4 h-4" />
+                    <span>Сообщить о баге</span>
+                  </Button>
+                </motion.a>
                 <div className="flex justify-center">
                   <div className="w-full max-w-md rounded-3xl border border-red-500/35 bg-gradient-to-br from-red-950/50 via-zinc-900 to-zinc-900 px-6 py-5 text-center shadow-[0_16px_40px_rgba(185,28,28,0.25)]">
                     <div className="text-[11px] uppercase tracking-[0.22em] text-red-300/80">
