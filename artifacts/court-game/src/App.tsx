@@ -106,6 +106,32 @@ const QUICK_ROOM_MODE = {
 const DISCORD_INVITE_URL = "https://discord.gg/6UZ7xDxnhR";
 const RECONNECT_GRACE_MS = 30_000;
 const VERDICT_CLOSE_COUNTDOWN_MS = 30_000;
+const AUTH_TOKEN_STORAGE_KEY = "court_auth_token";
+const AUTH_USER_STORAGE_KEY = "court_auth_user";
+const GUEST_NAME_STORAGE_KEY = "court_guest_name";
+const GUEST_NAME_PREFIX = "Гость-";
+
+const SITE_RULES: string[] = [
+  "Запрещено иметь нецензурные ники.",
+  "Запрещено в информации о себе использовать оскорбления, дискриминацию, экстремизм и мат.",
+  "Запрещены любые попытки накрутки статистики в личном кабинете.",
+  "Запрещены любые деструктивные действия: угрозы, домогательства, спам, ложная информация и ухудшение опыта других игроков.",
+  "Запрещен обман: ложные обвинения, фальсификация данных, подделка сообщений и мошенничество.",
+  "Запрещено искать и использовать уязвимости сайта. Найденные уязвимости нужно сообщать администрации через почту или Discord.",
+];
+
+function generateGuestName(): string {
+  const randomPart = Math.floor(1000 + Math.random() * 9000);
+  return `${GUEST_NAME_PREFIX}${randomPart}`;
+}
+
+function getOrCreateGuestName(): string {
+  const stored = localStorage.getItem(GUEST_NAME_STORAGE_KEY)?.trim() ?? "";
+  if (stored) return stored;
+  const next = generateGuestName();
+  localStorage.setItem(GUEST_NAME_STORAGE_KEY, next);
+  return next;
+}
 
 const ROOM_MODE_BY_KEY = Object.fromEntries(
   [...ROOM_MODE_OPTIONS, QUICK_ROOM_MODE].map((mode) => [mode.key, mode]),
@@ -1208,6 +1234,15 @@ interface PublicMatchInfo {
   requiresPassword: boolean;
 }
 
+interface AuthUser {
+  id: string;
+  login: string;
+  email: string;
+  nickname: string;
+  avatar?: string;
+  createdAt: number;
+}
+
 interface MyPlayer {
   id: string;
   name: string;
@@ -1287,6 +1322,34 @@ function Avatar({
       {initials}
     </div>
   );
+}
+
+async function authRequest<T>(
+  path: string,
+  options?: {
+    method?: "GET" | "POST" | "PATCH";
+    token?: string | null;
+    body?: unknown;
+  },
+): Promise<T> {
+  const response = await fetch(`/api${path}`, {
+    method: options?.method ?? "GET",
+    headers: {
+      "Content-Type": "application/json",
+      ...(options?.token ? { Authorization: `Bearer ${options.token}` } : {}),
+    },
+    body: options?.body !== undefined ? JSON.stringify(options.body) : undefined,
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const message =
+      typeof payload?.message === "string" && payload.message.trim()
+        ? payload.message
+        : "Ошибка запроса.";
+    throw new Error(message);
+  }
+  return payload as T;
 }
 
 function PlayerCard({
@@ -1455,7 +1518,7 @@ function ContextHelp({
 }
 
 export default function App() {
-  const [screen, setScreen] = useState<"setup" | "home" | "profile" | "room" | "game">(
+  const [screen, setScreen] = useState<"home" | "profile" | "room" | "game">(
     "home",
   );
   const [homeTab, setHomeTab] = useState<HomeTab>("play");
@@ -1466,6 +1529,30 @@ export default function App() {
   const [contextHelpQuery, setContextHelpQuery] = useState("");
   const [playerName, setPlayerName] = useState("");
   const [avatar, setAvatar] = useState<string | null>(null);
+  const [authToken, setAuthToken] = useState<string | null>(
+    () => localStorage.getItem(AUTH_TOKEN_STORAGE_KEY),
+  );
+  const [authUser, setAuthUser] = useState<AuthUser | null>(() => {
+    const raw = localStorage.getItem(AUTH_USER_STORAGE_KEY);
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as AuthUser;
+    } catch {
+      return null;
+    }
+  });
+  const [authDialogOpen, setAuthDialogOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<"login" | "register">("login");
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState("");
+  const [loginOrEmail, setLoginOrEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [registerLogin, setRegisterLogin] = useState("");
+  const [registerEmail, setRegisterEmail] = useState("");
+  const [registerPassword, setRegisterPassword] = useState("");
+  const [registerConfirmPassword, setRegisterConfirmPassword] = useState("");
+  const [registerAcceptRules, setRegisterAcceptRules] = useState(false);
+  const [rulesDialogOpen, setRulesDialogOpen] = useState(false);
   const [joinCode, setJoinCode] = useState("");
   const [error, setError] = useState("");
   const [kickedAlert, setKickedAlert] = useState("");
@@ -1547,6 +1634,7 @@ export default function App() {
   const socket = getSocket();
   const activeRoomCode = room?.code ?? game?.code ?? null;
   const sharedAvatar = shareAvatarInProfile ? avatar : null;
+  const isAuthenticated = !!authUser && !!authToken;
   const selectedCreateMode = getRoomModeMeta(createRoomMode);
   const reconnectSecondsLeft =
     reconnectExpiresAt !== null
@@ -1628,19 +1716,52 @@ export default function App() {
 
     if (savedName) {
       setPlayerName(savedName);
-      const sessionCode = localStorage.getItem("court_session");
-      const sessionToken = localStorage.getItem("court_session_token");
-      if (sessionCode && sessionToken) {
-        setHasSession(true);
-        attemptSessionRejoin("boot");
-      } else if (sessionCode && !sessionToken) {
-        localStorage.removeItem("court_session");
-        setHasSession(false);
-      }
+    } else if (authUser?.nickname) {
+      setPlayerName(authUser.nickname);
+      localStorage.setItem("court_nickname", authUser.nickname);
     } else {
-      setScreen("setup");
+      const guestName = getOrCreateGuestName();
+      setPlayerName(guestName);
+      localStorage.setItem("court_nickname", guestName);
     }
-  }, [attemptSessionRejoin]);
+
+    const sessionCode = localStorage.getItem("court_session");
+    const sessionToken = localStorage.getItem("court_session_token");
+    if (sessionCode && sessionToken) {
+      setHasSession(true);
+      attemptSessionRejoin("boot");
+    } else if (sessionCode && !sessionToken) {
+      localStorage.removeItem("court_session");
+      setHasSession(false);
+    }
+  }, [attemptSessionRejoin, authUser?.nickname]);
+
+  useEffect(() => {
+    if (!authToken) return;
+    let cancelled = false;
+    authRequest<{ user: AuthUser }>("/auth/me", { token: authToken })
+      .then(({ user }) => {
+        if (cancelled) return;
+        setAuthUser(user);
+        localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(user));
+        setPlayerName(user.nickname);
+        localStorage.setItem("court_nickname", user.nickname);
+        if (user.avatar) {
+          setAvatar(user.avatar);
+          localStorage.setItem("court_avatar", user.avatar);
+        }
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setAuthToken(null);
+        setAuthUser(null);
+        localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+        localStorage.removeItem(AUTH_USER_STORAGE_KEY);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [authToken]);
 
   useEffect(() => {
     if (screen !== "home") return;
@@ -2284,7 +2405,7 @@ export default function App() {
   }, [socket, avatar, clearReconnectWindow, sharedAvatar, startReconnectWindow]);
 
   const createQuickRoom = useCallback(() => {
-    const name = playerName.trim() || "Игрок";
+    const name = playerName.trim() || getOrCreateGuestName();
     localStorage.setItem("court_nickname", name);
     socket.emit("create_room", {
       playerName: name,
@@ -2297,7 +2418,7 @@ export default function App() {
   }, [socket, playerName, sharedAvatar]);
 
   const createRoomFromPanel = useCallback(() => {
-    const name = playerName.trim() || "Игрок";
+    const name = playerName.trim() || getOrCreateGuestName();
     if (createRoomPrivate && !createRoomPassword.trim()) {
       setError("Для приватной комнаты задайте пароль.");
       setTimeout(() => setError(""), 3000);
@@ -2334,7 +2455,7 @@ export default function App() {
     const targetCode = (options?.code ?? joinCode).trim().toUpperCase();
     if (!targetCode) return;
     const password = (options?.password ?? "").trim();
-    const name = playerName.trim() || "Игрок";
+    const name = playerName.trim() || getOrCreateGuestName();
     localStorage.setItem("court_nickname", name);
     socket.emit("join_room", {
       code: targetCode,
@@ -2364,9 +2485,33 @@ export default function App() {
       });
     }
 
+    if (authToken) {
+      authRequest<{ user: AuthUser }>("/auth/profile", {
+        method: "PATCH",
+        token: authToken,
+        body: {
+          nickname: nextName,
+          avatar: sharedAvatar,
+        },
+      })
+        .then(({ user }) => {
+          setAuthUser(user);
+          localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(user));
+        })
+        .catch(() => undefined);
+    }
+
     setProfileMenuOpen(false);
     setScreen("home");
-  }, [socket, activeRoomCode, mySessionToken, playerName, avatar, sharedAvatar]);
+  }, [
+    socket,
+    activeRoomCode,
+    mySessionToken,
+    playerName,
+    avatar,
+    sharedAvatar,
+    authToken,
+  ]);
 
   const sendLobbyChatMessage = useCallback(() => {
     const text = lobbyChatInput.trim();
@@ -2433,6 +2578,109 @@ export default function App() {
   const handlePlayerNameChange = useCallback((value: string) => {
     setPlayerName(value.slice(0, 20));
   }, []);
+
+  const handleAuthSuccess = useCallback((user: AuthUser, token: string) => {
+    setAuthUser(user);
+    setAuthToken(token);
+    localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token);
+    localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(user));
+    localStorage.setItem("court_nickname", user.nickname);
+    setPlayerName(user.nickname);
+    if (user.avatar) {
+      setAvatar(user.avatar);
+      localStorage.setItem("court_avatar", user.avatar);
+    }
+    setAuthError("");
+    setAuthDialogOpen(false);
+    setAuthMode("login");
+    if (activeRoomCode && mySessionToken) {
+      socket.emit("update_profile", {
+        code: activeRoomCode,
+        sessionToken: mySessionToken,
+        name: user.nickname,
+        avatar: user.avatar ?? null,
+      });
+    }
+    setScreen("profile");
+  }, [activeRoomCode, mySessionToken, socket]);
+
+  const submitLogin = useCallback(async () => {
+    if (authLoading) return;
+    setAuthLoading(true);
+    setAuthError("");
+    try {
+      const payload = await authRequest<{ user: AuthUser; token: string }>("/auth/login", {
+        method: "POST",
+        body: {
+          loginOrEmail: loginOrEmail.trim(),
+          password: loginPassword,
+        },
+      });
+      handleAuthSuccess(payload.user, payload.token);
+      setLoginPassword("");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Не удалось выполнить вход.";
+      setAuthError(message);
+    } finally {
+      setAuthLoading(false);
+    }
+  }, [authLoading, handleAuthSuccess, loginOrEmail, loginPassword]);
+
+  const submitRegister = useCallback(async () => {
+    if (authLoading) return;
+    setAuthLoading(true);
+    setAuthError("");
+    try {
+      const payload = await authRequest<{ user: AuthUser; token: string }>("/auth/register", {
+        method: "POST",
+        body: {
+          login: registerLogin.trim(),
+          email: registerEmail.trim(),
+          password: registerPassword,
+          confirmPassword: registerConfirmPassword,
+          acceptRules: registerAcceptRules,
+        },
+      });
+      handleAuthSuccess(payload.user, payload.token);
+      setRegisterPassword("");
+      setRegisterConfirmPassword("");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Не удалось зарегистрироваться.";
+      setAuthError(message);
+    } finally {
+      setAuthLoading(false);
+    }
+  }, [
+    authLoading,
+    handleAuthSuccess,
+    registerAcceptRules,
+    registerConfirmPassword,
+    registerEmail,
+    registerLogin,
+    registerPassword,
+  ]);
+
+  const logoutAccount = useCallback(() => {
+    if (authToken) {
+      authRequest("/auth/logout", {
+        method: "POST",
+        token: authToken,
+      }).catch(() => undefined);
+    }
+
+    setAuthToken(null);
+    setAuthUser(null);
+    localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+    localStorage.removeItem(AUTH_USER_STORAGE_KEY);
+
+    const guestName = getOrCreateGuestName();
+    setPlayerName(guestName);
+    localStorage.setItem("court_nickname", guestName);
+    setAvatar(null);
+    localStorage.removeItem("court_avatar");
+    setProfileMenuOpen(false);
+    setScreen("home");
+  }, [authToken]);
 
   const reconnect = useCallback(() => {
     if (reconnectExpiresAt !== null && reconnectExpiresAt <= Date.now()) {
@@ -2690,13 +2938,6 @@ export default function App() {
     setCreateMatchDialogOpen(false);
   }, [clearReconnectWindow, game, myId, room, socket, startReconnectWindow]);
 
-  const setupNickname = useCallback(() => {
-    const name = playerName.trim();
-    if (!name) return;
-    localStorage.setItem("court_nickname", name);
-    setScreen("home");
-  }, [playerName]);
-
   const compressAvatar = useCallback(
     (inputDataUrl: string): Promise<string> =>
       new Promise((resolve) => {
@@ -2759,83 +3000,6 @@ export default function App() {
       });
   }, []);
 
-  if (screen === "setup") {
-    return (
-      <motion.div
-        key="setup"
-        variants={pageVariants}
-        initial="initial"
-        animate="animate"
-        exit="exit"
-        className="relative isolate min-h-screen bg-[#0b0b0f] text-zinc-100 flex items-center justify-center p-6"
-      >
-        <CourtAtmosphereBackground />
-        <div className="w-full max-w-sm space-y-4">
-          <Card className="rounded-[28px] border-zinc-800 bg-zinc-900/95 text-zinc-100">
-            <CardContent className="p-8 space-y-6">
-              <div className="space-y-2 text-center">
-                <Badge className="rounded-full px-3 py-1 text-sm bg-red-600/90 text-white border-0">
-                  СУД
-                </Badge>
-                <h1 className="text-2xl font-bold pt-2">Добро пожаловать!</h1>
-                <p className="text-sm text-zinc-400">
-                  Придумайте никнейм — он сохранится и будет привязан к вам в
-                  каждой игре.
-                </p>
-              </div>
-
-              <div className="flex flex-col items-center gap-3">
-                <div
-                  className="relative cursor-pointer group"
-                  onClick={() => avatarInputRef.current?.click()}
-                >
-                  <Avatar src={avatar} name={playerName || "?"} size={72} />
-                  <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Camera className="w-5 h-5 text-white" />
-                  </div>
-                </div>
-                <span className="text-xs text-zinc-500">
-                  Нажмите, чтобы добавить фото
-                </span>
-                <input
-                  ref={avatarInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleAvatarChange}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Ваш никнейм</label>
-                <Input
-                  value={playerName}
-                  onChange={(e) => handlePlayerNameChange(e.target.value)}
-                  placeholder="Например: Артём"
-                  className="h-12 rounded-xl bg-zinc-100 text-zinc-950 placeholder:text-zinc-400 border-0 focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-0"
-                  onKeyDown={(e) => e.key === "Enter" && setupNickname()}
-                  autoFocus
-                />
-              </div>
-              <motion.div
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                <Button
-                  onClick={setupNickname}
-                  disabled={!playerName.trim()}
-                  className="w-full h-12 rounded-xl text-base bg-red-600 hover:bg-red-500 text-white border-0 disabled:bg-zinc-700 disabled:text-zinc-500"
-                >
-                  Продолжить
-                </Button>
-              </motion.div>
-            </CardContent>
-          </Card>
-        </div>
-      </motion.div>
-    );
-  }
-
   if (screen === "profile") {
     return (
       <motion.div
@@ -2859,6 +3023,12 @@ export default function App() {
                   <p className="text-zinc-400 mt-2">
                     Настройте профиль игрока и внешний вид лобби.
                   </p>
+                  {authUser && (
+                    <div className="mt-3 text-xs text-zinc-500 space-y-1">
+                      <div>Логин: {authUser.login}</div>
+                      <div>Почта: {authUser.email}</div>
+                    </div>
+                  )}
                 </div>
                 <Button
                   variant="outline"
@@ -3052,21 +3222,34 @@ export default function App() {
                 </div>
 
                 <div className="mt-1.5 border-t border-zinc-800/80 pt-1.5 sm:mt-0 sm:pt-0 sm:border-t-0 sm:ml-1 sm:pl-2 sm:border-l sm:border-zinc-700/80">
-                  <Button
-                    variant="outline"
-                    onClick={() => setProfileMenuOpen((prev) => !prev)}
-                    className="h-10 w-full sm:w-auto rounded-full border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100 px-3.5 gap-2 transition-all duration-200 hover:-translate-y-0.5"
-                  >
-                    <Avatar src={avatar} name={playerName || "Игрок"} size={32} />
-                    <span className="max-w-[130px] truncate text-sm">{playerName || "Игрок"}</span>
-                    <ChevronDown className="w-4 h-4 text-zinc-400" />
-                  </Button>
+                  {isAuthenticated ? (
+                    <Button
+                      variant="outline"
+                      onClick={() => setProfileMenuOpen((prev) => !prev)}
+                      className="h-10 w-full sm:w-auto rounded-full border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100 px-3.5 gap-2 transition-all duration-200 hover:-translate-y-0.5"
+                    >
+                      <Avatar src={avatar} name={playerName || "Игрок"} size={32} />
+                      <span className="max-w-[130px] truncate text-sm">{playerName || "Игрок"}</span>
+                      <ChevronDown className="w-4 h-4 text-zinc-400" />
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setAuthMode("login");
+                        setAuthDialogOpen(true);
+                      }}
+                      className="h-10 w-full sm:w-auto rounded-full border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100 px-4 gap-2 transition-all duration-200 hover:-translate-y-0.5"
+                    >
+                      Войти
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>
 
             <AnimatePresence>
-              {profileMenuOpen && (
+              {isAuthenticated && profileMenuOpen && (
                 <motion.div
                   initial={{ opacity: 0, y: -8, scale: 0.96 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -3081,9 +3264,188 @@ export default function App() {
                     <UserCircle2 className="w-4 h-4" />
                     Открыть профиль
                   </button>
+                  <button
+                    type="button"
+                    onClick={logoutAccount}
+                    className="w-full rounded-xl px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-800 flex items-center gap-2"
+                  >
+                    <DoorOpen className="w-4 h-4" />
+                    Выйти из аккаунта
+                  </button>
                 </motion.div>
               )}
             </AnimatePresence>
+
+            <Dialog
+              open={authDialogOpen}
+              onOpenChange={(open) => {
+                setAuthDialogOpen(open);
+                if (!open) setAuthError("");
+              }}
+            >
+              <DialogContent className="max-w-md border-zinc-800 bg-zinc-950 text-zinc-100">
+                <DialogHeader>
+                  <DialogTitle>
+                    {authMode === "login" ? "Вход в аккаунт" : "Регистрация"}
+                  </DialogTitle>
+                  <DialogDescription className="text-zinc-400">
+                    {authMode === "login"
+                      ? "Войдите, чтобы использовать личный профиль."
+                      : "Создайте аккаунт. После регистрации откроется ваш профиль."}
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      type="button"
+                      variant={authMode === "login" ? "secondary" : "outline"}
+                      onClick={() => {
+                        setAuthMode("login");
+                        setAuthError("");
+                      }}
+                      className={
+                        authMode === "login"
+                          ? "rounded-xl bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0"
+                          : "rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                      }
+                    >
+                      Вход
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={authMode === "register" ? "secondary" : "outline"}
+                      onClick={() => {
+                        setAuthMode("register");
+                        setAuthError("");
+                      }}
+                      className={
+                        authMode === "register"
+                          ? "rounded-xl bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0"
+                          : "rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                      }
+                    >
+                      Регистрация
+                    </Button>
+                  </div>
+
+                  {authError && (
+                    <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                      {authError}
+                    </div>
+                  )}
+
+                  {authMode === "login" ? (
+                    <div className="space-y-2">
+                      <Input
+                        value={loginOrEmail}
+                        onChange={(e) => setLoginOrEmail(e.target.value)}
+                        placeholder="Логин или почта"
+                        className="h-11 rounded-xl bg-zinc-100 text-zinc-950 border-0 placeholder:text-zinc-500"
+                      />
+                      <Input
+                        type="password"
+                        value={loginPassword}
+                        onChange={(e) => setLoginPassword(e.target.value)}
+                        placeholder="Пароль"
+                        className="h-11 rounded-xl bg-zinc-100 text-zinc-950 border-0 placeholder:text-zinc-500"
+                        onKeyDown={(e) => e.key === "Enter" && submitLogin()}
+                      />
+                      <Button
+                        type="button"
+                        onClick={submitLogin}
+                        disabled={authLoading || !loginOrEmail.trim() || !loginPassword}
+                        className="w-full h-11 rounded-xl bg-red-600 hover:bg-red-500 text-white border-0"
+                      >
+                        {authLoading ? "Входим..." : "Войти"}
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <Input
+                        value={registerLogin}
+                        onChange={(e) => setRegisterLogin(e.target.value.slice(0, 20))}
+                        placeholder="Логин"
+                        className="h-11 rounded-xl bg-zinc-100 text-zinc-950 border-0 placeholder:text-zinc-500"
+                      />
+                      <Input
+                        value={registerEmail}
+                        onChange={(e) => setRegisterEmail(e.target.value)}
+                        placeholder="Почта"
+                        className="h-11 rounded-xl bg-zinc-100 text-zinc-950 border-0 placeholder:text-zinc-500"
+                      />
+                      <Input
+                        type="password"
+                        value={registerPassword}
+                        onChange={(e) => setRegisterPassword(e.target.value)}
+                        placeholder="Пароль"
+                        className="h-11 rounded-xl bg-zinc-100 text-zinc-950 border-0 placeholder:text-zinc-500"
+                      />
+                      <Input
+                        type="password"
+                        value={registerConfirmPassword}
+                        onChange={(e) => setRegisterConfirmPassword(e.target.value)}
+                        placeholder="Подтверждение пароля"
+                        className="h-11 rounded-xl bg-zinc-100 text-zinc-950 border-0 placeholder:text-zinc-500"
+                        onKeyDown={(e) => e.key === "Enter" && submitRegister()}
+                      />
+                      <label className="flex items-start gap-2 rounded-xl border border-zinc-800 bg-zinc-900/75 px-3 py-2 text-sm text-zinc-300">
+                        <input
+                          type="checkbox"
+                          className="mt-1 accent-red-600"
+                          checked={registerAcceptRules}
+                          onChange={(e) => setRegisterAcceptRules(e.target.checked)}
+                        />
+                        <span>
+                          Я ознакомлен с{" "}
+                          <button
+                            type="button"
+                            className="text-red-300 underline underline-offset-2 hover:text-red-200"
+                            onClick={() => setRulesDialogOpen(true)}
+                          >
+                            правилами сайта
+                          </button>
+                          .
+                        </span>
+                      </label>
+                      <Button
+                        type="button"
+                        onClick={submitRegister}
+                        disabled={
+                          authLoading ||
+                          !registerLogin.trim() ||
+                          !registerEmail.trim() ||
+                          !registerPassword ||
+                          !registerConfirmPassword ||
+                          !registerAcceptRules
+                        }
+                        className="w-full h-11 rounded-xl bg-red-600 hover:bg-red-500 text-white border-0"
+                      >
+                        {authLoading ? "Создаем..." : "Зарегистрироваться"}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={rulesDialogOpen} onOpenChange={setRulesDialogOpen}>
+              <DialogContent className="max-w-2xl border-zinc-800 bg-zinc-950 text-zinc-100">
+                <DialogHeader>
+                  <DialogTitle>Правила сайта</DialogTitle>
+                </DialogHeader>
+                <div className={`space-y-2 max-h-[65vh] overflow-y-auto pr-1 ${HIDE_SCROLLBAR_CLASS}`}>
+                  <p className="text-sm text-zinc-400">
+                    Добро пожаловать на наш сайт по игре Bunker Online. Соблюдайте правила для комфортной и справедливой игры.
+                  </p>
+                  <ol className="list-decimal pl-5 space-y-2 text-sm text-zinc-300">
+                    {SITE_RULES.map((rule) => (
+                      <li key={rule}>{rule}</li>
+                    ))}
+                  </ol>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
 
