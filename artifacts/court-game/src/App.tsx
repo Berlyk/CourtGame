@@ -4062,7 +4062,7 @@ export default function App() {
       verdictCloseAt !== null
         ? Math.max(0, Math.ceil(verdictMsLeft / 1000))
         : 0;
-    const verdictRingRadius = 17;
+    const verdictRingRadius = 13;
     const verdictRingLength = 2 * Math.PI * verdictRingRadius;
     const verdictRingProgress =
       verdictCloseAt !== null
@@ -4207,27 +4207,27 @@ export default function App() {
                   <CardContent className="relative p-8 space-y-6 text-center">
                     {verdictCloseAt !== null && verdictSecondsLeft > 0 && (
                       <div className="absolute top-4 right-4 flex items-center justify-center">
-                        <div className="relative h-10 w-10">
+                        <div className="relative h-8 w-8">
                           <svg
-                            className="h-10 w-10 -rotate-90"
-                            viewBox="0 0 40 40"
+                            className="h-8 w-8 -rotate-90"
+                            viewBox="0 0 32 32"
                             aria-hidden="true"
                           >
                             <circle
-                              cx="20"
-                              cy="20"
+                              cx="16"
+                              cy="16"
                               r={verdictRingRadius}
                               fill="none"
                               stroke="rgba(113, 113, 122, 0.45)"
-                              strokeWidth="3"
+                              strokeWidth="2.5"
                             />
                             <circle
-                              cx="20"
-                              cy="20"
+                              cx="16"
+                              cy="16"
                               r={verdictRingRadius}
                               fill="none"
                               stroke="#ef4444"
-                              strokeWidth="3"
+                              strokeWidth="2.5"
                               strokeLinecap="round"
                               strokeDasharray={verdictRingLength}
                               strokeDashoffset={verdictRingOffset}
