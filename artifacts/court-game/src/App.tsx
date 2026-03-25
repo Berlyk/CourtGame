@@ -4062,7 +4062,7 @@ export default function App() {
       verdictCloseAt !== null
         ? Math.max(0, Math.ceil(verdictMsLeft / 1000))
         : 0;
-    const verdictRingRadius = 24;
+    const verdictRingRadius = 20;
     const verdictRingLength = 2 * Math.PI * verdictRingRadius;
     const verdictRingProgress =
       verdictCloseAt !== null
@@ -4206,35 +4206,35 @@ export default function App() {
                 <Card className="rounded-[28px] border-zinc-800 bg-zinc-900 text-zinc-100">
                   <CardContent className="relative p-8 space-y-6 text-center">
                     {verdictCloseAt !== null && verdictSecondsLeft > 0 && (
-                      <div className="absolute top-5 right-5 flex items-center justify-center">
-                        <div className="relative h-14 w-14">
+                      <div className="absolute top-4 right-4 flex items-center justify-center">
+                        <div className="relative h-11 w-11">
                           <svg
-                            className="h-14 w-14 -rotate-90"
-                            viewBox="0 0 56 56"
+                            className="h-11 w-11 -rotate-90"
+                            viewBox="0 0 48 48"
                             aria-hidden="true"
                           >
                             <circle
-                              cx="28"
-                              cy="28"
+                              cx="24"
+                              cy="24"
                               r={verdictRingRadius}
                               fill="none"
                               stroke="rgba(113, 113, 122, 0.45)"
-                              strokeWidth="4"
+                              strokeWidth="3.5"
                             />
                             <circle
-                              cx="28"
-                              cy="28"
+                              cx="24"
+                              cy="24"
                               r={verdictRingRadius}
                               fill="none"
                               stroke="#ef4444"
-                              strokeWidth="4"
+                              strokeWidth="3.5"
                               strokeLinecap="round"
                               strokeDasharray={verdictRingLength}
                               strokeDashoffset={verdictRingOffset}
                               className="transition-[stroke-dashoffset] duration-200 ease-linear"
                             />
                           </svg>
-                          <div className="absolute inset-0 grid place-items-center text-sm font-semibold text-zinc-100">
+                          <div className="absolute inset-0 grid place-items-center text-xs font-semibold text-zinc-100">
                             {verdictSecondsLeft}
                           </div>
                         </div>
