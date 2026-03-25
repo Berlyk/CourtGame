@@ -4234,9 +4234,6 @@ export default function App() {
                               className="transition-[stroke-dashoffset] duration-200 ease-linear"
                             />
                           </svg>
-                          <div className="absolute inset-0 grid place-items-center text-[11px] font-semibold text-zinc-100">
-                            {verdictSecondsLeft}
-                          </div>
                         </div>
                       </div>
                     )}
