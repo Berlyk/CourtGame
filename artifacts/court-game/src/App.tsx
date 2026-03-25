@@ -1541,6 +1541,7 @@ export default function App() {
   >("main");
   const myIdRef = useRef<string | null>(null);
   const influenceAnnouncementTimerRef = useRef<number | null>(null);
+  const lastAutoRejoinAttemptAtRef = useRef(0);
   const socket = getSocket();
   const activeRoomCode = room?.code ?? game?.code ?? null;
   const sharedAvatar = shareAvatarInProfile ? avatar : null;
@@ -1596,6 +1597,28 @@ export default function App() {
     [clearReconnectWindow, game?.code, mySessionToken, room?.code],
   );
 
+  const attemptSessionRejoin = useCallback(
+    (source: "boot" | "connect" | "manual" = "manual") => {
+      const sessionCode = localStorage.getItem("court_session");
+      const sessionToken =
+        (mySessionToken ?? localStorage.getItem("court_session_token")) || "";
+      if (!sessionCode || !sessionToken.trim()) return;
+
+      const now = Date.now();
+      const minIntervalMs = source === "connect" ? 1200 : 400;
+      if (now - lastAutoRejoinAttemptAtRef.current < minIntervalMs) return;
+      lastAutoRejoinAttemptAtRef.current = now;
+
+      setHasSession(true);
+      socket.emit("rejoin_room", {
+        code: sessionCode,
+        sessionToken: sessionToken.trim(),
+        avatar: sharedAvatar || undefined,
+      });
+    },
+    [mySessionToken, sharedAvatar, socket],
+  );
+
   useEffect(() => {
     const savedName = localStorage.getItem("court_nickname");
     const savedAvatar = localStorage.getItem("court_avatar");
@@ -1607,10 +1630,7 @@ export default function App() {
       const sessionToken = localStorage.getItem("court_session_token");
       if (sessionCode && sessionToken) {
         setHasSession(true);
-        socket.emit("rejoin_room", {
-          code: sessionCode,
-          sessionToken,
-        });
+        attemptSessionRejoin("boot");
       } else if (sessionCode && !sessionToken) {
         localStorage.removeItem("court_session");
         setHasSession(false);
@@ -1618,12 +1638,22 @@ export default function App() {
     } else {
       setScreen("setup");
     }
-  }, []);
+  }, [attemptSessionRejoin]);
 
   useEffect(() => {
     if (screen !== "home") return;
     socket.emit("list_public_matches");
   }, [socket, screen]);
+
+  useEffect(() => {
+    const onConnect = () => {
+      attemptSessionRejoin("connect");
+    };
+    socket.on("connect", onConnect);
+    return () => {
+      socket.off("connect", onConnect);
+    };
+  }, [attemptSessionRejoin, socket]);
 
   useEffect(() => {
     if (screen !== "home" || homeTab !== "play" || playView !== "matches") return;
@@ -2107,6 +2137,33 @@ export default function App() {
       setTimeout(() => setKickedAlert(""), 5000);
     });
 
+    socket.on("room_closed", ({ message }: { message?: string }) => {
+      clearReconnectWindow();
+      localStorage.removeItem("court_session");
+      localStorage.removeItem("court_session_token");
+      localStorage.removeItem("court_admin_host_id");
+      localStorage.removeItem("court_admin_host_token");
+      setHasSession(false);
+      setRoom(null);
+      setGame(null);
+      setMyId(null);
+      setMySessionToken(null);
+      setAdminHostId(null);
+      setAdminHostSessionToken(null);
+      setJoinCode("");
+      setCopiedRoomCode(false);
+      setIsHostJudge(false);
+      setStartGameLoading(false);
+      setContextHelpOpen(false);
+      setLobbyChatInput("");
+      setLobbyChatMessages([]);
+      setProfileMenuOpen(false);
+      setCreateMatchDialogOpen(false);
+      setScreen("home");
+      setKickedAlert(message || "Матч завершён. Комната закрыта автоматически.");
+      setTimeout(() => setKickedAlert(""), 5000);
+    });
+
     socket.on("game_started", ({ state }: { state: any }) => {
       setStartGameLoading(false);
       setGame(state as GameState);
@@ -2201,6 +2258,7 @@ export default function App() {
       socket.off("reconnect_available");
       socket.off("rejoin_failed");
       socket.off("kicked");
+      socket.off("room_closed");
       socket.off("game_started");
       socket.off("facts_updated");
       socket.off("my_facts_updated");
@@ -2372,15 +2430,8 @@ export default function App() {
       setHasSession(false);
       return;
     }
-    const sessionCode = localStorage.getItem("court_session");
-    const sessionToken = localStorage.getItem("court_session_token");
-    if (sessionCode && sessionToken) {
-      socket.emit("rejoin_room", {
-        code: sessionCode,
-        sessionToken,
-      });
-    }
-  }, [clearReconnectWindow, reconnectExpiresAt, socket]);
+    attemptSessionRejoin("manual");
+  }, [attemptSessionRejoin, clearReconnectWindow, reconnectExpiresAt]);
 
   const roomControlPlayerId =
     room && adminHostId === room.hostId ? adminHostId : myId;

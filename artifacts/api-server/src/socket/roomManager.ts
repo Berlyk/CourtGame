@@ -286,6 +286,10 @@ export function getRoom(code: string): Room | undefined {
   return rooms.get(code);
 }
 
+export function deleteRoom(code: string): boolean {
+  return rooms.delete(code);
+}
+
 export function updatePlayerAvatar(
   code: string,
   playerId: string,

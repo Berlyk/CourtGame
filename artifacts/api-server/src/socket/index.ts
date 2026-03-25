@@ -20,6 +20,7 @@ import {
   prevStage,
   setVerdict,
   getRoom,
+  deleteRoom,
   setHostJudge,
   updatePlayerAvatar,
   updatePlayerProfile,
@@ -37,6 +38,7 @@ const CROSS_EXAMINATION_STAGE_MARKERS = ["перекрест", "допрос"];
 const OPENING_STAGE_MARKERS = ["выступлен", "вступительн"];
 const CLOSING_STAGE_MARKERS = ["финальн", "заключительн"];
 const RECONNECT_GRACE_MS = 30_000;
+const VERDICT_ROOM_CLOSE_MS = 30_000;
 const PROTEST_COOLDOWN_MS = 30_000;
 const JUDGE_SILENCE_COOLDOWN_MS = 15_000;
 const INFLUENCE_ANNOUNCEMENT_DURATION_MS = 3_000;
@@ -298,6 +300,7 @@ export function setupSocket(httpServer: HttpServer) {
     { roomCode: string; playerId: string; sessionToken: string }
   >();
   const reconnectCleanupTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  const verdictRoomCloseTimers = new Map<string, ReturnType<typeof setTimeout>>();
   const actionCooldowns = new Map<string, number>();
   const lawyerChats = new Map<string, LawyerChatMessage[]>();
   const normalizeRoomCode = (code: string): string => code.trim().toUpperCase();
@@ -329,6 +332,14 @@ export function setupSocket(httpServer: HttpServer) {
         }
         reconnectCleanupTimers.delete(key);
       });
+    const verdictTimer = verdictRoomCloseTimers.get(roomCode);
+    if (verdictTimer) {
+      clearTimeout(verdictTimer);
+      verdictRoomCloseTimers.delete(roomCode);
+    }
+    [...socketToRoom.entries()]
+      .filter(([, info]) => info.roomCode === roomCode)
+      .forEach(([socketId]) => socketToRoom.delete(socketId));
   };
 
   const emitProtestState = (roomCode: string, room?: any) => {
@@ -439,6 +450,67 @@ export function setupSocket(httpServer: HttpServer) {
     }
   };
 
+  const cleanupDanglingRoomCaches = () => {
+    const roomCodes = new Set<string>();
+    [...actionCooldowns.keys()].forEach((key) => roomCodes.add(key.split(":")[0]));
+    [...lawyerChats.keys()].forEach((key) => roomCodes.add(key.split(":")[0]));
+    [...reconnectCleanupTimers.keys()].forEach((key) =>
+      roomCodes.add(key.split(":")[0]),
+    );
+    [...verdictRoomCloseTimers.keys()].forEach((code) => roomCodes.add(code));
+    [...socketToRoom.values()].forEach((entry) => roomCodes.add(entry.roomCode));
+
+    roomCodes.forEach((roomCode) => {
+      if (!getRoom(roomCode)) {
+        cleanupRoomCaches(roomCode);
+      }
+    });
+  };
+
+  const clearVerdictRoomClose = (roomCode: string) => {
+    const timeout = verdictRoomCloseTimers.get(roomCode);
+    if (timeout) {
+      clearTimeout(timeout);
+      verdictRoomCloseTimers.delete(roomCode);
+    }
+  };
+
+  const closeRoomAndNotify = (roomCode: string, message: string) => {
+    const room = getRoom(roomCode);
+    if (!room) {
+      cleanupRoomCaches(roomCode);
+      emitPublicMatches(io);
+      return;
+    }
+
+    io.to(roomCode).emit("room_closed", {
+      code: roomCode,
+      message,
+    });
+
+    const players = room.game?.players ?? room.players;
+    players.forEach((player: any) => clearReconnectCleanup(roomCode, player.id));
+
+    io.in(roomCode).socketsLeave(roomCode);
+    deleteRoom(roomCode);
+    cleanupRoomCaches(roomCode);
+    emitPublicMatches(io);
+  };
+
+  const scheduleVerdictRoomClose = (roomCode: string) => {
+    clearVerdictRoomClose(roomCode);
+    const timeout = setTimeout(() => {
+      verdictRoomCloseTimers.delete(roomCode);
+      const room = getRoom(roomCode);
+      if (!room?.game?.finished) return;
+      closeRoomAndNotify(
+        roomCode,
+        "Матч завершён. Комната автоматически закрыта через 30 секунд.",
+      );
+    }, VERDICT_ROOM_CLOSE_MS);
+    verdictRoomCloseTimers.set(roomCode, timeout);
+  };
+
   const emitRoomSnapshot = (roomCode: string) => {
     const room = getRoom(roomCode);
     if (!room) {
@@ -535,6 +607,7 @@ export function setupSocket(httpServer: HttpServer) {
   setInterval(() => {
     markMissingSocketPlayersDisconnected((socketId) => io.sockets.sockets.has(socketId));
     const removed = cleanupStaleRooms();
+    cleanupDanglingRoomCaches();
     if (removed > 0) {
       emitPublicMatches(io);
     }
@@ -543,6 +616,7 @@ export function setupSocket(httpServer: HttpServer) {
   io.on("connection", (socket) => {
     socket.on("list_public_matches", () => {
       markMissingSocketPlayersDisconnected((socketId) => io.sockets.sockets.has(socketId));
+      cleanupDanglingRoomCaches();
       socket.emit("public_matches_updated", {
         matches: listPublicMatches(),
       });
@@ -1653,6 +1727,7 @@ export function setupSocket(httpServer: HttpServer) {
         finished: true,
         truth: updatedRoom.game!.caseData.truth
       });
+      scheduleVerdictRoomClose(roomCode);
       emitPublicMatches(io);
     });
 
