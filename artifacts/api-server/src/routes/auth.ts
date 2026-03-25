@@ -32,7 +32,7 @@ function getRequestToken(headers: Record<string, unknown>): string | null {
   return null;
 }
 
-authRouter.post("/auth/register", (req, res) => {
+authRouter.post("/auth/register", async (req, res) => {
   try {
     const login = String(req.body?.login ?? "").trim();
     const email = String(req.body?.email ?? "").trim();
@@ -58,7 +58,7 @@ authRouter.post("/auth/register", (req, res) => {
         .json({ message: "You must accept the site rules." });
     }
 
-    const { user, token } = registerAccount({
+    const { user, token } = await registerAccount({
       login,
       email,
       password,
@@ -71,7 +71,7 @@ authRouter.post("/auth/register", (req, res) => {
   }
 });
 
-authRouter.post("/auth/login", (req, res) => {
+authRouter.post("/auth/login", async (req, res) => {
   try {
     const loginOrEmail = String(req.body?.loginOrEmail ?? "").trim();
     const password = String(req.body?.password ?? "");
@@ -79,7 +79,7 @@ authRouter.post("/auth/login", (req, res) => {
       return res.status(400).json({ message: "Please enter login/email and password." });
     }
 
-    const { user, token } = loginAccount({ loginOrEmail, password });
+    const { user, token } = await loginAccount({ loginOrEmail, password });
     return res.status(200).json({ user, token });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Login failed.";
@@ -87,27 +87,27 @@ authRouter.post("/auth/login", (req, res) => {
   }
 });
 
-authRouter.get("/auth/me", (req, res) => {
+authRouter.get("/auth/me", async (req, res) => {
   const token = getRequestToken(req.headers as Record<string, unknown>);
   if (!token) {
     return res.status(401).json({ message: "Unauthorized." });
   }
-  const user = getUserByToken(token);
+  const user = await getUserByToken(token);
   if (!user) {
     return res.status(401).json({ message: "Invalid session." });
   }
   return res.status(200).json({ user });
 });
 
-authRouter.post("/auth/logout", (req, res) => {
+authRouter.post("/auth/logout", async (req, res) => {
   const token = getRequestToken(req.headers as Record<string, unknown>);
   if (token) {
-    logoutByToken(token);
+    await logoutByToken(token);
   }
   return res.status(200).json({ ok: true });
 });
 
-authRouter.patch("/auth/profile", (req, res) => {
+authRouter.patch("/auth/profile", async (req, res) => {
   const token = getRequestToken(req.headers as Record<string, unknown>);
   if (!token) {
     return res.status(401).json({ message: "Unauthorized." });
@@ -119,7 +119,7 @@ authRouter.patch("/auth/profile", (req, res) => {
       req.body?.avatar === null || typeof req.body?.avatar === "string"
         ? req.body.avatar
         : undefined;
-    const user = updateProfileByToken(token, { nickname, avatar });
+    const user = await updateProfileByToken(token, { nickname, avatar });
     if (!user) {
       return res.status(401).json({ message: "Invalid session." });
     }
