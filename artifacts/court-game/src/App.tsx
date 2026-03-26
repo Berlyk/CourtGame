@@ -1266,6 +1266,27 @@ interface PublicUserProfile {
   hideAge: boolean;
   age?: number;
   createdAt: number;
+  stats?: {
+    totalMatches: number;
+    totalWins: number;
+    totalWinRate: number;
+    roleStats: Array<{
+      roleKey: string;
+      matches: number;
+      wins: number;
+      winRate: number;
+    }>;
+  };
+  badges?: Array<{
+    key: string;
+    title: string;
+    description: string;
+    active: boolean;
+  }>;
+  subscription?: {
+    tier: "none" | string;
+    label: string;
+  };
 }
 
 interface MyPlayer {
@@ -1383,6 +1404,23 @@ function getBannerStyle(
   return {
     backgroundImage: buildAutoBannerGradient(`${seedName}|${avatar ?? ""}`),
   };
+}
+
+const ROLE_TITLES: Record<string, string> = {
+  plaintiff: "Истец",
+  defendant: "Ответчик",
+  plaintiffLawyer: "Адвокат истца",
+  defenseLawyer: "Адвокат ответчика",
+  prosecutor: "Прокурор",
+  judge: "Судья",
+  witness: "Свидетель",
+};
+
+function getGenderLabel(gender: PublicUserProfile["gender"]): string {
+  if (gender === "male") return "Мужской";
+  if (gender === "female") return "Женский";
+  if (gender === "other") return "Другой";
+  return "Не выбран";
 }
 
 async function authRequest<T>(
@@ -1716,6 +1754,8 @@ export default function App() {
   const [passwordChangeCurrent, setPasswordChangeCurrent] = useState("");
   const [passwordChangeNext, setPasswordChangeNext] = useState("");
   const [profileActionLoading, setProfileActionLoading] = useState(false);
+  const [myProfileLoading, setMyProfileLoading] = useState(false);
+  const [myProfile, setMyProfile] = useState<PublicUserProfile | null>(null);
   const [viewPlayerProfileOpen, setViewPlayerProfileOpen] = useState(false);
   const [viewPlayerProfileLoading, setViewPlayerProfileLoading] = useState(false);
   const [viewPlayerProfileError, setViewPlayerProfileError] = useState("");
@@ -2051,6 +2091,33 @@ export default function App() {
     setProfileBirthDate(authUser.birthDate ?? "");
     setProfileHideAge(!!authUser.hideAge);
   }, [authUser]);
+
+  useEffect(() => {
+    if (!authToken || !isAuthenticated) {
+      setMyProfile(null);
+      setMyProfileLoading(false);
+      return;
+    }
+    if (screen !== "profile") return;
+    let cancelled = false;
+    setMyProfileLoading(true);
+    authRequest<{ profile: PublicUserProfile }>("/auth/profile", { token: authToken })
+      .then((payload) => {
+        if (cancelled) return;
+        setMyProfile(payload.profile);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setMyProfile(null);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setMyProfileLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [authToken, isAuthenticated, screen]);
 
   useEffect(() => {
     if (screen !== "home") return;
@@ -2762,6 +2829,18 @@ export default function App() {
     });
   }, [socket, joinCode, playerName, sharedAvatar, sharedBanner, authToken]);
 
+  const reloadMyProfile = useCallback(async () => {
+    if (!authToken) return;
+    try {
+      const payload = await authRequest<{ profile: PublicUserProfile }>("/auth/profile", {
+        token: authToken,
+      });
+      setMyProfile(payload.profile);
+    } catch {
+      // ignore
+    }
+  }, [authToken]);
+
   const updateProfile = useCallback(() => {
     const nextName = playerName.trim();
     if (!nextName) return;
@@ -2835,6 +2914,7 @@ export default function App() {
       });
       setAuthUser(payload.user);
       localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(payload.user));
+      await reloadMyProfile();
       setError("Профиль обновлен.");
       setTimeout(() => setError(""), 2500);
     } catch (err) {
@@ -2844,7 +2924,7 @@ export default function App() {
     } finally {
       setProfileActionLoading(false);
     }
-  }, [authToken, profileBio, profileBirthDate, profileGender, profileHideAge]);
+  }, [authToken, profileBio, profileBirthDate, profileGender, profileHideAge, reloadMyProfile]);
 
   const changePassword = useCallback(async () => {
     if (!authToken) return;
@@ -2861,6 +2941,7 @@ export default function App() {
       });
       setPasswordChangeCurrent("");
       setPasswordChangeNext("");
+      await reloadMyProfile();
       setError("Пароль обновлен.");
       setTimeout(() => setError(""), 2500);
     } catch (err) {
@@ -2870,7 +2951,7 @@ export default function App() {
     } finally {
       setProfileActionLoading(false);
     }
-  }, [authToken, passwordChangeCurrent, passwordChangeNext]);
+  }, [authToken, passwordChangeCurrent, passwordChangeNext, reloadMyProfile]);
 
   const changeEmail = useCallback(async () => {
     if (!authToken) return;
@@ -2889,6 +2970,7 @@ export default function App() {
       localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(payload.user));
       setEmailChangeCurrentPassword("");
       setEmailChangeNext("");
+      await reloadMyProfile();
       setError("Почта обновлена.");
       setTimeout(() => setError(""), 2500);
     } catch (err) {
@@ -2898,7 +2980,7 @@ export default function App() {
     } finally {
       setProfileActionLoading(false);
     }
-  }, [authToken, emailChangeCurrentPassword, emailChangeNext]);
+  }, [authToken, emailChangeCurrentPassword, emailChangeNext, reloadMyProfile]);
 
   const openUserProfile = useCallback(
     async (userId?: string) => {
@@ -3430,6 +3512,41 @@ export default function App() {
   }, []);
 
   if (screen === "profile") {
+    const profileData: PublicUserProfile | null = myProfile
+      ? myProfile
+      : authUser
+        ? {
+            id: authUser.id,
+            nickname: authUser.nickname,
+            avatar: authUser.avatar,
+            banner: authUser.banner,
+            bio: authUser.bio,
+            gender: authUser.gender,
+            birthDate: authUser.birthDate,
+            hideAge: authUser.hideAge,
+            createdAt: authUser.createdAt,
+          }
+        : null;
+
+    const registeredAtLabel =
+      typeof profileData?.createdAt === "number"
+        ? new Date(profileData.createdAt).toLocaleDateString("ru-RU")
+        : "Не указана";
+    const genderLabel = getGenderLabel(profileData?.gender);
+    const ageLabel = profileData?.hideAge
+      ? "Скрыт"
+      : typeof profileData?.age === "number"
+        ? `${profileData.age} лет`
+        : "Не выбран";
+
+    const totalMatches = profileData?.stats?.totalMatches ?? 0;
+    const totalWins = profileData?.stats?.totalWins ?? 0;
+    const totalWinRate = profileData?.stats?.totalWinRate ?? 0;
+    const roleStats = [...(profileData?.stats?.roleStats ?? [])].sort((a, b) => b.wins - a.wins);
+    const badges = profileData?.badges ?? [];
+    const activeBadges = badges.filter((badge) => badge.active);
+    const inactiveBadges = badges.filter((badge) => !badge.active);
+
     return (
       <motion.div
         key="profile"
@@ -3440,24 +3557,16 @@ export default function App() {
         className="relative isolate min-h-screen overflow-y-auto bg-[#0b0b0f] text-zinc-100 p-6 md:p-10"
       >
         <CourtAtmosphereBackground />
-        <div className="max-w-6xl mx-auto">
-          <Card className="rounded-[28px] border-zinc-800 bg-zinc-900/95 text-zinc-100">
-            <CardContent className="p-6 md:p-8">
+        <div className="max-w-7xl mx-auto">
+          <Card className="rounded-[28px] border-zinc-800 bg-zinc-900/95 text-zinc-100 overflow-hidden">
+            <CardContent className="p-6 md:p-8 space-y-6">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <div className="text-sm uppercase tracking-[0.16em] text-zinc-500">
-                    Профиль
-                  </div>
-                  <h2 className="text-3xl font-bold mt-2">Личные настройки</h2>
-                  <p className="text-zinc-400 mt-2">
-                    Настройте профиль игрока и внешний вид лобби.
+                  <div className="text-sm uppercase tracking-[0.16em] text-zinc-500">Профиль</div>
+                  <h2 className="mt-2 text-3xl font-bold">Личный кабинет</h2>
+                  <p className="mt-2 text-zinc-400">
+                    Управляйте профилем, безопасностью и личной статистикой.
                   </p>
-                  {authUser && (
-                    <div className="mt-3 text-xs text-zinc-500 space-y-1">
-                      <div>Логин: {authUser.login}</div>
-                      <div>Почта: {authUser.email}</div>
-                    </div>
-                  )}
                 </div>
                 <Button
                   variant="outline"
@@ -3468,158 +3577,197 @@ export default function App() {
                 </Button>
               </div>
 
-              <div className="mt-6 grid gap-6 lg:grid-cols-[320px_1fr]">
-                <Card className="rounded-2xl border-zinc-800 bg-zinc-950/70 text-zinc-100">
-                  <CardContent className="p-5 space-y-4">
-                    <div
-                      className="h-24 rounded-xl border border-zinc-800"
-                      style={getBannerStyle(banner, avatar, playerName || "Игрок")}
-                    />
-                    <input
-                      ref={bannerInputRef}
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={handleBannerChange}
-                    />
-                    <div className="text-sm font-medium text-zinc-300">Аватар профиля</div>
-                    <div className="flex justify-center">
+              <div className="rounded-3xl border border-zinc-800 bg-zinc-950/70 overflow-hidden">
+                <div
+                  className="relative min-h-[220px] md:min-h-[240px] p-5 md:p-6 flex flex-col justify-end"
+                  style={getBannerStyle(banner, avatar, playerName || "Игрок")}
+                >
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/45 to-black/15" />
+                  <div className="relative z-10 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                    <div className="flex items-end gap-4">
                       <div
                         className="relative cursor-pointer group"
                         onClick={() => avatarInputRef.current?.click()}
                       >
-                        <Avatar src={avatar} name={playerName || "?"} size={128} />
+                        <Avatar src={avatar} name={playerName || "?"} size={112} />
                         <div className="absolute inset-0 rounded-full bg-black/55 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Camera className="w-7 h-7 text-white" />
+                          <Camera className="w-6 h-6 text-white" />
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold leading-none">{playerName || "Игрок"}</div>
+                        <div className="mt-2 text-sm text-zinc-300">
+                          {authUser ? `@${authUser.login}` : "Гостевой профиль"}
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                          <span className="rounded-full border border-zinc-600 bg-black/35 px-3 py-1">
+                            Возраст: {ageLabel}
+                          </span>
+                          <span className="rounded-full border border-zinc-600 bg-black/35 px-3 py-1">
+                            Пол: {genderLabel}
+                          </span>
+                          <span className="rounded-full border border-zinc-600 bg-black/35 px-3 py-1">
+                            С нами с: {registeredAtLabel}
+                          </span>
                         </div>
                       </div>
                     </div>
-                    <input
-                      ref={avatarInputRef}
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={handleAvatarChange}
-                    />
-                    <div className="grid gap-2">
+                    <div className="grid grid-cols-2 gap-2 sm:flex">
                       <Button
                         variant="outline"
-                        className="rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                        className="rounded-xl border-zinc-500/70 bg-black/30 text-zinc-100 hover:bg-black/50 hover:text-zinc-100"
                         onClick={() => bannerInputRef.current?.click()}
                       >
-                        Загрузить баннер
+                        Баннер
                       </Button>
                       <Button
                         variant="outline"
-                        className="rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                        className="rounded-xl border-zinc-500/70 bg-black/30 text-zinc-100 hover:bg-black/50 hover:text-zinc-100"
                         onClick={() => setBanner(null)}
                       >
-                        Сбросить баннер
+                        Сброс
                       </Button>
                       <Button
                         variant="outline"
-                        className="rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                        className="rounded-xl border-zinc-500/70 bg-black/30 text-zinc-100 hover:bg-black/50 hover:text-zinc-100"
                         onClick={() => avatarInputRef.current?.click()}
                       >
-                        Загрузить аватар
+                        Аватар
                       </Button>
                       <Button
-                        variant="outline"
-                        className="rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
-                        onClick={() => setAvatar(null)}
+                        className="rounded-xl bg-red-600 text-white hover:bg-red-500 border-0"
+                        onClick={updateProfile}
+                        disabled={!playerName.trim() || profileActionLoading}
                       >
-                        Удалить аватар
+                        {profileActionLoading ? "Сохраняем..." : "Сохранить"}
                       </Button>
                     </div>
-                  </CardContent>
-                </Card>
-
-                <div className="grid gap-4 xl:grid-cols-2">
-                  <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4 xl:col-span-2">
-                    <label className="text-sm font-medium text-zinc-300">Никнейм</label>
-                    <Input
-                      value={playerName}
-                      onChange={(e) => handlePlayerNameChange(e.target.value)}
-                      placeholder="Например: Berly"
-                      className="mt-2 h-11 rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-2 focus-visible:ring-red-500/40 focus-visible:ring-offset-0"
-                    />
-                    <div className="mt-2 text-xs text-zinc-500">
-                      До 20 символов, отображается в подборе и лобби.
-                    </div>
                   </div>
+                </div>
+              </div>
+              <input
+                ref={bannerInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleBannerChange}
+              />
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleAvatarChange}
+              />
 
-                  {isAuthenticated && (
-                    <>
-                      <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4 space-y-3">
-                        <div className="text-sm font-medium text-zinc-300">О себе</div>
+              <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]">
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4 md:p-5">
+                    <div className="text-lg font-semibold">Личная информация</div>
+                    <div className="text-sm text-zinc-500 mt-1">
+                      Ник, описание, пол и возрастной профиль.
+                    </div>
+                    <div className="mt-4 grid gap-3 md:grid-cols-2">
+                      <div className="md:col-span-2">
+                        <label className="text-sm text-zinc-300">Никнейм</label>
+                        <Input
+                          value={playerName}
+                          onChange={(e) => handlePlayerNameChange(e.target.value)}
+                          placeholder="Например: Berly"
+                          className="mt-2 h-11 rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-red-500/40"
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="text-sm text-zinc-300">О себе</label>
                         <textarea
                           value={profileBio}
                           onChange={(e) => setProfileBio(e.target.value.slice(0, 500))}
                           placeholder="Коротко о себе..."
-                          className="h-24 w-full resize-none rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40"
+                          className="mt-2 h-24 w-full resize-none rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40"
                         />
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          <div className="space-y-2">
-                            <label className="text-sm text-zinc-300">Пол</label>
-                            <select
-                              value={profileGender}
-                              onChange={(e) =>
-                                setProfileGender(e.target.value as "" | "male" | "female" | "other")
-                              }
-                              className="h-11 w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 text-sm text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40"
-                            >
-                              <option value="">Не указывать</option>
-                              <option value="male">Мужской</option>
-                              <option value="female">Женский</option>
-                              <option value="other">Другой</option>
-                            </select>
-                          </div>
-                          <div className="space-y-2">
-                            <label className="text-sm text-zinc-300">Дата рождения</label>
-                            <Input
-                              type="date"
-                              value={profileBirthDate}
-                              onChange={(e) => setProfileBirthDate(e.target.value)}
-                              className="h-11 rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-red-500/40"
-                            />
-                          </div>
-                        </div>
-                        <div className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2">
-                          <div>
-                            <div className="text-sm font-medium text-zinc-100">Скрыть возраст</div>
-                            <div className="text-xs text-zinc-500">
-                              В публичном профиле возраст не показывается.
-                            </div>
-                          </div>
-                          <Switch
-                            checked={profileHideAge}
-                            onCheckedChange={setProfileHideAge}
-                          />
-                        </div>
-                        <Button
-                          onClick={saveExtendedProfile}
-                          disabled={profileActionLoading}
-                          className="w-full h-10 rounded-xl bg-red-600 hover:bg-red-500 text-white border-0"
-                        >
-                          Сохранить инфо профиля
-                        </Button>
                       </div>
+                      <div>
+                        <label className="text-sm text-zinc-300">Пол</label>
+                        <select
+                          value={profileGender}
+                          onChange={(e) =>
+                            setProfileGender(e.target.value as "" | "male" | "female" | "other")
+                          }
+                          className="mt-2 h-11 w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 text-sm text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40"
+                        >
+                          <option value="">Не выбран</option>
+                          <option value="male">Мужской</option>
+                          <option value="female">Женский</option>
+                          <option value="other">Другой</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-sm text-zinc-300">Дата рождения</label>
+                        <Input
+                          type="date"
+                          value={profileBirthDate}
+                          onChange={(e) => setProfileBirthDate(e.target.value)}
+                          className="mt-2 h-11 rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-red-500/40"
+                        />
+                      </div>
+                    </div>
 
-                      <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4 space-y-3">
-                        <div className="text-sm font-medium text-zinc-300">Сменить пароль</div>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-xl border border-zinc-800 bg-zinc-900/70 px-3 py-2 flex items-center justify-between">
+                        <div>
+                          <div className="text-sm text-zinc-100">Скрыть возраст</div>
+                          <div className="text-xs text-zinc-500">Возраст в профиле будет скрыт.</div>
+                        </div>
+                        <Switch checked={profileHideAge} onCheckedChange={setProfileHideAge} />
+                      </div>
+                      <div className="rounded-xl border border-zinc-800 bg-zinc-900/70 px-3 py-2 flex items-center justify-between">
+                        <div>
+                          <div className="text-sm text-zinc-100">Показывать аватар</div>
+                          <div className="text-xs text-zinc-500">В линиях игроков и профилях.</div>
+                        </div>
+                        <Switch checked={shareAvatarInProfile} onCheckedChange={setShareAvatarInProfile} />
+                      </div>
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <Button
+                        onClick={saveExtendedProfile}
+                        disabled={profileActionLoading}
+                        className="rounded-xl bg-red-600 hover:bg-red-500 text-white border-0"
+                      >
+                        Сохранить личные данные
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                        onClick={() => setScreen("home")}
+                      >
+                        В главное меню
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4 md:p-5">
+                    <div className="text-lg font-semibold">Безопасность</div>
+                    <div className="text-sm text-zinc-500 mt-1">
+                      Смена пароля и почты с подтверждением.
+                    </div>
+                    <div className="mt-4 grid gap-4 md:grid-cols-2">
+                      <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-3 space-y-3">
+                        <div className="text-sm font-medium text-zinc-200">Сменить пароль</div>
                         <Input
                           type="password"
                           value={passwordChangeCurrent}
                           onChange={(e) => setPasswordChangeCurrent(e.target.value)}
                           placeholder="Текущий пароль"
-                          className="h-11 rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-red-500/40"
+                          className="h-10 rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-red-500/40"
                         />
                         <Input
                           type="password"
                           value={passwordChangeNext}
                           onChange={(e) => setPasswordChangeNext(e.target.value)}
                           placeholder="Новый пароль"
-                          className="h-11 rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-red-500/40"
+                          className="h-10 rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-red-500/40"
                         />
                         <Button
                           onClick={changePassword}
@@ -3630,21 +3778,21 @@ export default function App() {
                         </Button>
                       </div>
 
-                      <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4 space-y-3">
-                        <div className="text-sm font-medium text-zinc-300">Сменить почту</div>
+                      <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-3 space-y-3">
+                        <div className="text-sm font-medium text-zinc-200">Сменить почту</div>
                         <Input
                           type="email"
                           value={emailChangeNext}
                           onChange={(e) => setEmailChangeNext(e.target.value)}
                           placeholder="Новая почта"
-                          className="h-11 rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-red-500/40"
+                          className="h-10 rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-red-500/40"
                         />
                         <Input
                           type="password"
                           value={emailChangeCurrentPassword}
                           onChange={(e) => setEmailChangeCurrentPassword(e.target.value)}
-                          placeholder="Подтвердите текущим паролем"
-                          className="h-11 rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-red-500/40"
+                          placeholder="Текущий пароль"
+                          className="h-10 rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-red-500/40"
                         />
                         <Button
                           onClick={changeEmail}
@@ -3654,54 +3802,119 @@ export default function App() {
                           Обновить почту
                         </Button>
                       </div>
-                    </>
-                  )}
+                    </div>
+                  </div>
+                </div>
 
-                  <div className="grid gap-3 sm:grid-cols-2 xl:col-span-2">
-                    <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4">
-                      <div className="text-sm font-medium text-zinc-100">Показывать аватар</div>
-                      <div className="text-xs text-zinc-500 mt-1">
-                        Если выключено, другие увидят только инициалы.
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4 md:p-5">
+                    <div className="text-lg font-semibold">Статистика</div>
+                    <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                      <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-2 py-3">
+                        <div className="text-xs text-zinc-500">Матчей</div>
+                        <div className="mt-1 text-xl font-bold">{totalMatches}</div>
                       </div>
-                      <div className="mt-3">
-                        <Switch
-                          checked={shareAvatarInProfile}
-                          onCheckedChange={setShareAvatarInProfile}
-                        />
+                      <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-2 py-3">
+                        <div className="text-xs text-zinc-500">Побед</div>
+                        <div className="mt-1 text-xl font-bold text-emerald-400">{totalWins}</div>
+                      </div>
+                      <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-2 py-3">
+                        <div className="text-xs text-zinc-500">Winrate</div>
+                        <div className="mt-1 text-xl font-bold">{Math.round(totalWinRate)}%</div>
                       </div>
                     </div>
-
-                    <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4">
-                      <div className="text-sm font-medium text-zinc-100">Секунды в чате</div>
-                      <div className="text-xs text-zinc-500 mt-1">
-                        Показывать секунды у времени сообщений в лобби.
-                      </div>
-                      <div className="mt-3">
-                        <Switch checked={showChatSeconds} onCheckedChange={setShowChatSeconds} />
-                      </div>
+                    <div className="mt-3 h-2 w-full rounded-full bg-zinc-800">
+                      <div
+                        className="h-2 rounded-full bg-red-500 transition-all"
+                        style={{ width: `${Math.max(0, Math.min(100, totalWinRate))}%` }}
+                      />
+                    </div>
+                    <div className="mt-4 space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                      {roleStats.length ? (
+                        roleStats.map((role) => (
+                          <div
+                            key={role.roleKey}
+                            className="rounded-xl border border-zinc-800 bg-zinc-900/55 px-3 py-2"
+                          >
+                            <div className="flex items-center justify-between gap-3 text-sm">
+                              <span className="font-medium">{ROLE_TITLES[role.roleKey] ?? role.roleKey}</span>
+                              <span className="text-zinc-400">{role.wins}/{role.matches}</span>
+                            </div>
+                            <div className="mt-1 text-xs text-zinc-500">Winrate: {Math.round(role.winRate)}%</div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="rounded-xl border border-zinc-800 bg-zinc-900/55 px-3 py-3 text-sm text-zinc-500">
+                          Пока нет завершенных матчей.
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  <div className="flex gap-3 pt-1 xl:col-span-2">
-                    <Button
-                      variant="outline"
-                      className="flex-1 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
-                      onClick={() => setScreen("home")}
-                    >
-                      Отмена
-                    </Button>
-                    <Button
-                      className="flex-1 rounded-xl bg-red-600 hover:bg-red-500 text-white border-0"
-                      onClick={updateProfile}
-                      disabled={!playerName.trim() || profileActionLoading}
-                    >
-                      {profileActionLoading ? "Сохраняем..." : "Сохранить"}
-                    </Button>
+                  <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4 md:p-5">
+                    <div className="text-lg font-semibold">Бейджи</div>
+                    <div className="text-sm text-zinc-500 mt-1">
+                      Активные и доступные награды профиля.
+                    </div>
+                    <div className="mt-3 space-y-2 max-h-[250px] overflow-y-auto pr-1">
+                      {activeBadges.map((badge) => (
+                        <div
+                          key={`active-${badge.key}`}
+                          className="rounded-xl border border-red-600/40 bg-red-600/10 px-3 py-2"
+                        >
+                          <div className="text-sm font-semibold text-red-300">{badge.title}</div>
+                          <div className="text-xs text-zinc-400 mt-1">{badge.description}</div>
+                        </div>
+                      ))}
+                      {inactiveBadges.map((badge) => (
+                        <div
+                          key={`inactive-${badge.key}`}
+                          className="rounded-xl border border-zinc-800 bg-zinc-900/55 px-3 py-2"
+                        >
+                          <div className="text-sm font-medium text-zinc-300">{badge.title}</div>
+                          <div className="text-xs text-zinc-500 mt-1">{badge.description}</div>
+                        </div>
+                      ))}
+                      {!badges.length && (
+                        <div className="rounded-xl border border-zinc-800 bg-zinc-900/55 px-3 py-3 text-sm text-zinc-500">
+                          Бейджи пока не получены.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4 md:p-5 space-y-3">
+                    <div>
+                      <div className="text-lg font-semibold">Подписка</div>
+                      <div className="text-sm text-zinc-500">Раздел зарезервирован под будущие тарифы.</div>
+                    </div>
+                    <div className="rounded-xl border border-zinc-800 bg-zinc-900/55 px-3 py-3">
+                      <div className="text-sm text-zinc-500">Текущий статус</div>
+                      <div className="mt-1 text-base font-semibold text-zinc-100">
+                        {profileData?.subscription?.label ?? "Нет подписки"}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-zinc-800 bg-zinc-900/55 px-3 py-3">
+                      <div className="text-sm text-zinc-500">Аккаунт</div>
+                      <div className="mt-1 text-sm text-zinc-200 break-all">
+                        {authUser?.email ?? "Гостевой режим"}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-zinc-800 bg-zinc-900/55 px-3 py-2 flex items-center justify-between">
+                      <div>
+                        <div className="text-sm text-zinc-100">Показывать секунды в чате</div>
+                        <div className="text-xs text-zinc-500">Временные метки сообщений в лобби.</div>
+                      </div>
+                      <Switch checked={showChatSeconds} onCheckedChange={setShowChatSeconds} />
+                    </div>
                   </div>
                 </div>
               </div>
             </CardContent>
           </Card>
+          {myProfileLoading && (
+            <div className="mt-3 text-center text-sm text-zinc-500">Загружаем статистику и бейджи...</div>
+          )}
         </div>
         {renderPublicProfileDialog()}
       </motion.div>
@@ -6224,4 +6437,5 @@ export default function App() {
     </div>
   );
 }
+
 
