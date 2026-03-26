@@ -1072,6 +1072,61 @@ export async function recordMatchOutcome(input: {
 }): Promise<void> {
   await ensureTables();
 
+  const normalizeRoleKey = (rawRoleKey: string, rawRoleTitle?: string): string => {
+    const roleKey = rawRoleKey.trim();
+    const compactKey = roleKey.replace(/[^a-zA-Z]/g, "").toLowerCase();
+    const roleTitle = (rawRoleTitle ?? "").toLowerCase().replace(/ё/g, "е");
+
+    const byKey: Record<string, string> = {
+      plaintiff: "plaintiff",
+      defendant: "defendant",
+      plaintifflawyer: "plaintiffLawyer",
+      defenselawyer: "defenseLawyer",
+      defendantlawyer: "defenseLawyer",
+      prosecutor: "prosecutor",
+      judge: "judge",
+      witness: "witness",
+    };
+    if (byKey[compactKey]) {
+      return byKey[compactKey];
+    }
+
+    if (roleTitle.includes("адвокат истца")) return "plaintiffLawyer";
+    if (roleTitle.includes("адвокат ответчика")) return "defenseLawyer";
+    if (roleTitle.includes("прокурор")) return "prosecutor";
+    if (roleTitle.includes("судья")) return "judge";
+    if (roleTitle.includes("истец")) return "plaintiff";
+    if (roleTitle.includes("ответчик")) return "defendant";
+    if (roleTitle.includes("свидетел")) return "witness";
+
+    return roleKey;
+  };
+
+  const isUuidLike = (value: string): boolean =>
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      value.trim(),
+    );
+
+  const resolveUserId = async (rawUserId: string, nickname: string): Promise<string | null> => {
+    const normalizedRaw = rawUserId.trim();
+    if (normalizedRaw && isUuidLike(normalizedRaw)) {
+      return normalizedRaw;
+    }
+    const normalizedNickname = nickname.trim().toLowerCase();
+    if (!normalizedNickname) return null;
+    const lookup = await pool.query<{ id: string }>(
+      `
+        SELECT id
+        FROM auth_users
+        WHERE nickname_normalized = $1
+           OR login_normalized = $1
+        LIMIT 1
+      `,
+      [normalizedNickname],
+    );
+    return lookup.rowCount ? lookup.rows[0].id : null;
+  };
+
   const verdictLower = (input.verdict || "").toLowerCase().replace(/ё/g, "е");
   const expectedLower = (input.expectedVerdict || "").toLowerCase().replace(/ё/g, "е");
   const isNotGuilty = verdictLower.includes("не винов");
@@ -1088,14 +1143,17 @@ export async function recordMatchOutcome(input: {
   };
 
   for (const player of input.players) {
-    const userId = typeof player.userId === "string" ? player.userId.trim() : "";
+    const nickname =
+      typeof player.nickname === "string" && player.nickname.trim()
+        ? player.nickname.trim()
+        : "Игрок";
+    const rawUserId = typeof player.userId === "string" ? player.userId : "";
+    const userId = await resolveUserId(rawUserId, nickname);
     const roleKeyRaw = typeof player.roleKey === "string" ? player.roleKey.trim() : "";
-    const roleKey =
-      roleKeyRaw === "defendantLawyer"
-        ? "defenseLawyer"
-        : roleKeyRaw === "plaintiff_lawyer"
-          ? "plaintiffLawyer"
-          : roleKeyRaw;
+    const roleKey = normalizeRoleKey(
+      roleKeyRaw,
+      typeof player.roleTitle === "string" ? player.roleTitle : "",
+    );
     if (!userId || !roleKey || roleKey === "witness") continue;
     const win = roleWinMap[roleKey] ?? false;
     await pool.query(

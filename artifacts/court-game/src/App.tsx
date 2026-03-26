@@ -326,7 +326,7 @@ const floatingHelpButtonVariants = {
 };
 
 const HIDE_SCROLLBAR_CLASS =
-  "[scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden";
+  "[scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden [&::-webkit-scrollbar-button]:hidden";
 
 function CourtAtmosphereBackground() {
   return (
@@ -1407,7 +1407,7 @@ function buildAutoBannerGradient(seedRaw: string): string {
 }
 
 function buildNeutralBannerGradient(): string {
-  return "linear-gradient(135deg, rgba(71,76,88,0.62) 0%, rgba(52,57,67,0.46) 46%, rgba(30,32,39,0.92) 100%)";
+  return "linear-gradient(180deg, rgba(70,74,84,0.88) 0%, rgba(46,49,58,0.9) 100%)";
 }
 
 function getBannerStyle(
@@ -1431,7 +1431,7 @@ function getBannerStyle(
     };
   }
   return {
-    backgroundImage: buildAutoBannerGradient(`${seedName}|${normalizedAvatar}`),
+    backgroundImage: buildNeutralBannerGradient(),
   };
 }
 
@@ -1449,7 +1449,7 @@ function getGenderLabel(gender: PublicUserProfile["gender"]): string {
   if (gender === "male") return "Мужской";
   if (gender === "female") return "Женский";
   if (gender === "other") return "Другой";
-  return "Не выбран";
+  return "Не указан";
 }
 
 function computeAgeFromIsoDate(isoDate: string | undefined): number | undefined {
@@ -1467,6 +1467,84 @@ function computeAgeFromIsoDate(isoDate: string | undefined): number | undefined 
   if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) age -= 1;
   if (age < 0 || age > 120) return undefined;
   return age;
+}
+
+type CropTarget = "avatar" | "banner";
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+async function cropImageDataUrl(options: {
+  sourceDataUrl: string;
+  target: CropTarget;
+  zoom: number;
+  offsetX: number;
+  offsetY: number;
+}): Promise<string> {
+  const { sourceDataUrl, target } = options;
+  const zoom = clampNumber(options.zoom, 1, 3);
+  const offsetX = clampNumber(options.offsetX, -100, 100) / 100;
+  const offsetY = clampNumber(options.offsetY, -100, 100) / 100;
+  const outputWidth = target === "avatar" ? 512 : 1280;
+  const outputHeight = target === "avatar" ? 512 : 360;
+  const outputAspect = outputWidth / outputHeight;
+
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => {
+      const sourceWidth = image.naturalWidth || image.width;
+      const sourceHeight = image.naturalHeight || image.height;
+      if (!sourceWidth || !sourceHeight) {
+        resolve(sourceDataUrl);
+        return;
+      }
+
+      const sourceAspect = sourceWidth / sourceHeight;
+      let cropWidth = 0;
+      let cropHeight = 0;
+
+      if (sourceAspect > outputAspect) {
+        cropHeight = sourceHeight / zoom;
+        cropWidth = cropHeight * outputAspect;
+      } else {
+        cropWidth = sourceWidth / zoom;
+        cropHeight = cropWidth / outputAspect;
+      }
+
+      cropWidth = clampNumber(cropWidth, 1, sourceWidth);
+      cropHeight = clampNumber(cropHeight, 1, sourceHeight);
+
+      const extraX = Math.max(0, sourceWidth - cropWidth);
+      const extraY = Math.max(0, sourceHeight - cropHeight);
+      const sx = clampNumber(extraX / 2 + (extraX / 2) * offsetX, 0, extraX);
+      const sy = clampNumber(extraY / 2 + (extraY / 2) * offsetY, 0, extraY);
+
+      const canvas = document.createElement("canvas");
+      canvas.width = outputWidth;
+      canvas.height = outputHeight;
+      const context = canvas.getContext("2d");
+      if (!context) {
+        resolve(sourceDataUrl);
+        return;
+      }
+      context.drawImage(
+        image,
+        sx,
+        sy,
+        cropWidth,
+        cropHeight,
+        0,
+        0,
+        outputWidth,
+        outputHeight,
+      );
+
+      resolve(canvas.toDataURL("image/jpeg", 0.88));
+    };
+    image.onerror = () => resolve(sourceDataUrl);
+    image.src = sourceDataUrl;
+  });
 }
 
 async function authRequest<T>(
@@ -1604,12 +1682,12 @@ function PlayerCard({
       <Card className="rounded-2xl shadow-sm bg-zinc-900/90 border-zinc-800 text-zinc-100">
         <CardContent className="relative overflow-hidden p-4 pt-5 flex items-center justify-between gap-3">
           <div
-            className="pointer-events-none absolute inset-0 opacity-85"
+            className="pointer-events-none absolute inset-[6px] rounded-[16px] opacity-85"
             style={getBannerStyle(player.banner, player.avatar, player.name)}
           />
-          <div className="pointer-events-none absolute inset-0 bg-black/35" />
+          <div className="pointer-events-none absolute inset-[6px] rounded-[16px] bg-black/35" />
           <div className="relative z-10 flex items-center gap-3 min-w-0">
-            <Avatar src={player.avatar ?? null} name={player.name} size={52} />
+            <Avatar src={player.avatar ?? null} name={player.name} size={72} />
             <div className="min-w-0">
               <div className="font-semibold text-base truncate">
                 <button
@@ -1803,6 +1881,8 @@ export default function App() {
   const [emailChangeNext, setEmailChangeNext] = useState("");
   const [passwordChangeCurrent, setPasswordChangeCurrent] = useState("");
   const [passwordChangeNext, setPasswordChangeNext] = useState("");
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false);
   const [profileActionLoading, setProfileActionLoading] = useState(false);
   const [myProfileLoading, setMyProfileLoading] = useState(false);
   const [myProfile, setMyProfile] = useState<PublicUserProfile | null>(null);
@@ -1839,6 +1919,13 @@ export default function App() {
   const [createRoomPassword, setCreateRoomPassword] = useState("");
   const [createRoomPasswordVisible, setCreateRoomPasswordVisible] = useState(false);
   const [badgeRulesOpen, setBadgeRulesOpen] = useState(false);
+  const [imageCropDialogOpen, setImageCropDialogOpen] = useState(false);
+  const [imageCropTarget, setImageCropTarget] = useState<CropTarget>("avatar");
+  const [imageCropSource, setImageCropSource] = useState<string | null>(null);
+  const [imageCropZoom, setImageCropZoom] = useState(1);
+  const [imageCropOffsetX, setImageCropOffsetX] = useState(0);
+  const [imageCropOffsetY, setImageCropOffsetY] = useState(0);
+  const [imageCropLoading, setImageCropLoading] = useState(false);
   const [lobbyChatInput, setLobbyChatInput] = useState("");
   const [lobbyChatMessages, setLobbyChatMessages] = useState<LobbyChatMessage[]>([]);
   const [influenceView, setInfluenceView] = useState<
@@ -1983,6 +2070,11 @@ export default function App() {
         caret-color: rgb(244 244 245) !important;
         transition: background-color 9999s ease-in-out 0s;
       }
+      ::-webkit-scrollbar-button {
+        display: none !important;
+        width: 0 !important;
+        height: 0 !important;
+      }
     `;
     document.head.appendChild(style);
   }, []);
@@ -1999,7 +2091,7 @@ export default function App() {
     const ageLabel = viewPlayerProfile?.hideAge
       ? "Скрыт"
       : typeof viewPlayerProfile?.age === "number"
-        ? `${viewPlayerProfile.age}`
+        ? `${viewPlayerProfile.age} лет`
         : "Не указан";
     const createdAtLabel =
       typeof viewPlayerProfile?.createdAt === "number"
@@ -2008,7 +2100,7 @@ export default function App() {
 
     return (
       <Dialog open={viewPlayerProfileOpen} onOpenChange={setViewPlayerProfileOpen}>
-        <DialogContent className="max-w-lg border-zinc-800 bg-zinc-950 text-zinc-100">
+        <DialogContent className="max-w-3xl border-zinc-800 bg-zinc-950 text-zinc-100">
           <DialogHeader>
             <DialogTitle>Профиль игрока</DialogTitle>
             <DialogDescription className="text-zinc-400">
@@ -2025,19 +2117,25 @@ export default function App() {
             </div>
           ) : viewPlayerProfile ? (
             <div className="space-y-4">
-              <div
-                className="h-24 rounded-xl border border-zinc-800"
-                style={getBannerStyle(
-                  viewPlayerProfile.banner,
-                  viewPlayerProfile.avatar,
-                  viewPlayerProfile.nickname,
-                )}
-              />
-              <div className="flex items-center gap-3">
-                <Avatar src={viewPlayerProfile.avatar ?? null} name={viewPlayerProfile.nickname} size={56} />
-                <div>
-                  <div className="text-xl font-bold">{viewPlayerProfile.nickname}</div>
-                  <div className="text-xs text-zinc-500">Профиль с {createdAtLabel || "неизвестной даты"}</div>
+              <div className="rounded-3xl border border-zinc-800 bg-zinc-950/70 overflow-hidden">
+                <div
+                  className="relative min-h-[132px] p-5 md:p-6 flex items-end"
+                  style={getBannerStyle(
+                    viewPlayerProfile.banner,
+                    viewPlayerProfile.avatar,
+                    viewPlayerProfile.nickname,
+                  )}
+                >
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/35 to-black/10" />
+                  <div className="relative z-10 flex items-end gap-3">
+                    <Avatar src={viewPlayerProfile.avatar ?? null} name={viewPlayerProfile.nickname} size={96} />
+                    <div>
+                      <div className="text-2xl font-bold leading-none">{viewPlayerProfile.nickname}</div>
+                      <div className="mt-2 text-xs text-zinc-300">
+                        Профиль с {createdAtLabel || "неизвестной даты"}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3 text-sm">
@@ -2775,6 +2873,11 @@ export default function App() {
               }
             : prev,
         );
+        if (authToken) {
+          authRequest<{ profile: PublicUserProfile }>("/auth/profile", { token: authToken })
+            .then((payload) => setMyProfile(payload.profile))
+            .catch(() => undefined);
+        }
       },
     );
 
@@ -2822,7 +2925,7 @@ export default function App() {
       socket.off("verdict_set");
       socket.off("error");
     };
-  }, [socket, avatar, clearReconnectWindow, sharedAvatar, startReconnectWindow]);
+  }, [socket, avatar, authToken, clearReconnectWindow, sharedAvatar, startReconnectWindow]);
 
   const createQuickRoom = useCallback(() => {
     const name = playerName.trim() || getOrCreateGuestName();
@@ -2905,68 +3008,48 @@ export default function App() {
     }
   }, [authToken]);
 
-  const updateProfile = useCallback(() => {
-    const nextName = playerName.trim();
-    if (!nextName) return;
-
-    localStorage.setItem("court_nickname", nextName);
-    if (avatar) {
-      localStorage.setItem("court_avatar", avatar);
-    } else {
-      localStorage.removeItem("court_avatar");
-    }
-    if (banner) {
-      localStorage.setItem(BANNER_STORAGE_KEY, banner);
-    } else {
-      localStorage.removeItem(BANNER_STORAGE_KEY);
-    }
+  const resetProfileMedia = useCallback(async () => {
+    setAvatar(null);
+    setBanner(null);
+    localStorage.removeItem("court_avatar");
+    localStorage.removeItem(BANNER_STORAGE_KEY);
 
     if (activeRoomCode && mySessionToken) {
       socket.emit("update_profile", {
         code: activeRoomCode,
         sessionToken: mySessionToken,
-        name: nextName,
-        avatar: sharedAvatar,
-        banner: sharedBanner,
+        name: playerName.trim() || getOrCreateGuestName(),
+        avatar: null,
+        banner: null,
       });
     }
 
-    if (authToken) {
-      authRequest<{ user: AuthUser }>("/auth/profile", {
+    if (!authToken) return;
+    try {
+      const payload = await authRequest<{ user: AuthUser }>("/auth/profile", {
         method: "PATCH",
         token: authToken,
         body: {
-          nickname: nextName,
-          avatar: sharedAvatar,
-          banner: sharedBanner,
-          selectedBadgeKey: selectedBadgeKey || null,
+          avatar: null,
+          banner: null,
         },
-      })
-        .then(({ user }) => {
-          setAuthUser(user);
-          localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(user));
-        })
-        .catch(() => undefined);
+      });
+      setAuthUser(payload.user);
+      localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(payload.user));
+      await reloadMyProfile();
+    } catch {
+      // no-op
     }
-
-    setProfileMenuOpen(false);
-    setError("Профиль сохранен.");
-    setTimeout(() => setError(""), 2000);
-  }, [
-    socket,
-    activeRoomCode,
-    mySessionToken,
-    playerName,
-    avatar,
-    banner,
-    sharedAvatar,
-    sharedBanner,
-    authToken,
-    selectedBadgeKey,
-  ]);
+  }, [activeRoomCode, authToken, mySessionToken, playerName, reloadMyProfile, socket]);
 
   const saveExtendedProfile = useCallback(async () => {
     if (!authToken) return;
+    const normalizedName = playerName.trim();
+    if (!normalizedName) {
+      setError("Введите никнейм.");
+      setTimeout(() => setError(""), 2500);
+      return;
+    }
     const normalizedBirthDate = profileBirthDate.trim();
     if (normalizedBirthDate && !/^\d{4}-\d{2}-\d{2}$/.test(normalizedBirthDate)) {
       setError("Дата рождения должна быть в формате ГГГГ-ММ-ДД.");
@@ -2985,6 +3068,9 @@ export default function App() {
         method: "PATCH",
         token: authToken,
         body: {
+          nickname: normalizedName,
+          avatar: sharedAvatar,
+          banner: sharedBanner,
           bio: profileBio.trim() || null,
           gender: profileGender || null,
           birthDate: normalizedBirthDate || null,
@@ -2994,6 +3080,26 @@ export default function App() {
       });
       setAuthUser(payload.user);
       localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(payload.user));
+      localStorage.setItem("court_nickname", normalizedName);
+      if (sharedAvatar) {
+        localStorage.setItem("court_avatar", sharedAvatar);
+      } else {
+        localStorage.removeItem("court_avatar");
+      }
+      if (sharedBanner) {
+        localStorage.setItem(BANNER_STORAGE_KEY, sharedBanner);
+      } else {
+        localStorage.removeItem(BANNER_STORAGE_KEY);
+      }
+      if (activeRoomCode && mySessionToken) {
+        socket.emit("update_profile", {
+          code: activeRoomCode,
+          sessionToken: mySessionToken,
+          name: normalizedName,
+          avatar: sharedAvatar,
+          banner: sharedBanner,
+        });
+      }
       await reloadMyProfile();
       setError("Профиль обновлен.");
       setTimeout(() => setError(""), 2500);
@@ -3004,11 +3110,25 @@ export default function App() {
     } finally {
       setProfileActionLoading(false);
     }
-  }, [authToken, profileBio, profileBirthDate, profileGender, profileHideAge, reloadMyProfile, selectedBadgeKey]);
+  }, [
+    authToken,
+    playerName,
+    profileBirthDate,
+    profileBio,
+    profileGender,
+    profileHideAge,
+    reloadMyProfile,
+    selectedBadgeKey,
+    sharedAvatar,
+    sharedBanner,
+    activeRoomCode,
+    mySessionToken,
+    socket,
+  ]);
 
-  const changePassword = useCallback(async () => {
-    if (!authToken) return;
-    if (!passwordChangeCurrent || !passwordChangeNext) return;
+  const changePassword = useCallback(async (): Promise<boolean> => {
+    if (!authToken) return false;
+    if (!passwordChangeCurrent || !passwordChangeNext) return false;
     setProfileActionLoading(true);
     try {
       await authRequest<{ ok: boolean }>("/auth/password", {
@@ -3024,18 +3144,20 @@ export default function App() {
       await reloadMyProfile();
       setError("Пароль обновлен.");
       setTimeout(() => setError(""), 2500);
+      return true;
     } catch (err) {
       const message = err instanceof Error ? localizeAuthError(err.message) : "Не удалось сменить пароль.";
       setError(message);
       setTimeout(() => setError(""), 3500);
+      return false;
     } finally {
       setProfileActionLoading(false);
     }
   }, [authToken, passwordChangeCurrent, passwordChangeNext, reloadMyProfile]);
 
-  const changeEmail = useCallback(async () => {
-    if (!authToken) return;
-    if (!emailChangeCurrentPassword || !emailChangeNext.trim()) return;
+  const changeEmail = useCallback(async (): Promise<boolean> => {
+    if (!authToken) return false;
+    if (!emailChangeCurrentPassword || !emailChangeNext.trim()) return false;
     setProfileActionLoading(true);
     try {
       const payload = await authRequest<{ user: AuthUser }>("/auth/email", {
@@ -3053,10 +3175,12 @@ export default function App() {
       await reloadMyProfile();
       setError("Почта обновлена.");
       setTimeout(() => setError(""), 2500);
+      return true;
     } catch (err) {
       const message = err instanceof Error ? localizeAuthError(err.message) : "Не удалось сменить почту.";
       setError(message);
       setTimeout(() => setError(""), 3500);
+      return false;
     } finally {
       setProfileActionLoading(false);
     }
@@ -3541,36 +3665,84 @@ export default function App() {
     [],
   );
 
+  const openImageCropper = useCallback(
+    (file: File, target: CropTarget) => {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const dataUrl = (ev.target?.result as string) || "";
+        if (!dataUrl) return;
+        setImageCropTarget(target);
+        setImageCropSource(dataUrl);
+        setImageCropZoom(1);
+        setImageCropOffsetX(0);
+        setImageCropOffsetY(0);
+        setImageCropDialogOpen(true);
+      };
+      reader.readAsDataURL(file);
+    },
+    [],
+  );
+
+  const applyImageCrop = useCallback(async () => {
+    if (!imageCropSource) return;
+    setImageCropLoading(true);
+    try {
+      const cropped = await cropImageDataUrl({
+        sourceDataUrl: imageCropSource,
+        target: imageCropTarget,
+        zoom: imageCropZoom,
+        offsetX: imageCropOffsetX,
+        offsetY: imageCropOffsetY,
+      });
+
+      if (imageCropTarget === "avatar") {
+        const compactAvatar = await compressImage(cropped, 384);
+        setAvatar(compactAvatar);
+        localStorage.setItem("court_avatar", compactAvatar);
+      } else {
+        const compactBanner = await compressImage(cropped, 1280);
+        setBanner(compactBanner);
+        localStorage.setItem(BANNER_STORAGE_KEY, compactBanner);
+      }
+
+      setImageCropDialogOpen(false);
+      setImageCropSource(null);
+    } finally {
+      setImageCropLoading(false);
+    }
+  }, [
+    compressImage,
+    imageCropOffsetX,
+    imageCropOffsetY,
+    imageCropSource,
+    imageCropTarget,
+    imageCropZoom,
+  ]);
+
+  const resetImageCrop = useCallback(() => {
+    setImageCropZoom(1);
+    setImageCropOffsetX(0);
+    setImageCropOffsetY(0);
+  }, []);
+
   const handleAvatarChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      const reader = new FileReader();
-      reader.onload = async (ev) => {
-        const dataUrl = ev.target?.result as string;
-        const compactAvatar = await compressImage(dataUrl, 256);
-        setAvatar(compactAvatar);
-        localStorage.setItem("court_avatar", compactAvatar);
-      };
-      reader.readAsDataURL(file);
+      openImageCropper(file, "avatar");
+      e.target.value = "";
     },
-    [compressImage],
+    [openImageCropper],
   );
 
   const handleBannerChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      const reader = new FileReader();
-      reader.onload = async (ev) => {
-        const dataUrl = ev.target?.result as string;
-        const compactBanner = await compressImage(dataUrl, 1024);
-        setBanner(compactBanner);
-        localStorage.setItem(BANNER_STORAGE_KEY, compactBanner);
-      };
-      reader.readAsDataURL(file);
+      openImageCropper(file, "banner");
+      e.target.value = "";
     },
-    [compressImage],
+    [openImageCropper],
   );
 
   const copyCode = useCallback((code: string) => {
@@ -3620,7 +3792,7 @@ export default function App() {
         ? `${profileData.age} лет`
         : typeof computedAge === "number"
           ? `${computedAge} лет`
-        : "Не выбран";
+        : "Не указан";
 
     const totalMatches = profileData?.stats?.totalMatches ?? 0;
     const totalWins = profileData?.stats?.totalWins ?? 0;
@@ -3662,23 +3834,23 @@ export default function App() {
 
               <div className="rounded-3xl border border-zinc-800 bg-zinc-950/70 overflow-hidden">
                 <div
-                  className="relative min-h-[142px] md:min-h-[156px] p-5 md:p-6 flex flex-col justify-end cursor-pointer group"
+                  className="relative min-h-[124px] md:min-h-[136px] p-5 md:p-6 flex flex-col justify-end cursor-pointer group/banner"
                   style={getBannerStyle(banner, avatar, playerName || "Игрок")}
                   onClick={() => bannerInputRef.current?.click()}
                 >
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/45 to-black/15" />
-                  <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity bg-black/15" />
+                  <div className="absolute inset-0 opacity-0 group-hover/banner:opacity-100 transition-opacity bg-black/15" />
                   <div className="relative z-10 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                     <div className="flex items-end gap-4">
                       <div
-                        className="relative cursor-pointer group"
+                        className="relative cursor-pointer group/avatar"
                         onClick={(e) => {
                           e.stopPropagation();
                           avatarInputRef.current?.click();
                         }}
                       >
                         <Avatar src={avatar} name={playerName || "?"} size={146} />
-                        <div className="absolute inset-0 rounded-full bg-black/55 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="absolute inset-0 rounded-full bg-black/55 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity">
                           <Camera className="w-6 h-6 text-white" />
                         </div>
                       </div>
@@ -3709,16 +3881,12 @@ export default function App() {
                       <Button
                         variant="outline"
                         className="rounded-xl border-zinc-500/70 bg-black/30 text-zinc-100 hover:bg-black/50 hover:text-zinc-100"
-                        onClick={() => setBanner(null)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void resetProfileMedia();
+                        }}
                       >
                         Сброс
-                      </Button>
-                      <Button
-                        className="rounded-xl bg-red-600 text-white hover:bg-red-500 border-0"
-                        onClick={updateProfile}
-                        disabled={!playerName.trim() || profileActionLoading}
-                      >
-                        {profileActionLoading ? "Сохраняем..." : "Сохранить"}
                       </Button>
                     </div>
                   </div>
@@ -3746,7 +3914,7 @@ export default function App() {
                     <div className="text-sm text-zinc-500 mt-1">
                       Ник, описание, пол и возрастной профиль.
                     </div>
-                    <div className="mt-4 grid gap-3 md:grid-cols-2">
+                    <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(190px,240px)]">
                       <div className="md:col-span-2">
                         <label className="text-sm text-zinc-300">Никнейм</label>
                         <Input
@@ -3769,13 +3937,11 @@ export default function App() {
                         <label className="text-sm text-zinc-300">Пол</label>
                         <div className="mt-2 grid grid-cols-2 gap-2">
                           {[
-                            { value: "", label: "Не выбран" },
                             { value: "male", label: "Мужской" },
                             { value: "female", label: "Женский" },
-                            { value: "other", label: "Другой" },
                           ].map((option) => (
                             <button
-                              key={option.value || "none"}
+                              key={option.value}
                               type="button"
                               onClick={() =>
                                 setProfileGender(option.value as "" | "male" | "female" | "other")
@@ -3791,7 +3957,7 @@ export default function App() {
                           ))}
                         </div>
                       </div>
-                      <div>
+                      <div className="max-w-[240px]">
                         <label className="text-sm text-zinc-300">Дата рождения</label>
                         <div className="relative mt-2">
                           <Input
@@ -3835,65 +4001,28 @@ export default function App() {
 
                   <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4 md:p-5">
                     <div className="text-lg font-semibold">Безопасность</div>
-                    <div className="text-sm text-zinc-500 mt-1">
-                      Смена пароля и почты с подтверждением.
-                    </div>
+                    <div className="text-sm text-zinc-500 mt-1">Управление доступом к аккаунту.</div>
                     <div className="mt-3 rounded-xl border border-zinc-800 bg-zinc-900/55 px-3 py-3">
                       <div className="text-sm text-zinc-500">Текущая почта</div>
                       <div className="mt-1 text-sm text-zinc-100 break-all">
                         {authUser?.email ?? "Гостевой режим"}
                       </div>
                     </div>
-                    <div className="mt-4 grid gap-4 md:grid-cols-2">
-                      <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-3 space-y-3">
-                        <div className="text-sm font-medium text-zinc-200">Сменить пароль</div>
-                        <Input
-                          type="password"
-                          value={passwordChangeCurrent}
-                          onChange={(e) => setPasswordChangeCurrent(e.target.value)}
-                          placeholder="Текущий пароль"
-                          className="h-10 rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-red-500/40"
-                        />
-                        <Input
-                          type="password"
-                          value={passwordChangeNext}
-                          onChange={(e) => setPasswordChangeNext(e.target.value)}
-                          placeholder="Новый пароль"
-                          className="h-10 rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-red-500/40"
-                        />
-                        <Button
-                          onClick={changePassword}
-                          disabled={profileActionLoading || !passwordChangeCurrent || !passwordChangeNext}
-                          className="w-full h-10 rounded-xl bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0"
-                        >
-                          Обновить пароль
-                        </Button>
-                      </div>
-
-                      <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-3 space-y-3">
-                        <div className="text-sm font-medium text-zinc-200">Сменить почту</div>
-                        <Input
-                          type="email"
-                          value={emailChangeNext}
-                          onChange={(e) => setEmailChangeNext(e.target.value)}
-                          placeholder="Новая почта"
-                          className="h-10 rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-red-500/40"
-                        />
-                        <Input
-                          type="password"
-                          value={emailChangeCurrentPassword}
-                          onChange={(e) => setEmailChangeCurrentPassword(e.target.value)}
-                          placeholder="Текущий пароль"
-                          className="h-10 rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-red-500/40"
-                        />
-                        <Button
-                          onClick={changeEmail}
-                          disabled={profileActionLoading || !emailChangeCurrentPassword || !emailChangeNext.trim()}
-                          className="w-full h-10 rounded-xl bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0"
-                        >
-                          Обновить почту
-                        </Button>
-                      </div>
+                    <div className="mt-4 grid gap-3 md:grid-cols-2">
+                      <Button
+                        variant="outline"
+                        className="h-11 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                        onClick={() => setPasswordDialogOpen(true)}
+                      >
+                        Сменить пароль
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="h-11 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                        onClick={() => setEmailDialogOpen(true)}
+                      >
+                        Сменить почту
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -3921,7 +4050,7 @@ export default function App() {
                         style={{ width: `${Math.max(0, Math.min(100, totalWinRate))}%` }}
                       />
                     </div>
-                    <div className="mt-4 space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                    <div className="mt-4 space-y-2">
                       {roleStats.length ? (
                         roleStats.map((role) => (
                           <div
@@ -3952,7 +4081,7 @@ export default function App() {
                     <div className="text-sm text-zinc-500 mt-1">
                       Активные и доступные награды профиля.
                     </div>
-                    <div className="mt-3 space-y-2 max-h-[250px] overflow-y-auto pr-1">
+                    <div className={`mt-3 space-y-2 max-h-[250px] overflow-y-auto pr-1 ${HIDE_SCROLLBAR_CLASS}`}>
                       <div className="rounded-xl border border-zinc-800 bg-zinc-900/55 p-2">
                         <div className="text-xs text-zinc-500 px-1 pb-2">Выбранный бейдж</div>
                         <div className="grid grid-cols-1 gap-2">
@@ -3997,27 +4126,16 @@ export default function App() {
                           <div className="text-xs text-zinc-500 mt-1">{badge.description}</div>
                         </div>
                       ))}
-                      {!badges.length && (
-                        <div className="rounded-xl border border-zinc-800 bg-zinc-900/55 px-3 py-3 text-sm text-zinc-500">
-                          Бейджи пока не получены.
-                        </div>
-                      )}
                     </div>
                   </div>
 
                   <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4 md:p-5 space-y-3">
-                    <div>
-                      <div className="text-lg font-semibold">Подписка</div>
-                      <div className="text-sm text-zinc-500">Раздел зарезервирован под будущие тарифы.</div>
-                    </div>
+                    <div className="text-lg font-semibold">Подписка</div>
                     <div className="rounded-xl border border-zinc-800 bg-zinc-900/55 px-3 py-3">
                       <div className="text-sm text-zinc-500">Текущий статус</div>
                       <div className="mt-1 text-base font-semibold text-zinc-100">
                         {profileData?.subscription?.label ?? "Нет подписки"}
                       </div>
-                    </div>
-                    <div className="rounded-xl border border-zinc-800 bg-zinc-900/55 px-3 py-3 text-sm text-zinc-500">
-                      Здесь будут тарифы и бонусы подписки.
                     </div>
                   </div>
                 </div>
@@ -4036,7 +4154,7 @@ export default function App() {
                 История матчей и результаты по вашей роли.
               </DialogDescription>
             </DialogHeader>
-            <div className="max-h-[60vh] overflow-y-auto space-y-2 pr-1">
+            <div className={`max-h-[60vh] overflow-y-auto space-y-2 pr-1 ${HIDE_SCROLLBAR_CLASS}`}>
               {(profileData?.recentMatches ?? []).length ? (
                 (profileData?.recentMatches ?? []).map((match, idx) => (
                   <div
@@ -4081,24 +4199,214 @@ export default function App() {
                 Здесь показаны доступные бейджи и как их открыть.
               </DialogDescription>
             </DialogHeader>
-            <div className="max-h-[60vh] overflow-y-auto pr-1 space-y-2">
+            <div className={`max-h-[60vh] overflow-y-auto pr-1 space-y-2 ${HIDE_SCROLLBAR_CLASS}`}>
               {badges.map((badge) => (
                 <div
                   key={`rules-${badge.key}`}
-                  className={`rounded-xl border px-3 py-2 ${
+                  className={`rounded-xl border px-3 py-3 ${
                     badge.active
-                      ? "border-red-500/40 bg-red-600/10"
+                      ? "border-red-500/45 bg-red-600/12"
                       : "border-zinc-800 bg-zinc-900/55"
                   }`}
                 >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-sm font-semibold">{badge.title}</div>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span
+                        className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-[11px] ${
+                          badge.active
+                            ? "border-red-400/70 bg-red-500/25 text-red-100"
+                            : "border-zinc-700 bg-zinc-800 text-zinc-300"
+                        }`}
+                      >
+                        ★
+                      </span>
+                      <div className="text-sm font-semibold truncate">{badge.title}</div>
+                    </div>
                     <div className="text-xs text-zinc-400">{badge.active ? "Доступен" : "Закрыт"}</div>
                   </div>
-                  <div className="mt-1 text-xs text-zinc-400">{badge.description}</div>
+                  <div className="mt-2 text-xs text-zinc-400">{badge.description}</div>
                 </div>
               ))}
             </div>
+          </DialogContent>
+        </Dialog>
+        <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>
+          <DialogContent className="max-w-md border-zinc-800 bg-zinc-950 text-zinc-100">
+            <DialogHeader>
+              <DialogTitle>Сменить пароль</DialogTitle>
+              <DialogDescription className="text-zinc-400">
+                Подтвердите текущий пароль и введите новый.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <Input
+                type="password"
+                value={passwordChangeCurrent}
+                onChange={(e) => setPasswordChangeCurrent(e.target.value)}
+                placeholder="Текущий пароль"
+                className="h-11 rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-red-500/40"
+              />
+              <Input
+                type="password"
+                value={passwordChangeNext}
+                onChange={(e) => setPasswordChangeNext(e.target.value)}
+                placeholder="Новый пароль"
+                className="h-11 rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-red-500/40"
+              />
+              <Button
+                onClick={async () => {
+                  const ok = await changePassword();
+                  if (ok) setPasswordDialogOpen(false);
+                }}
+                disabled={profileActionLoading || !passwordChangeCurrent || !passwordChangeNext}
+                className="w-full h-11 rounded-xl bg-red-600 text-white hover:bg-red-500 border-0"
+              >
+                Сохранить пароль
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+        <Dialog open={emailDialogOpen} onOpenChange={setEmailDialogOpen}>
+          <DialogContent className="max-w-md border-zinc-800 bg-zinc-950 text-zinc-100">
+            <DialogHeader>
+              <DialogTitle>Сменить почту</DialogTitle>
+              <DialogDescription className="text-zinc-400">
+                Введите новую почту и подтвердите текущий пароль.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <Input
+                type="email"
+                value={emailChangeNext}
+                onChange={(e) => setEmailChangeNext(e.target.value)}
+                placeholder="Новая почта"
+                className="h-11 rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-red-500/40"
+              />
+              <Input
+                type="password"
+                value={emailChangeCurrentPassword}
+                onChange={(e) => setEmailChangeCurrentPassword(e.target.value)}
+                placeholder="Текущий пароль"
+                className="h-11 rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-red-500/40"
+              />
+              <Button
+                onClick={async () => {
+                  const ok = await changeEmail();
+                  if (ok) setEmailDialogOpen(false);
+                }}
+                disabled={profileActionLoading || !emailChangeCurrentPassword || !emailChangeNext.trim()}
+                className="w-full h-11 rounded-xl bg-red-600 text-white hover:bg-red-500 border-0"
+              >
+                Сохранить почту
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+        <Dialog
+          open={imageCropDialogOpen}
+          onOpenChange={(open) => {
+            setImageCropDialogOpen(open);
+            if (!open) {
+              setImageCropSource(null);
+              setImageCropLoading(false);
+            }
+          }}
+        >
+          <DialogContent className="max-w-3xl border-zinc-800 bg-zinc-950 text-zinc-100">
+            <DialogHeader>
+              <DialogTitle>Редактировать изображение</DialogTitle>
+              <DialogDescription className="text-zinc-400">
+                Выберите область, которая будет установлена для {imageCropTarget === "avatar" ? "аватара" : "баннера"}.
+              </DialogDescription>
+            </DialogHeader>
+            {imageCropSource ? (
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
+                  <div
+                    className={`relative mx-auto overflow-hidden bg-zinc-950 ${imageCropTarget === "avatar" ? "h-[280px] w-[280px] rounded-full border border-zinc-700" : "h-[220px] w-full rounded-xl border border-zinc-700"}`}
+                  >
+                    <img
+                      src={imageCropSource}
+                      alt="crop"
+                      className="absolute left-1/2 top-1/2 max-w-none select-none pointer-events-none"
+                      style={{
+                        transform: `translate(calc(-50% + ${imageCropOffsetX}px), calc(-50% + ${imageCropOffsetY}px)) scale(${imageCropZoom})`,
+                        transformOrigin: "center center",
+                        width: imageCropTarget === "avatar" ? "280px" : "100%",
+                        height: imageCropTarget === "avatar" ? "280px" : "220px",
+                        objectFit: "cover",
+                      }}
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="space-y-1">
+                    <label className="text-xs text-zinc-400">Масштаб</label>
+                    <Input
+                      type="range"
+                      min={1}
+                      max={3}
+                      step={0.01}
+                      value={imageCropZoom}
+                      onChange={(e) => setImageCropZoom(Number(e.target.value))}
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-zinc-400">Смещение X</label>
+                    <Input
+                      type="range"
+                      min={-100}
+                      max={100}
+                      step={1}
+                      value={imageCropOffsetX}
+                      onChange={(e) => setImageCropOffsetX(Number(e.target.value))}
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-zinc-400">Смещение Y</label>
+                    <Input
+                      type="range"
+                      min={-100}
+                      max={100}
+                      step={1}
+                      value={imageCropOffsetY}
+                      onChange={(e) => setImageCropOffsetY(Number(e.target.value))}
+                      className="h-9"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                    onClick={resetImageCrop}
+                  >
+                    Сброс
+                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                      onClick={() => setImageCropDialogOpen(false)}
+                    >
+                      Отмена
+                    </Button>
+                    <Button
+                      type="button"
+                      className="rounded-xl bg-red-600 text-white hover:bg-red-500 border-0"
+                      onClick={() => void applyImageCrop()}
+                      disabled={imageCropLoading}
+                    >
+                      {imageCropLoading ? "Сохраняем..." : "Применить"}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </DialogContent>
         </Dialog>
         {renderPublicProfileDialog()}

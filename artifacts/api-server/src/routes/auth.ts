@@ -1,8 +1,9 @@
-import { Router } from "express";
+﻿import { Router } from "express";
 import {
   changeEmailByToken,
   changePasswordByToken,
   getPublicUserProfileById,
+  getProfileByToken,
   getUserByToken,
   loginAccount,
   logoutByToken,
@@ -44,21 +45,21 @@ authRouter.post("/auth/register", async (req, res) => {
     const acceptRules = Boolean(req.body?.acceptRules);
 
     if (!login || login.length < 3) {
-      return res.status(400).json({ message: "Login must be at least 3 characters." });
+      return res.status(400).json({ message: "Логин должен быть не короче 3 символов." });
     }
     if (!email || !email.includes("@")) {
-      return res.status(400).json({ message: "Please enter a valid email." });
+      return res.status(400).json({ message: "Введите корректную почту." });
     }
     if (!password || password.length < 6) {
-      return res.status(400).json({ message: "Password must be at least 6 characters." });
+      return res.status(400).json({ message: "Пароль должен быть не короче 6 символов." });
     }
     if (password !== confirmPassword) {
-      return res.status(400).json({ message: "Passwords do not match." });
+      return res.status(400).json({ message: "Пароли не совпадают." });
     }
     if (!acceptRules) {
       return res
         .status(400)
-        .json({ message: "You must accept the site rules." });
+        .json({ message: "Нужно принять правила сайта." });
     }
 
     const { user, token } = await registerAccount({
@@ -69,7 +70,7 @@ authRouter.post("/auth/register", async (req, res) => {
     });
     return res.status(201).json({ user, token });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Registration failed.";
+    const message = error instanceof Error ? error.message : "Не удалось зарегистрироваться.";
     return res.status(400).json({ message });
   }
 });
@@ -79,13 +80,13 @@ authRouter.post("/auth/login", async (req, res) => {
     const loginOrEmail = String(req.body?.loginOrEmail ?? "").trim();
     const password = String(req.body?.password ?? "");
     if (!loginOrEmail || !password) {
-      return res.status(400).json({ message: "Please enter login/email and password." });
+      return res.status(400).json({ message: "Введите логин/email и пароль." });
     }
 
     const { user, token } = await loginAccount({ loginOrEmail, password });
     return res.status(200).json({ user, token });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Login failed.";
+    const message = error instanceof Error ? error.message : "Не удалось выполнить вход.";
     return res.status(401).json({ message });
   }
 });
@@ -93,13 +94,25 @@ authRouter.post("/auth/login", async (req, res) => {
 authRouter.get("/auth/me", async (req, res) => {
   const token = getRequestToken(req.headers as Record<string, unknown>);
   if (!token) {
-    return res.status(401).json({ message: "Unauthorized." });
+    return res.status(401).json({ message: "Не авторизован." });
   }
   const user = await getUserByToken(token);
   if (!user) {
-    return res.status(401).json({ message: "Invalid session." });
+    return res.status(401).json({ message: "Сессия недействительна." });
   }
   return res.status(200).json({ user });
+});
+
+authRouter.get("/auth/profile", async (req, res) => {
+  const token = getRequestToken(req.headers as Record<string, unknown>);
+  if (!token) {
+    return res.status(401).json({ message: "Не авторизован." });
+  }
+  const profile = await getProfileByToken(token);
+  if (!profile) {
+    return res.status(401).json({ message: "Сессия недействительна." });
+  }
+  return res.status(200).json({ profile });
 });
 
 authRouter.post("/auth/logout", async (req, res) => {
@@ -113,7 +126,7 @@ authRouter.post("/auth/logout", async (req, res) => {
 authRouter.patch("/auth/profile", async (req, res) => {
   const token = getRequestToken(req.headers as Record<string, unknown>);
   if (!token) {
-    return res.status(401).json({ message: "Unauthorized." });
+    return res.status(401).json({ message: "Не авторизован." });
   }
   try {
     const nickname =
@@ -140,6 +153,10 @@ authRouter.patch("/auth/profile", async (req, res) => {
         : undefined;
     const hideAge =
       typeof req.body?.hideAge === "boolean" ? req.body.hideAge : undefined;
+    const selectedBadgeKey =
+      req.body?.selectedBadgeKey === null || typeof req.body?.selectedBadgeKey === "string"
+        ? req.body.selectedBadgeKey
+        : undefined;
     const updatedUser = await updateProfileByToken(token, {
       nickname,
       avatar,
@@ -151,13 +168,14 @@ authRouter.patch("/auth/profile", async (req, res) => {
           : undefined,
       birthDate,
       hideAge,
+      selectedBadgeKey,
     });
     if (!updatedUser) {
-      return res.status(401).json({ message: "Invalid session." });
+      return res.status(401).json({ message: "Сессия недействительна." });
     }
     return res.status(200).json({ user: updatedUser });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Profile update failed.";
+    const message = error instanceof Error ? error.message : "Не удалось обновить профиль.";
     return res.status(400).json({ message });
   }
 });
@@ -165,27 +183,27 @@ authRouter.patch("/auth/profile", async (req, res) => {
 authRouter.patch("/auth/password", async (req, res) => {
   const token = getRequestToken(req.headers as Record<string, unknown>);
   if (!token) {
-    return res.status(401).json({ message: "Unauthorized." });
+    return res.status(401).json({ message: "Не авторизован." });
   }
 
   try {
     const currentPassword = String(req.body?.currentPassword ?? "");
     const nextPassword = String(req.body?.nextPassword ?? "");
     if (!currentPassword || !nextPassword) {
-      return res.status(400).json({ message: "Current password and new password are required." });
+      return res.status(400).json({ message: "Заполните обязательные поля." });
     }
     if (nextPassword.length < 6) {
-      return res.status(400).json({ message: "Password must be at least 6 characters." });
+      return res.status(400).json({ message: "Пароль должен быть не короче 6 символов." });
     }
 
     const user = await changePasswordByToken(token, currentPassword, nextPassword);
     if (!user) {
-      return res.status(401).json({ message: "Invalid session." });
+      return res.status(401).json({ message: "Сессия недействительна." });
     }
 
     return res.status(200).json({ user, ok: true });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Password change failed.";
+    const message = error instanceof Error ? error.message : "Не удалось сменить пароль.";
     return res.status(400).json({ message });
   }
 });
@@ -193,26 +211,26 @@ authRouter.patch("/auth/password", async (req, res) => {
 authRouter.patch("/auth/email", async (req, res) => {
   const token = getRequestToken(req.headers as Record<string, unknown>);
   if (!token) {
-    return res.status(401).json({ message: "Unauthorized." });
+    return res.status(401).json({ message: "Не авторизован." });
   }
 
   try {
     const currentPassword = String(req.body?.currentPassword ?? "");
     const nextEmail = String(req.body?.nextEmail ?? "").trim();
     if (!currentPassword || !nextEmail) {
-      return res.status(400).json({ message: "Current password and new email are required." });
+      return res.status(400).json({ message: "Заполните обязательные поля." });
     }
     if (!nextEmail.includes("@")) {
-      return res.status(400).json({ message: "Please enter a valid email." });
+      return res.status(400).json({ message: "Введите корректную почту." });
     }
 
     const user = await changeEmailByToken(token, currentPassword, nextEmail);
     if (!user) {
-      return res.status(401).json({ message: "Invalid session." });
+      return res.status(401).json({ message: "Сессия недействительна." });
     }
     return res.status(200).json({ user, ok: true });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Email change failed.";
+    const message = error instanceof Error ? error.message : "Не удалось сменить почту.";
     return res.status(400).json({ message });
   }
 });
@@ -220,13 +238,14 @@ authRouter.patch("/auth/email", async (req, res) => {
 authRouter.get("/auth/public/:id", async (req, res) => {
   const id = String(req.params?.id ?? "").trim();
   if (!id) {
-    return res.status(400).json({ message: "User id is required." });
+    return res.status(400).json({ message: "Нужен идентификатор игрока." });
   }
   const profile = await getPublicUserProfileById(id);
   if (!profile) {
-    return res.status(404).json({ message: "User not found." });
+    return res.status(404).json({ message: "Профиль игрока не найден." });
   }
   return res.status(200).json({ profile });
 });
 
 export default authRouter;
+

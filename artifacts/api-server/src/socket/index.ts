@@ -30,7 +30,7 @@ import {
   markMissingSocketPlayersDisconnected,
   type CreateRoomOptions,
 } from "./roomManager.js";
-import { getUserByToken } from "../lib/authStore.js";
+import { getUserByToken, recordMatchOutcome } from "../lib/authStore.js";
 import {
   cleanupOldSnapshots,
   deleteRoomSnapshot,
@@ -67,6 +67,17 @@ type CanonicalRole =
   | "prosecutor"
   | "judge"
   | "witness";
+
+function resolveExpectedVerdictFromTruth(truthRaw: string | undefined): string {
+  const truth = (truthRaw ?? "").toLowerCase().replace(/ё/g, "е");
+  if (truth.includes("не винов") || truth.includes("не виноват")) {
+    return "Не виновен";
+  }
+  if (truth.includes("частично винов")) {
+    return "Частично виновен";
+  }
+  return "Виновен";
+}
 
 function normalizeRoleKey(roleKey: string | undefined): CanonicalRole | null {
   if (!roleKey) return null;
@@ -1882,6 +1893,22 @@ export function setupSocket(httpServer: HttpServer) {
 
       const updatedRoom = setVerdict(roomCode, verdict);
       if (!updatedRoom) return;
+      const expectedVerdict = resolveExpectedVerdictFromTruth(
+        updatedRoom.game?.caseData?.truth,
+      );
+      void recordMatchOutcome({
+        roomCode,
+        verdict,
+        expectedVerdict,
+        players: (updatedRoom.game?.players ?? []).map((player: any) => ({
+          userId: player.userId,
+          roleKey: player.roleKey,
+          nickname: player.name,
+          roleTitle: player.roleTitle,
+        })),
+      }).catch((error) => {
+        console.error("recordMatchOutcome failed", error);
+      });
       const closeAt = Date.now() + VERDICT_ROOM_CLOSE_MS;
       updatedRoom.game!.verdictCloseAt = closeAt;
 
