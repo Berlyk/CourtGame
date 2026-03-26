@@ -7,6 +7,24 @@ export interface AuthUserPublic {
   email: string;
   nickname: string;
   avatar?: string;
+  banner?: string;
+  bio?: string;
+  gender?: "male" | "female" | "other";
+  birthDate?: string;
+  hideAge: boolean;
+  createdAt: number;
+}
+
+export interface AuthUserPublicProfile {
+  id: string;
+  nickname: string;
+  avatar?: string;
+  banner?: string;
+  bio?: string;
+  gender?: "male" | "female" | "other";
+  birthDate?: string;
+  hideAge: boolean;
+  age?: number;
   createdAt: number;
 }
 
@@ -43,6 +61,11 @@ function toPublicUser(row: {
   email: string;
   nickname: string;
   avatar: string | null;
+  banner: string | null;
+  bio: string | null;
+  gender: string | null;
+  birth_date: Date | null;
+  hide_age: boolean | null;
   created_at: Date;
 }): AuthUserPublic {
   return {
@@ -51,6 +74,55 @@ function toPublicUser(row: {
     email: row.email,
     nickname: row.nickname,
     avatar: row.avatar ?? undefined,
+    banner: row.banner ?? undefined,
+    bio: row.bio ?? undefined,
+    gender:
+      row.gender === "male" || row.gender === "female" || row.gender === "other"
+        ? row.gender
+        : undefined,
+    birthDate: row.birth_date ? row.birth_date.toISOString().slice(0, 10) : undefined,
+    hideAge: !!row.hide_age,
+    createdAt: row.created_at.getTime(),
+  };
+}
+
+function computeAge(date: Date | null): number | undefined {
+  if (!date) return undefined;
+  const now = new Date();
+  let age = now.getUTCFullYear() - date.getUTCFullYear();
+  const monthDiff = now.getUTCMonth() - date.getUTCMonth();
+  const dayDiff = now.getUTCDate() - date.getUTCDate();
+  if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
+    age -= 1;
+  }
+  return age >= 0 ? age : undefined;
+}
+
+function toPublicProfile(row: {
+  id: string;
+  nickname: string;
+  avatar: string | null;
+  banner: string | null;
+  bio: string | null;
+  gender: string | null;
+  birth_date: Date | null;
+  hide_age: boolean | null;
+  created_at: Date;
+}): AuthUserPublicProfile {
+  const age = computeAge(row.birth_date);
+  return {
+    id: row.id,
+    nickname: row.nickname,
+    avatar: row.avatar ?? undefined,
+    banner: row.banner ?? undefined,
+    bio: row.bio ?? undefined,
+    gender:
+      row.gender === "male" || row.gender === "female" || row.gender === "other"
+        ? row.gender
+        : undefined,
+    birthDate: row.birth_date ? row.birth_date.toISOString().slice(0, 10) : undefined,
+    hideAge: !!row.hide_age,
+    age: row.hide_age ? undefined : age,
     createdAt: row.created_at.getTime(),
   };
 }
@@ -71,8 +143,34 @@ async function ensureTables(): Promise<void> {
           password_hash TEXT NOT NULL,
           accepted_rules_at TIMESTAMPTZ NOT NULL,
           avatar TEXT,
+          banner TEXT,
+          bio TEXT,
+          gender TEXT,
+          birth_date DATE,
+          hide_age BOOLEAN NOT NULL DEFAULT FALSE,
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
+      `);
+
+      await pool.query(`
+        ALTER TABLE auth_users
+          ADD COLUMN IF NOT EXISTS banner TEXT;
+      `);
+      await pool.query(`
+        ALTER TABLE auth_users
+          ADD COLUMN IF NOT EXISTS bio TEXT;
+      `);
+      await pool.query(`
+        ALTER TABLE auth_users
+          ADD COLUMN IF NOT EXISTS gender TEXT;
+      `);
+      await pool.query(`
+        ALTER TABLE auth_users
+          ADD COLUMN IF NOT EXISTS birth_date DATE;
+      `);
+      await pool.query(`
+        ALTER TABLE auth_users
+          ADD COLUMN IF NOT EXISTS hide_age BOOLEAN NOT NULL DEFAULT FALSE;
       `);
 
       await pool.query(`
@@ -149,6 +247,11 @@ export async function registerAccount(input: {
     email: string;
     nickname: string;
     avatar: string | null;
+    banner: string | null;
+    bio: string | null;
+    gender: string | null;
+    birth_date: Date | null;
+    hide_age: boolean | null;
     created_at: Date;
   }>(
     `
@@ -165,7 +268,7 @@ export async function registerAccount(input: {
         accepted_rules_at
       )
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-      RETURNING id, login, email, nickname, avatar, created_at
+      RETURNING id, login, email, nickname, avatar, banner, bio, gender, birth_date, hide_age, created_at
     `,
     [
       userId,
@@ -203,12 +306,17 @@ export async function loginAccount(input: {
     email: string;
     nickname: string;
     avatar: string | null;
+    banner: string | null;
+    bio: string | null;
+    gender: string | null;
+    birth_date: Date | null;
+    hide_age: boolean | null;
     created_at: Date;
     password_salt: string;
     password_hash: string;
   }>(
     `
-      SELECT id, login, email, nickname, avatar, created_at, password_salt, password_hash
+      SELECT id, login, email, nickname, avatar, banner, bio, gender, birth_date, hide_age, created_at, password_salt, password_hash
       FROM auth_users
       WHERE login_normalized = $1 OR email_normalized = $1
       LIMIT 1
@@ -243,10 +351,15 @@ export async function getUserByToken(token: string): Promise<AuthUserPublic | nu
     email: string;
     nickname: string;
     avatar: string | null;
+    banner: string | null;
+    bio: string | null;
+    gender: string | null;
+    birth_date: Date | null;
+    hide_age: boolean | null;
     created_at: Date;
   }>(
     `
-      SELECT u.id, u.login, u.email, u.nickname, u.avatar, u.created_at
+      SELECT u.id, u.login, u.email, u.nickname, u.avatar, u.banner, u.bio, u.gender, u.birth_date, u.hide_age, u.created_at
       FROM auth_sessions s
       JOIN auth_users u ON u.id = s.user_id
       WHERE s.token = $1
@@ -266,7 +379,15 @@ export async function logoutByToken(token: string): Promise<void> {
 
 export async function updateProfileByToken(
   token: string,
-  profile: { nickname?: string; avatar?: string | null },
+  profile: {
+    nickname?: string;
+    avatar?: string | null;
+    banner?: string | null;
+    bio?: string | null;
+    gender?: "male" | "female" | "other" | null;
+    birthDate?: string | null;
+    hideAge?: boolean;
+  },
 ): Promise<AuthUserPublic | null> {
   await cleanupSessions();
 
@@ -316,16 +437,60 @@ export async function updateProfileByToken(
     );
   }
 
+  if (profile.banner !== undefined) {
+    await pool.query(
+      `
+        UPDATE auth_users
+        SET banner = $1
+        WHERE id = $2
+      `,
+      [profile.banner || null, userId],
+    );
+  }
+
+  if (profile.bio !== undefined) {
+    const bio = typeof profile.bio === "string" ? profile.bio.trim().slice(0, 500) : null;
+    await pool.query(`UPDATE auth_users SET bio = $1 WHERE id = $2`, [bio || null, userId]);
+  }
+
+  if (profile.gender !== undefined) {
+    const gender =
+      profile.gender === "male" || profile.gender === "female" || profile.gender === "other"
+        ? profile.gender
+        : null;
+    await pool.query(`UPDATE auth_users SET gender = $1 WHERE id = $2`, [gender, userId]);
+  }
+
+  if (profile.birthDate !== undefined) {
+    const birthDate =
+      typeof profile.birthDate === "string" && profile.birthDate.trim()
+        ? profile.birthDate.trim()
+        : null;
+    await pool.query(`UPDATE auth_users SET birth_date = $1::date WHERE id = $2`, [birthDate, userId]);
+  }
+
+  if (profile.hideAge !== undefined) {
+    await pool.query(`UPDATE auth_users SET hide_age = $1 WHERE id = $2`, [
+      !!profile.hideAge,
+      userId,
+    ]);
+  }
+
   const userResult = await pool.query<{
     id: string;
     login: string;
     email: string;
     nickname: string;
     avatar: string | null;
+    banner: string | null;
+    bio: string | null;
+    gender: string | null;
+    birth_date: Date | null;
+    hide_age: boolean | null;
     created_at: Date;
   }>(
     `
-      SELECT id, login, email, nickname, avatar, created_at
+      SELECT id, login, email, nickname, avatar, banner, bio, gender, birth_date, hide_age, created_at
       FROM auth_users
       WHERE id = $1
       LIMIT 1
@@ -335,4 +500,114 @@ export async function updateProfileByToken(
 
   if (!userResult.rowCount) return null;
   return toPublicUser(userResult.rows[0]);
+}
+
+async function getUserWithSecretsByToken(token: string): Promise<{
+  userId: string;
+  email: string;
+  passwordSalt: string;
+  passwordHash: string;
+} | null> {
+  await cleanupSessions();
+  const result = await pool.query<{
+    user_id: string;
+    email: string;
+    password_salt: string;
+    password_hash: string;
+  }>(
+    `
+      SELECT s.user_id, u.email, u.password_salt, u.password_hash
+      FROM auth_sessions s
+      JOIN auth_users u ON u.id = s.user_id
+      WHERE s.token = $1
+      LIMIT 1
+    `,
+    [token],
+  );
+  if (!result.rowCount) return null;
+  const row = result.rows[0];
+  return {
+    userId: row.user_id,
+    email: row.email,
+    passwordSalt: row.password_salt,
+    passwordHash: row.password_hash,
+  };
+}
+
+export async function changePasswordByToken(
+  token: string,
+  currentPassword: string,
+  nextPassword: string,
+): Promise<AuthUserPublic | null> {
+  const data = await getUserWithSecretsByToken(token);
+  if (!data) return null;
+
+  if (!verifyPassword(currentPassword, data.passwordSalt, data.passwordHash)) {
+    throw new Error("Invalid current password.");
+  }
+
+  const salt = crypto.randomBytes(16).toString("hex");
+  const hash = hashPassword(nextPassword, salt);
+  await pool.query(
+    `UPDATE auth_users SET password_salt = $1, password_hash = $2 WHERE id = $3`,
+    [salt, hash, data.userId],
+  );
+
+  return getUserByToken(token);
+}
+
+export async function changeEmailByToken(
+  token: string,
+  currentPassword: string,
+  nextEmail: string,
+): Promise<AuthUserPublic | null> {
+  const data = await getUserWithSecretsByToken(token);
+  if (!data) return null;
+
+  if (!verifyPassword(currentPassword, data.passwordSalt, data.passwordHash)) {
+    throw new Error("Invalid current password.");
+  }
+
+  const emailNormalized = normalizeEmail(nextEmail);
+  const conflict = await pool.query(
+    `SELECT 1 FROM auth_users WHERE id <> $1 AND email_normalized = $2 LIMIT 1`,
+    [data.userId, emailNormalized],
+  );
+  if (conflict.rowCount) {
+    throw new Error("Email is already in use.");
+  }
+
+  await pool.query(
+    `UPDATE auth_users SET email = $1, email_normalized = $2 WHERE id = $3`,
+    [nextEmail.trim(), emailNormalized, data.userId],
+  );
+
+  return getUserByToken(token);
+}
+
+export async function getPublicUserProfileById(
+  userId: string,
+): Promise<AuthUserPublicProfile | null> {
+  await ensureTables();
+  const result = await pool.query<{
+    id: string;
+    nickname: string;
+    avatar: string | null;
+    banner: string | null;
+    bio: string | null;
+    gender: string | null;
+    birth_date: Date | null;
+    hide_age: boolean | null;
+    created_at: Date;
+  }>(
+    `
+      SELECT id, nickname, avatar, banner, bio, gender, birth_date, hide_age, created_at
+      FROM auth_users
+      WHERE id = $1
+      LIMIT 1
+    `,
+    [userId],
+  );
+  if (!result.rowCount) return null;
+  return toPublicProfile(result.rows[0]);
 }

@@ -110,6 +110,7 @@ const VERDICT_CLOSE_COUNTDOWN_MS = 30_000;
 const AUTH_TOKEN_STORAGE_KEY = "court_auth_token";
 const AUTH_USER_STORAGE_KEY = "court_auth_user";
 const GUEST_NAME_STORAGE_KEY = "court_guest_name";
+const BANNER_STORAGE_KEY = "court_banner";
 const GUEST_NAME_PREFIX = "Гость-";
 
 const SITE_RULES: string[] = [
@@ -1147,6 +1148,7 @@ interface PlayerInfo {
   userId?: string;
   name: string;
   avatar?: string;
+  banner?: string;
   roleKey?: string;
   roleTitle?: string;
   warningCount?: number;
@@ -1245,6 +1247,7 @@ interface AuthUser {
   email: string;
   nickname: string;
   avatar?: string;
+  banner?: string;
   bio?: string;
   gender?: "male" | "female" | "other";
   birthDate?: string;
@@ -1256,6 +1259,7 @@ interface PublicUserProfile {
   id: string;
   nickname: string;
   avatar?: string;
+  banner?: string;
   bio?: string;
   gender?: "male" | "female" | "other";
   birthDate?: string;
@@ -1269,6 +1273,7 @@ interface MyPlayer {
   userId?: string;
   name: string;
   avatar?: string;
+  banner?: string;
   roleKey: string;
   roleTitle: string;
   goal: string;
@@ -1344,6 +1349,40 @@ function Avatar({
       {initials}
     </div>
   );
+}
+
+function hashSeed(value: string): number {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash << 5) - hash + value.charCodeAt(index);
+    hash |= 0;
+  }
+  return Math.abs(hash);
+}
+
+function buildAutoBannerGradient(seedRaw: string): string {
+  const seed = hashSeed(seedRaw || "courtgame");
+  const hue = seed % 360;
+  const accentHue = (hue + 28) % 360;
+  return `linear-gradient(135deg, hsla(${hue}, 78%, 46%, 0.48) 0%, hsla(${accentHue}, 74%, 36%, 0.34) 48%, hsla(230, 26%, 11%, 0.95) 100%)`;
+}
+
+function getBannerStyle(
+  banner: string | null | undefined,
+  avatar: string | null | undefined,
+  seedName: string,
+): React.CSSProperties {
+  if (banner && banner.trim()) {
+    return {
+      backgroundImage: `url(${banner})`,
+      backgroundSize: "cover",
+      backgroundPosition: "center",
+      backgroundRepeat: "no-repeat",
+    };
+  }
+  return {
+    backgroundImage: buildAutoBannerGradient(`${seedName}|${avatar ?? ""}`),
+  };
 }
 
 async function authRequest<T>(
@@ -1476,7 +1515,11 @@ function PlayerCard({
   return (
     <motion.div variants={cardVariants} initial="initial" animate="animate">
       <Card className="rounded-2xl shadow-sm bg-zinc-900/90 border-zinc-800 text-zinc-100">
-        <CardContent className="p-4 flex items-center justify-between gap-3">
+        <CardContent className="relative overflow-hidden p-4 pt-5 flex items-center justify-between gap-3">
+          <div
+            className="pointer-events-none absolute inset-x-2 top-2 h-9 rounded-lg opacity-80"
+            style={getBannerStyle(player.banner, player.avatar, player.name)}
+          />
           <div className="flex items-center gap-3 min-w-0">
             <Avatar src={player.avatar ?? null} name={player.name} size={52} />
             <div className="min-w-0">
@@ -1634,6 +1677,9 @@ export default function App() {
   const [contextHelpQuery, setContextHelpQuery] = useState("");
   const [playerName, setPlayerName] = useState("");
   const [avatar, setAvatar] = useState<string | null>(null);
+  const [banner, setBanner] = useState<string | null>(
+    () => localStorage.getItem(BANNER_STORAGE_KEY),
+  );
   const [authToken, setAuthToken] = useState<string | null>(
     () => localStorage.getItem(AUTH_TOKEN_STORAGE_KEY),
   );
@@ -1743,6 +1789,7 @@ export default function App() {
   const [isHostJudge, setIsHostJudge] = useState(false);
 
   const avatarInputRef = useRef<HTMLInputElement>(null);
+  const bannerInputRef = useRef<HTMLInputElement>(null);
   const lobbyChatScrollRef = useRef<HTMLDivElement>(null);
   const lawyerChatScrollRef = useRef<HTMLDivElement>(null);
   const joinPasswordDialogOpenRef = useRef(false);
@@ -1755,6 +1802,7 @@ export default function App() {
   const socket = getSocket();
   const activeRoomCode = room?.code ?? game?.code ?? null;
   const sharedAvatar = shareAvatarInProfile ? avatar : null;
+  const sharedBanner = banner;
   const isAuthenticated = !!authUser && !!authToken;
   const selectedCreateMode = getRoomModeMeta(createRoomMode);
   const reconnectSecondsLeft =
@@ -1873,7 +1921,7 @@ export default function App() {
 
     return (
       <Dialog open={viewPlayerProfileOpen} onOpenChange={setViewPlayerProfileOpen}>
-        <DialogContent className="max-w-md border-zinc-800 bg-zinc-950 text-zinc-100">
+        <DialogContent className="max-w-lg border-zinc-800 bg-zinc-950 text-zinc-100">
           <DialogHeader>
             <DialogTitle>Профиль игрока</DialogTitle>
             <DialogDescription className="text-zinc-400">
@@ -1890,6 +1938,14 @@ export default function App() {
             </div>
           ) : viewPlayerProfile ? (
             <div className="space-y-4">
+              <div
+                className="h-24 rounded-xl border border-zinc-800"
+                style={getBannerStyle(
+                  viewPlayerProfile.banner,
+                  viewPlayerProfile.avatar,
+                  viewPlayerProfile.nickname,
+                )}
+              />
               <div className="flex items-center gap-3">
                 <Avatar src={viewPlayerProfile.avatar ?? null} name={viewPlayerProfile.nickname} size={56} />
                 <div>
@@ -1927,7 +1983,9 @@ export default function App() {
   useEffect(() => {
     const savedName = localStorage.getItem("court_nickname");
     const savedAvatar = localStorage.getItem("court_avatar");
+    const savedBanner = localStorage.getItem(BANNER_STORAGE_KEY);
     if (savedAvatar) setAvatar(savedAvatar);
+    if (savedBanner) setBanner(savedBanner);
 
     if (savedName) {
       setPlayerName(savedName);
@@ -1964,6 +2022,10 @@ export default function App() {
         if (user.avatar) {
           setAvatar(user.avatar);
           localStorage.setItem("court_avatar", user.avatar);
+        }
+        if (user.banner) {
+          setBanner(user.banner);
+          localStorage.setItem(BANNER_STORAGE_KEY, user.banner);
         }
       })
       .catch(() => {
@@ -2637,13 +2699,14 @@ export default function App() {
     socket.emit("create_room", {
       playerName: name,
       avatar: sharedAvatar || undefined,
+      banner: sharedBanner || undefined,
       authToken: authToken || undefined,
       options: {
         visibility: "public",
         modeKey: "quick_flex",
       },
     });
-  }, [socket, playerName, sharedAvatar, authToken]);
+  }, [socket, playerName, sharedAvatar, sharedBanner, authToken]);
 
   const createRoomFromPanel = useCallback(() => {
     const name = playerName.trim() || getOrCreateGuestName();
@@ -2656,6 +2719,7 @@ export default function App() {
     socket.emit("create_room", {
       playerName: name,
       avatar: sharedAvatar || undefined,
+      banner: sharedBanner || undefined,
       authToken: authToken || undefined,
       options: {
         modeKey: createRoomMode,
@@ -2674,6 +2738,7 @@ export default function App() {
     playerName,
     sharedAvatar,
     authToken,
+    sharedBanner,
     createRoomMode,
     createRoomPrivate,
     createRoomName,
@@ -2691,10 +2756,11 @@ export default function App() {
       code: targetCode,
       playerName: name,
       avatar: sharedAvatar || undefined,
+      banner: sharedBanner || undefined,
       authToken: authToken || undefined,
       password: password || undefined,
     });
-  }, [socket, joinCode, playerName, sharedAvatar, authToken]);
+  }, [socket, joinCode, playerName, sharedAvatar, sharedBanner, authToken]);
 
   const updateProfile = useCallback(() => {
     const nextName = playerName.trim();
@@ -2706,6 +2772,11 @@ export default function App() {
     } else {
       localStorage.removeItem("court_avatar");
     }
+    if (banner) {
+      localStorage.setItem(BANNER_STORAGE_KEY, banner);
+    } else {
+      localStorage.removeItem(BANNER_STORAGE_KEY);
+    }
 
     if (activeRoomCode && mySessionToken) {
       socket.emit("update_profile", {
@@ -2713,6 +2784,7 @@ export default function App() {
         sessionToken: mySessionToken,
         name: nextName,
         avatar: sharedAvatar,
+        banner: sharedBanner,
       });
     }
 
@@ -2723,6 +2795,7 @@ export default function App() {
         body: {
           nickname: nextName,
           avatar: sharedAvatar,
+          banner: sharedBanner,
         },
       })
         .then(({ user }) => {
@@ -2740,7 +2813,9 @@ export default function App() {
     mySessionToken,
     playerName,
     avatar,
+    banner,
     sharedAvatar,
+    sharedBanner,
     authToken,
   ]);
 
@@ -2922,6 +2997,10 @@ export default function App() {
       setAvatar(user.avatar);
       localStorage.setItem("court_avatar", user.avatar);
     }
+    if (user.banner) {
+      setBanner(user.banner);
+      localStorage.setItem(BANNER_STORAGE_KEY, user.banner);
+    }
     setAuthError("");
     setAuthDialogOpen(false);
     setAuthMode("login");
@@ -2931,6 +3010,7 @@ export default function App() {
         sessionToken: mySessionToken,
         name: user.nickname,
         avatar: user.avatar ?? null,
+        banner: user.banner ?? null,
       });
     }
     setScreen("profile");
@@ -3010,6 +3090,8 @@ export default function App() {
     localStorage.setItem("court_nickname", guestName);
     setAvatar(null);
     localStorage.removeItem("court_avatar");
+    setBanner(null);
+    localStorage.removeItem(BANNER_STORAGE_KEY);
     setProfileMenuOpen(false);
     setScreen("home");
   }, [authToken]);
@@ -3270,12 +3352,11 @@ export default function App() {
     setCreateMatchDialogOpen(false);
   }, [clearReconnectWindow, game, myId, room, socket, startReconnectWindow]);
 
-  const compressAvatar = useCallback(
-    (inputDataUrl: string): Promise<string> =>
+  const compressImage = useCallback(
+    (inputDataUrl: string, maxSide: number): Promise<string> =>
       new Promise((resolve) => {
         const img = new Image();
         img.onload = () => {
-          const maxSide = 256;
           const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
           const width = Math.max(1, Math.round(img.width * scale));
           const height = Math.max(1, Math.round(img.height * scale));
@@ -3290,7 +3371,7 @@ export default function App() {
             return;
           }
           ctx.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL("image/jpeg", 0.78));
+          resolve(canvas.toDataURL("image/jpeg", 0.82));
         };
         img.onerror = () => resolve(inputDataUrl);
         img.src = inputDataUrl;
@@ -3305,13 +3386,29 @@ export default function App() {
       const reader = new FileReader();
       reader.onload = async (ev) => {
         const dataUrl = ev.target?.result as string;
-        const compactAvatar = await compressAvatar(dataUrl);
+        const compactAvatar = await compressImage(dataUrl, 256);
         setAvatar(compactAvatar);
         localStorage.setItem("court_avatar", compactAvatar);
       };
       reader.readAsDataURL(file);
     },
-    [compressAvatar],
+    [compressImage],
+  );
+
+  const handleBannerChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = async (ev) => {
+        const dataUrl = ev.target?.result as string;
+        const compactBanner = await compressImage(dataUrl, 1024);
+        setBanner(compactBanner);
+        localStorage.setItem(BANNER_STORAGE_KEY, compactBanner);
+      };
+      reader.readAsDataURL(file);
+    },
+    [compressImage],
   );
 
   const copyCode = useCallback((code: string) => {
@@ -3343,9 +3440,9 @@ export default function App() {
         className="relative isolate min-h-screen overflow-y-auto bg-[#0b0b0f] text-zinc-100 p-6 md:p-10"
       >
         <CourtAtmosphereBackground />
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-6xl mx-auto">
           <Card className="rounded-[28px] border-zinc-800 bg-zinc-900/95 text-zinc-100">
-            <CardContent className="p-8 md:p-10">
+            <CardContent className="p-6 md:p-8">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="text-sm uppercase tracking-[0.16em] text-zinc-500">
@@ -3371,9 +3468,20 @@ export default function App() {
                 </Button>
               </div>
 
-              <div className="mt-7 grid gap-6 lg:grid-cols-[260px_1fr]">
+              <div className="mt-6 grid gap-6 lg:grid-cols-[320px_1fr]">
                 <Card className="rounded-2xl border-zinc-800 bg-zinc-950/70 text-zinc-100">
                   <CardContent className="p-5 space-y-4">
+                    <div
+                      className="h-24 rounded-xl border border-zinc-800"
+                      style={getBannerStyle(banner, avatar, playerName || "Игрок")}
+                    />
+                    <input
+                      ref={bannerInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleBannerChange}
+                    />
                     <div className="text-sm font-medium text-zinc-300">Аватар профиля</div>
                     <div className="flex justify-center">
                       <div
@@ -3397,6 +3505,20 @@ export default function App() {
                       <Button
                         variant="outline"
                         className="rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                        onClick={() => bannerInputRef.current?.click()}
+                      >
+                        Загрузить баннер
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                        onClick={() => setBanner(null)}
+                      >
+                        Сбросить баннер
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
                         onClick={() => avatarInputRef.current?.click()}
                       >
                         Загрузить аватар
@@ -3412,8 +3534,8 @@ export default function App() {
                   </CardContent>
                 </Card>
 
-                <div className="space-y-4">
-                  <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4">
+                <div className="grid gap-4 xl:grid-cols-2">
+                  <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4 xl:col-span-2">
                     <label className="text-sm font-medium text-zinc-300">Никнейм</label>
                     <Input
                       value={playerName}
@@ -3535,7 +3657,7 @@ export default function App() {
                     </>
                   )}
 
-                  <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-3 sm:grid-cols-2 xl:col-span-2">
                     <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4">
                       <div className="text-sm font-medium text-zinc-100">Показывать аватар</div>
                       <div className="text-xs text-zinc-500 mt-1">
@@ -3560,7 +3682,7 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="flex gap-3 pt-1">
+                  <div className="flex gap-3 pt-1 xl:col-span-2">
                     <Button
                       variant="outline"
                       className="flex-1 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
@@ -5376,8 +5498,15 @@ export default function App() {
                   </div>
                   <div className="space-y-1">
                     {game.players.map((p) => (
-                      <div key={p.id} className="flex items-center justify-between text-sm">
-                        <div className="flex items-center gap-2 min-w-0">
+                      <div
+                        key={p.id}
+                        className="relative overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/60 px-2.5 py-1.5 flex items-center justify-between text-sm"
+                      >
+                        <div
+                          className="pointer-events-none absolute inset-x-1 top-1 h-6 rounded-md opacity-70"
+                          style={getBannerStyle(p.banner, p.avatar, p.name)}
+                        />
+                        <div className="relative flex items-center gap-2 min-w-0">
                           <Avatar src={p.avatar ?? null} name={p.name} size={32} />
                           {p.userId ? (
                             <button
@@ -5421,7 +5550,7 @@ export default function App() {
                               </motion.span>
                             )}
                         </div>
-                        <span className="text-zinc-500">{p.roleTitle}</span>
+                        <span className="relative text-zinc-500">{p.roleTitle}</span>
                       </div>
                     ))}
                   </div>

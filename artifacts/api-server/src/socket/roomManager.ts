@@ -85,11 +85,14 @@ export interface PlayerFact {
 
 export interface Player {
   id: string;
+  userId?: string;
   name: string;
   socketId: string;
   sessionToken?: string;
   disconnectedUntil?: number;
+  warningCount?: number;
   avatar?: string;
+  banner?: string;
   roleKey?: string;
   roleTitle?: string;
   goal?: string;
@@ -206,6 +209,113 @@ const ROOM_MODE_MAX_PLAYERS: Record<RoomModeKey, number> = {
 
 const rooms = new Map<string, Room>();
 const ROOM_HARD_TTL_MS = 24 * 60 * 60 * 1000;
+
+function normalizeLoadedPlayer(player: any): Player | null {
+  if (!player || typeof player.id !== "string" || typeof player.name !== "string") {
+    return null;
+  }
+  return {
+    id: player.id,
+    userId: typeof player.userId === "string" ? player.userId : undefined,
+    name: player.name,
+    socketId: typeof player.socketId === "string" ? player.socketId : "",
+    sessionToken:
+      typeof player.sessionToken === "string" ? player.sessionToken : undefined,
+    disconnectedUntil:
+      typeof player.disconnectedUntil === "number" ? player.disconnectedUntil : undefined,
+    avatar: typeof player.avatar === "string" ? player.avatar : undefined,
+    banner: typeof player.banner === "string" ? player.banner : undefined,
+    roleKey: typeof player.roleKey === "string" ? player.roleKey : undefined,
+    roleTitle: typeof player.roleTitle === "string" ? player.roleTitle : undefined,
+    goal: typeof player.goal === "string" ? player.goal : undefined,
+    facts: Array.isArray(player.facts) ? player.facts : undefined,
+    cards: Array.isArray(player.cards) ? player.cards : undefined,
+    warningCount:
+      typeof player.warningCount === "number" ? Math.max(0, Math.min(3, player.warningCount)) : undefined,
+  };
+}
+
+export function restoreRoomsFromSnapshots(snapshots: unknown[]): number {
+  let restored = 0;
+  for (const raw of snapshots) {
+    const snapshot = raw as any;
+    if (!snapshot || typeof snapshot.code !== "string") continue;
+    if (rooms.has(snapshot.code)) continue;
+
+    const players = Array.isArray(snapshot.players)
+      ? snapshot.players
+          .map(normalizeLoadedPlayer)
+          .filter((player): player is Player => !!player)
+      : [];
+    if (players.length === 0) continue;
+
+    const loadedRoom: Room = {
+      code: snapshot.code,
+      roomName: typeof snapshot.roomName === "string" ? snapshot.roomName : undefined,
+      modeKey: normalizeModeKey(snapshot.modeKey),
+      maxPlayers:
+        typeof snapshot.maxPlayers === "number"
+          ? Math.max(3, Math.min(6, snapshot.maxPlayers))
+          : ROOM_MODE_MAX_PLAYERS[normalizeModeKey(snapshot.modeKey)],
+      hostId:
+        typeof snapshot.hostId === "string" && snapshot.hostId
+          ? snapshot.hostId
+          : players[0].id,
+      players,
+      game: null,
+      started: !!snapshot.started,
+      isHostJudge: !!snapshot.isHostJudge,
+      visibility: normalizeVisibility(snapshot.visibility),
+      password:
+        typeof snapshot.password === "string" && snapshot.password.trim()
+          ? snapshot.password.trim()
+          : undefined,
+      venueLabel:
+        typeof snapshot.venueLabel === "string" ? snapshot.venueLabel : undefined,
+      venueUrl: typeof snapshot.venueUrl === "string" ? snapshot.venueUrl : undefined,
+      createdAt:
+        typeof snapshot.createdAt === "number" ? snapshot.createdAt : Date.now(),
+      lobbyChat: Array.isArray(snapshot.lobbyChat) ? snapshot.lobbyChat : [],
+    };
+
+    if (snapshot.game && typeof snapshot.game === "object") {
+      const gamePlayers = Array.isArray(snapshot.game.players)
+        ? snapshot.game.players
+            .map(normalizeLoadedPlayer)
+            .filter((player): player is Player => !!player)
+        : [];
+      loadedRoom.game = {
+        caseData: snapshot.game.caseData,
+        players: gamePlayers.length > 0 ? gamePlayers : players,
+        stages: Array.isArray(snapshot.game.stages) ? snapshot.game.stages : [],
+        stageIndex:
+          typeof snapshot.game.stageIndex === "number"
+            ? snapshot.game.stageIndex
+            : 0,
+        revealedFacts: Array.isArray(snapshot.game.revealedFacts)
+          ? snapshot.game.revealedFacts
+          : [],
+        usedCards: Array.isArray(snapshot.game.usedCards) ? snapshot.game.usedCards : [],
+        activeProtest: snapshot.game.activeProtest ?? null,
+        finished: !!snapshot.game.finished,
+        verdict: typeof snapshot.game.verdict === "string" ? snapshot.game.verdict : "",
+        verdictEvaluation:
+          typeof snapshot.game.verdictEvaluation === "string"
+            ? snapshot.game.verdictEvaluation
+            : "",
+        verdictCloseAt:
+          typeof snapshot.game.verdictCloseAt === "number"
+            ? snapshot.game.verdictCloseAt
+            : null,
+      };
+      loadedRoom.started = true;
+    }
+
+    rooms.set(loadedRoom.code, loadedRoom);
+    restored += 1;
+  }
+  return restored;
+}
 
 function normalizeVisibility(value: string | undefined): "public" | "private" {
   if (value === "public") return "public";
@@ -492,6 +602,67 @@ export function reclaimDisconnectedPlayerByName(
   };
 }
 
+export function reclaimDisconnectedPlayerByUserId(
+  code: string,
+  userId: string,
+  newSocketId: string,
+  avatar?: string | null,
+): { room: Room; playerId: string; playerName: string; sessionToken: string } | null {
+  const room = rooms.get(code);
+  if (!room) return null;
+  const normalizedUserId = userId.trim();
+  if (!normalizedUserId) return null;
+  const normalizedAvatar = avatar || undefined;
+
+  const findDisconnected = (list: Player[]) =>
+    list.find(
+      (p) =>
+        p.userId === normalizedUserId &&
+        (!p.socketId || p.socketId.trim().length === 0),
+    );
+
+  const lobbyPlayer = findDisconnected(room.players);
+  const gamePlayer = room.game ? findDisconnected(room.game.players) : undefined;
+  const targetPlayer = gamePlayer ?? lobbyPlayer;
+  if (!targetPlayer) return null;
+
+  targetPlayer.socketId = newSocketId;
+  targetPlayer.disconnectedUntil = undefined;
+  if (avatar !== undefined) {
+    targetPlayer.avatar = normalizedAvatar;
+  }
+  if (!targetPlayer.sessionToken || !targetPlayer.sessionToken.trim()) {
+    targetPlayer.sessionToken = crypto.randomUUID();
+  }
+
+  const mirrorLobbyPlayer = room.players.find((p) => p.id === targetPlayer.id);
+  if (mirrorLobbyPlayer) {
+    mirrorLobbyPlayer.socketId = newSocketId;
+    mirrorLobbyPlayer.disconnectedUntil = undefined;
+    mirrorLobbyPlayer.sessionToken = targetPlayer.sessionToken;
+    if (avatar !== undefined) {
+      mirrorLobbyPlayer.avatar = normalizedAvatar;
+    }
+  }
+
+  const mirrorGamePlayer = room.game?.players.find((p) => p.id === targetPlayer.id);
+  if (mirrorGamePlayer) {
+    mirrorGamePlayer.socketId = newSocketId;
+    mirrorGamePlayer.disconnectedUntil = undefined;
+    mirrorGamePlayer.sessionToken = targetPlayer.sessionToken;
+    if (avatar !== undefined) {
+      mirrorGamePlayer.avatar = normalizedAvatar;
+    }
+  }
+
+  return {
+    room,
+    playerId: targetPlayer.id,
+    playerName: targetPlayer.name,
+    sessionToken: targetPlayer.sessionToken!,
+  };
+}
+
 export function removePlayer(code: string, playerId: string): Room | null {
   const room = rooms.get(code);
   if (!room) return null;
@@ -578,6 +749,8 @@ function isPlayerConnected(player: Player): boolean {
 }
 
 function canStillReconnect(player: Player, nowMs: number): boolean {
+  const hasAccount = typeof player.userId === "string" && player.userId.trim().length > 0;
+  if (hasAccount) return true;
   return (
     !isPlayerConnected(player) &&
     typeof player?.disconnectedUntil === "number" &&
@@ -700,17 +873,19 @@ export function addLobbyChatMessage(
 export function updatePlayerProfile(
   code: string,
   playerId: string,
-  profile: { name?: string; avatar?: string | null },
+  profile: { name?: string; avatar?: string | null; banner?: string | null },
 ): Room | null {
   const room = rooms.get(code);
   if (!room) return null;
 
   const normalizedName = profile.name?.trim();
   const normalizedAvatar = profile.avatar || undefined;
+  const normalizedBanner = profile.banner || undefined;
   const hasName = !!normalizedName;
   const hasAvatar = profile.avatar !== undefined;
+  const hasBanner = profile.banner !== undefined;
 
-  if (!hasName && !hasAvatar) return room;
+  if (!hasName && !hasAvatar && !hasBanner) return room;
 
   const applyProfile = (player: Player) => {
     if (hasName && normalizedName) {
@@ -718,6 +893,9 @@ export function updatePlayerProfile(
     }
     if (hasAvatar) {
       player.avatar = normalizedAvatar;
+    }
+    if (hasBanner) {
+      player.banner = normalizedBanner;
     }
   };
 

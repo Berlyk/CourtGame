@@ -7,6 +7,7 @@ import {
   joinRunningGameAsWitness,
   isJoinPasswordValid,
   rejoinRoom,
+  reclaimDisconnectedPlayerByUserId,
   reclaimDisconnectedPlayerByName,
   isNameTaken,
   isNameTakenByOther,
@@ -25,9 +26,18 @@ import {
   updatePlayerAvatar,
   updatePlayerProfile,
   cleanupStaleRooms,
+  restoreRoomsFromSnapshots,
   markMissingSocketPlayersDisconnected,
   type CreateRoomOptions,
 } from "./roomManager.js";
+import { getUserByToken } from "../lib/authStore.js";
+import {
+  cleanupOldSnapshots,
+  deleteRoomSnapshot,
+  findBindingByUser,
+  loadRoomSnapshots,
+  persistRoomSnapshot,
+} from "../lib/matchStore.js";
 
 function randomCode(): string {
   return Math.random().toString(36).slice(2, 7).toUpperCase();
@@ -201,8 +211,10 @@ function emitFactRevealPermissions(io: SocketIOServer, room: any) {
 function mapGamePlayers(players: any[]) {
   return players.map((p: any) => ({
     id: p.id,
+    userId: p.userId ?? undefined,
     name: p.name,
     avatar: p.avatar,
+    banner: p.banner,
     roleKey: p.roleKey,
     roleTitle: p.roleTitle,
     warningCount: typeof p?.warningCount === "number" ? p.warningCount : 0,
@@ -214,8 +226,10 @@ function mapGamePlayers(players: any[]) {
 function mapLobbyPlayers(players: any[]) {
   return players.map((p: any) => ({
     id: p.id,
+    userId: p.userId ?? undefined,
     name: p.name,
     avatar: p.avatar,
+    banner: p.banner,
     warningCount: typeof p?.warningCount === "number" ? p.warningCount : 0,
     disconnectedUntil:
       typeof p?.disconnectedUntil === "number" ? p.disconnectedUntil : undefined,
@@ -273,8 +287,10 @@ function getRoomState(room: any, playerId: string) {
     players: mapGamePlayers(room.game.players),
     me: myPlayer ? {
       id: myPlayer.id,
+      userId: myPlayer.userId ?? undefined,
       name: myPlayer.name,
       avatar: myPlayer.avatar,
+      banner: myPlayer.banner,
       roleKey: myPlayer.roleKey,
       roleTitle: myPlayer.roleTitle,
       goal: myPlayer.goal,
@@ -344,7 +360,29 @@ export function setupSocket(httpServer: HttpServer) {
     [...socketToRoom.entries()]
       .filter(([, info]) => info.roomCode === roomCode)
       .forEach(([socketId]) => socketToRoom.delete(socketId));
+    deleteRoomSnapshot(roomCode).catch(() => undefined);
   };
+
+  const persistRoom = (roomCode: string) => {
+    const room = getRoom(roomCode);
+    if (!room) {
+      deleteRoomSnapshot(roomCode).catch(() => undefined);
+      return;
+    }
+    persistRoomSnapshot(room).catch(() => undefined);
+  };
+
+  void (async () => {
+    try {
+      const snapshots = await loadRoomSnapshots(500);
+      const restored = restoreRoomsFromSnapshots(snapshots);
+      if (restored > 0) {
+        emitPublicMatches(io);
+      }
+    } catch {
+      // noop: app continues with in-memory only rooms
+    }
+  })();
 
   const emitProtestState = (roomCode: string, room?: any) => {
     const targetRoom = room ?? getRoom(roomCode);
@@ -499,6 +537,7 @@ export function setupSocket(httpServer: HttpServer) {
     deleteRoom(roomCode);
     cleanupRoomCaches(roomCode);
     emitPublicMatches(io);
+    deleteRoomSnapshot(roomCode).catch(() => undefined);
   };
 
   const scheduleVerdictRoomClose = (roomCode: string) => {
@@ -543,6 +582,7 @@ export function setupSocket(httpServer: HttpServer) {
       });
     }
     emitPublicMatches(io);
+    persistRoom(roomCode);
   };
 
   const scheduleReconnectCleanup = (roomCode: string, playerId: string) => {
@@ -558,6 +598,9 @@ export function setupSocket(httpServer: HttpServer) {
         room.players.find((p: any) => p.id === playerId) ??
         room.game?.players.find((p: any) => p.id === playerId);
       if (!player) return;
+      if (typeof player.userId === "string" && player.userId.trim().length > 0) {
+        return;
+      }
       if (player.socketId && player.socketId.trim().length > 0) return;
       if (
         typeof player.disconnectedUntil === "number" &&
@@ -611,6 +654,7 @@ export function setupSocket(httpServer: HttpServer) {
   setInterval(() => {
     markMissingSocketPlayersDisconnected((socketId) => io.sockets.sockets.has(socketId));
     const removed = cleanupStaleRooms();
+    cleanupOldSnapshots(72).catch(() => undefined);
     cleanupDanglingRoomCaches();
     if (removed > 0) {
       emitPublicMatches(io);
@@ -628,25 +672,35 @@ export function setupSocket(httpServer: HttpServer) {
 
     socket.on(
       "create_room",
-      ({
+      async ({
         playerName,
         avatar,
+        banner,
+        authToken,
         options,
       }: {
         playerName: string;
         avatar?: string | null;
+        banner?: string | null;
+        authToken?: string;
         options?: CreateRoomOptions;
       }) => {
-      const code = randomCode();
-      const playerId = crypto.randomUUID();
-      const sessionToken = crypto.randomUUID();
-      const player = {
-        id: playerId,
-        name: playerName || "Игрок 1",
-        socketId: socket.id,
-        sessionToken,
-        avatar: avatar || undefined
-      };
+        const code = randomCode();
+        const playerId = crypto.randomUUID();
+        const sessionToken = crypto.randomUUID();
+        const authUser =
+          typeof authToken === "string" && authToken.trim()
+            ? await getUserByToken(authToken.trim())
+            : null;
+        const player = {
+          id: playerId,
+          userId: authUser?.id,
+          name: playerName || "Игрок 1",
+          socketId: socket.id,
+          sessionToken,
+          avatar: avatar || authUser?.avatar || undefined,
+          banner: banner || authUser?.banner || undefined,
+        };
       const room = createRoom(code, player, options);
 
       socketToRoom.set(socket.id, { roomCode: code, playerId, sessionToken });
@@ -657,12 +711,17 @@ export function setupSocket(httpServer: HttpServer) {
         state: getRoomState(room, playerId)
       });
       emitPublicMatches(io);
+      persistRoom(code);
     });
 
-    socket.on("join_room", ({ code, playerName, avatar, password }: { code: string; playerName: string; avatar?: string | null; password?: string }) => {
+    socket.on("join_room", async ({ code, playerName, avatar, banner, password, authToken }: { code: string; playerName: string; avatar?: string | null; banner?: string | null; password?: string; authToken?: string }) => {
       const roomCode = normalizeRoomCode(code);
       const room = getRoom(roomCode);
       const trimmedName = (playerName || "").trim();
+      const authUser =
+        typeof authToken === "string" && authToken.trim()
+          ? await getUserByToken(authToken.trim())
+          : null;
 
       if (!room) {
         socket.emit("error", { message: "\u041a\u043e\u043c\u043d\u0430\u0442\u0430 \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u0430. \u041f\u0440\u043e\u0432\u0435\u0440\u044c\u0442\u0435 \u043a\u043e\u0434." });
@@ -675,6 +734,98 @@ export function setupSocket(httpServer: HttpServer) {
       if (!isJoinPasswordValid(roomCode, password)) {
         socket.emit("error", { message: "\u041d\u0435\u0432\u0435\u0440\u043d\u044b\u0439 \u043f\u0430\u0440\u043e\u043b\u044c \u043a\u043e\u043c\u043d\u0430\u0442\u044b." });
         return;
+      }
+
+      if (authUser) {
+        const reclaimedByUser = reclaimDisconnectedPlayerByUserId(
+          roomCode,
+          authUser.id,
+          socket.id,
+          avatar,
+        );
+        if (reclaimedByUser) {
+          clearReconnectCleanup(roomCode, reclaimedByUser.playerId);
+          socketToRoom.set(socket.id, {
+            roomCode,
+            playerId: reclaimedByUser.playerId,
+            sessionToken: reclaimedByUser.sessionToken,
+          });
+          socket.join(roomCode);
+          socket.emit("room_joined", {
+            playerId: reclaimedByUser.playerId,
+            sessionToken: reclaimedByUser.sessionToken,
+            state: getRoomState(reclaimedByUser.room, reclaimedByUser.playerId),
+          });
+          if (reclaimedByUser.room.game) {
+            emitLawyerChatStateToSocket(socket.id, roomCode, reclaimedByUser.playerId);
+            socket.to(roomCode).emit("player_rejoined", {
+              playerId: reclaimedByUser.playerId,
+              playerName: reclaimedByUser.playerName.trim(),
+            });
+            io.to(roomCode).emit("game_players_updated", {
+              players: mapGamePlayers(reclaimedByUser.room.game.players),
+            });
+          } else {
+            io.to(roomCode).emit("room_updated", {
+              players: mapLobbyPlayers(reclaimedByUser.room.players),
+              hostId: reclaimedByUser.room.hostId,
+              roomName: reclaimedByUser.room.roomName,
+              modeKey: reclaimedByUser.room.modeKey,
+              maxPlayers: reclaimedByUser.room.maxPlayers,
+              isHostJudge: reclaimedByUser.room.isHostJudge,
+              visibility: reclaimedByUser.room.visibility,
+              venueLabel: reclaimedByUser.room.venueLabel,
+              venueUrl: reclaimedByUser.room.venueUrl,
+              requiresPassword: !!reclaimedByUser.room.password,
+              lobbyChat: reclaimedByUser.room.lobbyChat,
+            });
+          }
+          emitPublicMatches(io);
+          persistRoom(roomCode);
+          return;
+        }
+
+        const binding = await findBindingByUser(roomCode, authUser.id);
+        if (binding?.sessionToken) {
+          const restoreResult = rejoinRoom(roomCode, binding.sessionToken, socket.id, avatar);
+          if (restoreResult) {
+            clearReconnectCleanup(roomCode, restoreResult.playerId);
+            socketToRoom.set(socket.id, {
+              roomCode,
+              playerId: restoreResult.playerId,
+              sessionToken: binding.sessionToken,
+            });
+            socket.join(roomCode);
+            socket.emit("room_joined", {
+              playerId: restoreResult.playerId,
+              sessionToken: binding.sessionToken,
+              state: getRoomState(restoreResult.room, restoreResult.playerId),
+            });
+            if (restoreResult.room.game) {
+              emitLawyerChatStateToSocket(socket.id, roomCode, restoreResult.playerId);
+              io.to(roomCode).emit("game_players_updated", {
+                players: mapGamePlayers(restoreResult.room.game.players),
+              });
+            } else {
+              io.to(roomCode).emit("room_updated", {
+                players: mapLobbyPlayers(restoreResult.room.players),
+                hostId: restoreResult.room.hostId,
+                roomName: restoreResult.room.roomName,
+                modeKey: restoreResult.room.modeKey,
+                maxPlayers: restoreResult.room.maxPlayers,
+                isHostJudge: restoreResult.room.isHostJudge,
+                visibility: restoreResult.room.visibility,
+                venueLabel: restoreResult.room.venueLabel,
+                venueUrl: restoreResult.room.venueUrl,
+                requiresPassword: !!restoreResult.room.password,
+                lobbyChat: restoreResult.room.lobbyChat,
+              });
+            }
+            emitPublicMatches(io);
+            persistRoom(roomCode);
+            return;
+          }
+        }
       }
 
       // If a player with this nickname disconnected earlier, reclaim their slot/role.
@@ -736,10 +887,12 @@ export function setupSocket(httpServer: HttpServer) {
       const sessionToken = crypto.randomUUID();
       const player = {
         id: playerId,
+        userId: authUser?.id,
         name: trimmedName,
         socketId: socket.id,
         sessionToken,
-        avatar: avatar || undefined
+        avatar: avatar || authUser?.avatar || undefined,
+        banner: banner || authUser?.banner || undefined,
       };
 
       if (room.started) {
@@ -761,6 +914,7 @@ export function setupSocket(httpServer: HttpServer) {
           players: mapGamePlayers(updatedRoom.game.players)
         });
         emitPublicMatches(io);
+        persistRoom(roomCode);
         return;
       }
 
@@ -797,6 +951,7 @@ export function setupSocket(httpServer: HttpServer) {
         lobbyChat: updatedRoom.lobbyChat,
       });
       emitPublicMatches(io);
+      persistRoom(roomCode);
     });
 
     socket.on("rejoin_room", ({ code, sessionToken, avatar }: { code: string; sessionToken: string; avatar?: string | null }) => {
@@ -974,11 +1129,13 @@ export function setupSocket(httpServer: HttpServer) {
         code,
         name,
         avatar,
+        banner,
         sessionToken,
       }: {
         code: string;
         name?: string;
         avatar?: string | null;
+        banner?: string | null;
         sessionToken?: string;
       }) => {
         const roomCode = normalizeRoomCode(code);
@@ -1004,6 +1161,7 @@ export function setupSocket(httpServer: HttpServer) {
         const updatedRoom = updatePlayerProfile(roomCode, actorId, {
           name: nextName,
           avatar,
+          banner,
         });
         if (!updatedRoom) return;
 

@@ -1,5 +1,8 @@
 import { Router } from "express";
 import {
+  changeEmailByToken,
+  changePasswordByToken,
+  getPublicUserProfileById,
   getUserByToken,
   loginAccount,
   logoutByToken,
@@ -119,15 +122,111 @@ authRouter.patch("/auth/profile", async (req, res) => {
       req.body?.avatar === null || typeof req.body?.avatar === "string"
         ? req.body.avatar
         : undefined;
-    const user = await updateProfileByToken(token, { nickname, avatar });
-    if (!user) {
+    const banner =
+      req.body?.banner === null || typeof req.body?.banner === "string"
+        ? req.body.banner
+        : undefined;
+    const bio =
+      req.body?.bio === null || typeof req.body?.bio === "string"
+        ? req.body.bio
+        : undefined;
+    const gender =
+      req.body?.gender === null || typeof req.body?.gender === "string"
+        ? req.body.gender
+        : undefined;
+    const birthDate =
+      req.body?.birthDate === null || typeof req.body?.birthDate === "string"
+        ? req.body.birthDate
+        : undefined;
+    const hideAge =
+      typeof req.body?.hideAge === "boolean" ? req.body.hideAge : undefined;
+    const updatedUser = await updateProfileByToken(token, {
+      nickname,
+      avatar,
+      banner,
+      bio,
+      gender:
+        gender === "male" || gender === "female" || gender === "other" || gender === null
+          ? gender
+          : undefined,
+      birthDate,
+      hideAge,
+    });
+    if (!updatedUser) {
       return res.status(401).json({ message: "Invalid session." });
     }
-    return res.status(200).json({ user });
+    return res.status(200).json({ user: updatedUser });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Profile update failed.";
     return res.status(400).json({ message });
   }
+});
+
+authRouter.patch("/auth/password", async (req, res) => {
+  const token = getRequestToken(req.headers as Record<string, unknown>);
+  if (!token) {
+    return res.status(401).json({ message: "Unauthorized." });
+  }
+
+  try {
+    const currentPassword = String(req.body?.currentPassword ?? "");
+    const nextPassword = String(req.body?.nextPassword ?? "");
+    if (!currentPassword || !nextPassword) {
+      return res.status(400).json({ message: "Current password and new password are required." });
+    }
+    if (nextPassword.length < 6) {
+      return res.status(400).json({ message: "Password must be at least 6 characters." });
+    }
+
+    const user = await changePasswordByToken(token, currentPassword, nextPassword);
+    if (!user) {
+      return res.status(401).json({ message: "Invalid session." });
+    }
+
+    return res.status(200).json({ user, ok: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Password change failed.";
+    return res.status(400).json({ message });
+  }
+});
+
+authRouter.patch("/auth/email", async (req, res) => {
+  const token = getRequestToken(req.headers as Record<string, unknown>);
+  if (!token) {
+    return res.status(401).json({ message: "Unauthorized." });
+  }
+
+  try {
+    const currentPassword = String(req.body?.currentPassword ?? "");
+    const nextEmail = String(req.body?.nextEmail ?? "").trim();
+    if (!currentPassword || !nextEmail) {
+      return res.status(400).json({ message: "Current password and new email are required." });
+    }
+    if (!nextEmail.includes("@")) {
+      return res.status(400).json({ message: "Please enter a valid email." });
+    }
+
+    const user = await changeEmailByToken(token, currentPassword, nextEmail);
+    if (!user) {
+      return res.status(401).json({ message: "Invalid session." });
+    }
+    return res.status(200).json({ user, ok: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Email change failed.";
+    return res.status(400).json({ message });
+  }
+});
+
+authRouter.get("/auth/public/:id", async (req, res) => {
+  const id = String(req.params?.id ?? "").trim();
+  if (!id) {
+    return res.status(400).json({ message: "User id is required." });
+  }
+  const profile = await getPublicUserProfileById(id);
+  if (!profile) {
+    return res.status(404).json({ message: "User not found." });
+  }
+  return res.status(200).json({ profile });
 });
 
 export default authRouter;
