@@ -125,11 +125,91 @@ const BADGE_SYMBOLS: Record<string, string> = {
   winner: "🏆",
   legend: "✦",
   media: "🎥",
-  creator: "🧩",
+  creator: "💻",
   host: "🎙",
   innovator: "💡",
   moderator: "🛠",
   admin: "👑",
+};
+
+const BADGE_THEME: Record<
+  string,
+  {
+    chip: string;
+    icon: string;
+    iconOnly?: string;
+  }
+> = {
+  plaintiff: {
+    chip: "border-sky-500/55 bg-sky-500/20 text-sky-200",
+    icon: "border-sky-500/45 bg-sky-500/25 text-sky-200",
+    iconOnly: "text-sky-300",
+  },
+  defendant: {
+    chip: "border-zinc-500/65 bg-zinc-500/20 text-zinc-200",
+    icon: "border-zinc-500/45 bg-zinc-500/25 text-zinc-200",
+    iconOnly: "text-zinc-200",
+  },
+  plaintiffLawyer: {
+    chip: "border-indigo-500/55 bg-indigo-500/20 text-indigo-200",
+    icon: "border-indigo-500/45 bg-indigo-500/25 text-indigo-200",
+    iconOnly: "text-indigo-300",
+  },
+  defenseLawyer: {
+    chip: "border-emerald-500/55 bg-emerald-500/20 text-emerald-200",
+    icon: "border-emerald-500/45 bg-emerald-500/25 text-emerald-200",
+    iconOnly: "text-emerald-300",
+  },
+  prosecutor: {
+    chip: "border-orange-500/55 bg-orange-500/20 text-orange-200",
+    icon: "border-orange-500/45 bg-orange-500/25 text-orange-200",
+    iconOnly: "text-orange-300",
+  },
+  judge: {
+    chip: "border-violet-500/55 bg-violet-500/20 text-violet-200",
+    icon: "border-violet-500/45 bg-violet-500/25 text-violet-200",
+    iconOnly: "text-violet-300",
+  },
+  winner: {
+    chip: "border-yellow-500/55 bg-yellow-500/20 text-yellow-200",
+    icon: "border-yellow-500/45 bg-yellow-500/25 text-yellow-200",
+    iconOnly: "text-yellow-300",
+  },
+  legend: {
+    chip: "border-fuchsia-500/55 bg-fuchsia-500/20 text-fuchsia-200",
+    icon: "border-fuchsia-500/45 bg-fuchsia-500/25 text-fuchsia-200",
+    iconOnly: "text-fuchsia-300",
+  },
+  media: {
+    chip: "border-cyan-500/55 bg-cyan-500/20 text-cyan-200",
+    icon: "border-cyan-500/45 bg-cyan-500/25 text-cyan-200",
+    iconOnly: "text-cyan-300",
+  },
+  creator: {
+    chip: "border-red-500/65 bg-red-600/25 text-red-100",
+    icon: "border-red-500/55 bg-red-700/35 text-emerald-300",
+    iconOnly: "text-emerald-300",
+  },
+  host: {
+    chip: "border-rose-500/55 bg-rose-500/20 text-rose-200",
+    icon: "border-rose-500/45 bg-rose-500/25 text-rose-200",
+    iconOnly: "text-rose-300",
+  },
+  innovator: {
+    chip: "border-lime-500/55 bg-lime-500/20 text-lime-200",
+    icon: "border-lime-500/45 bg-lime-500/25 text-lime-200",
+    iconOnly: "text-lime-300",
+  },
+  moderator: {
+    chip: "border-amber-500/55 bg-amber-500/20 text-amber-200",
+    icon: "border-amber-500/45 bg-amber-500/25 text-amber-200",
+    iconOnly: "text-amber-300",
+  },
+  admin: {
+    chip: "border-purple-500/55 bg-purple-500/20 text-purple-200",
+    icon: "border-purple-500/45 bg-purple-500/25 text-purple-200",
+    iconOnly: "text-purple-300",
+  },
 };
 
 const SITE_RULES: string[] = [
@@ -1695,6 +1775,23 @@ function getBadgeSymbol(badgeKey?: string): string {
   return BADGE_SYMBOLS[badgeKey] ?? "★";
 }
 
+function getBadgeTheme(
+  badgeKey?: string,
+): { chip: string; icon: string; iconOnly?: string } {
+  if (!badgeKey) {
+    return {
+      chip: "border-zinc-600 bg-zinc-800/60 text-zinc-200",
+      icon: "border-zinc-600 bg-zinc-800/60 text-zinc-200",
+      iconOnly: "text-zinc-300",
+    };
+  }
+  return BADGE_THEME[badgeKey] ?? {
+    chip: "border-zinc-600 bg-zinc-800/60 text-zinc-200",
+    icon: "border-zinc-600 bg-zinc-800/60 text-zinc-200",
+    iconOnly: "text-zinc-300",
+  };
+}
+
 function getBadgeTitleByKey(
   badgeKey: string | undefined,
   badges?: Array<{ key: string; title: string }>,
@@ -1720,6 +1817,7 @@ function PlayerCard({
 }) {
   const canOpenProfile = !!player.userId && !!onOpenProfile;
   const badgeSymbol = getBadgeSymbol(player.selectedBadgeKey);
+  const badgeTheme = getBadgeTheme(player.selectedBadgeKey);
   const disconnectRemainingMs =
     typeof player.disconnectedUntil === "number"
       ? Math.max(0, player.disconnectedUntil - nowTs)
@@ -1755,7 +1853,10 @@ function PlayerCard({
             <div className="min-w-0">
               <div className="font-semibold text-base truncate inline-flex items-center gap-2">
                 {player.selectedBadgeKey ? (
-                  <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-md border border-red-500/45 bg-red-600/20 px-1 text-[10px] font-bold leading-none text-red-200">
+                  <span
+                    className={`inline-flex h-5 min-w-5 items-center justify-center px-0.5 text-xs font-bold leading-none ${badgeTheme.iconOnly ?? "text-zinc-300"}`}
+                    title={getBadgeTitleByKey(player.selectedBadgeKey)}
+                  >
                     {badgeSymbol}
                   </span>
                 ) : null}
@@ -2178,7 +2279,7 @@ export default function App() {
 
     return (
       <Dialog open={viewPlayerProfileOpen} onOpenChange={setViewPlayerProfileOpen}>
-        <DialogContent className="max-w-[420px] border-zinc-800 bg-zinc-950 text-zinc-100">
+        <DialogContent className="max-w-[460px] border-zinc-800 bg-zinc-950 text-zinc-100">
           <DialogHeader>
             <DialogTitle>Профиль игрока</DialogTitle>
             <DialogDescription className="text-zinc-400">
@@ -2208,10 +2309,20 @@ export default function App() {
                   <div className="relative z-10 flex items-end gap-3">
                     <Avatar src={viewPlayerProfile.avatar ?? null} name={viewPlayerProfile.nickname} size={88} />
                     <div>
-                      <div className="text-xl font-bold leading-none">{viewPlayerProfile.nickname}</div>
+                      <div className="text-xl font-bold leading-none truncate max-w-[240px] sm:max-w-[320px]">
+                        {viewPlayerProfile.nickname}
+                      </div>
                       {viewPlayerProfile.selectedBadgeKey ? (
-                        <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-red-500/50 bg-red-600/20 px-2.5 py-1 text-xs text-red-200">
-                          <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-md border border-red-500/45 bg-red-600/20 px-1 text-[10px] font-bold leading-none">
+                        <div
+                          className={`mt-2 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs ${
+                            getBadgeTheme(viewPlayerProfile.selectedBadgeKey).chip
+                          }`}
+                        >
+                          <span
+                            className={`inline-flex h-5 min-w-5 items-center justify-center rounded-md border px-1 text-[10px] font-bold leading-none ${
+                              getBadgeTheme(viewPlayerProfile.selectedBadgeKey).icon
+                            }`}
+                          >
                             {getBadgeSymbol(viewPlayerProfile.selectedBadgeKey)}
                           </span>
                           <span>
@@ -2241,7 +2352,7 @@ export default function App() {
               </div>
               <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2">
                 <div className="text-zinc-500 text-xs">О себе</div>
-                <div className="text-zinc-100 mt-1 whitespace-pre-wrap break-words">
+                <div className="text-zinc-100 mt-1 whitespace-pre-wrap break-all overflow-hidden">
                   {viewPlayerProfile.bio?.trim() ? viewPlayerProfile.bio : "Пока без описания."}
                 </div>
               </div>
@@ -3909,7 +4020,6 @@ export default function App() {
     const totalMatches = profileData?.stats?.totalMatches ?? 0;
     const totalWins = profileData?.stats?.totalWins ?? 0;
     const totalWinRate = profileData?.stats?.totalWinRate ?? 0;
-    const roleStats = [...(profileData?.stats?.roleStats ?? [])].sort((a, b) => b.wins - a.wins);
     const badges = profileData?.badges ?? [];
 
     return (
@@ -3951,7 +4061,7 @@ export default function App() {
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/45 to-black/15" />
                   <div className="absolute inset-0 opacity-0 group-hover/banner:opacity-100 transition-opacity bg-black/15" />
                   <div className="relative z-10 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-                    <div className="flex items-end gap-4">
+                      <div className="flex items-end gap-4">
                       <div
                         className="relative cursor-pointer group/avatar"
                         onClick={(e) => {
@@ -3964,27 +4074,39 @@ export default function App() {
                           <Camera className="w-6 h-6 text-white" />
                         </div>
                       </div>
-                      <div>
-                        <div className="text-2xl font-bold leading-none">{playerName || "Игрок"}</div>
-                        <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                          <span className="rounded-full border border-zinc-600 bg-black/35 px-3 py-1">
-                            Возраст: {ageLabel}
+                        <div className="pb-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="text-2xl font-bold leading-none">{playerName || "Игрок"}</div>
+                            {selectedBadgeKey && (
+                              <span
+                                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs ${
+                                  getBadgeTheme(selectedBadgeKey).chip
+                                }`}
+                              >
+                                <span
+                                  className={`inline-flex h-5 min-w-5 items-center justify-center rounded-md border px-1 text-[10px] font-bold leading-none ${
+                                    getBadgeTheme(selectedBadgeKey).icon
+                                  }`}
+                                >
+                                  {getBadgeSymbol(selectedBadgeKey)}
+                                </span>
+                                {getBadgeTitleByKey(selectedBadgeKey, badges)}
+                              </span>
+                            )}
+                          </div>
+                          <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                            <span className="rounded-full border border-zinc-600 bg-black/35 px-3 py-1">
+                              Возраст: {ageLabel}
                           </span>
                           <span className="rounded-full border border-zinc-600 bg-black/35 px-3 py-1">
                             Пол: {genderLabel}
                           </span>
-                          <span className="rounded-full border border-zinc-600 bg-black/35 px-3 py-1">
-                            С нами с: {registeredAtLabel}
-                          </span>
-                          {selectedBadgeKey && (
-                            <span className="rounded-full border border-red-500/60 bg-red-600/20 px-3 py-1 text-red-200">
-                              {getBadgeSymbol(selectedBadgeKey)}{" "}
-                              {getBadgeTitleByKey(selectedBadgeKey, badges)}
+                            <span className="rounded-full border border-zinc-600 bg-black/35 px-3 py-1">
+                              С нами с: {registeredAtLabel}
                             </span>
-                          )}
+                          </div>
                         </div>
                       </div>
-                    </div>
                     <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
                       <Button
                         variant="outline"
@@ -4163,20 +4285,6 @@ export default function App() {
                       />
                     </div>
                     <div className="mt-4 space-y-2">
-                      {roleStats.length ? (
-                        roleStats.map((role) => (
-                          <div
-                            key={role.roleKey}
-                            className="rounded-xl border border-zinc-800 bg-zinc-900/55 px-3 py-2"
-                          >
-                            <div className="flex items-center justify-between gap-3 text-sm">
-                              <span className="font-medium">{ROLE_TITLES[role.roleKey] ?? role.roleKey}</span>
-                              <span className="text-zinc-400">{role.wins}/{role.matches}</span>
-                            </div>
-                            <div className="mt-1 text-xs text-zinc-500">Winrate: {Math.round(role.winRate)}%</div>
-                          </div>
-                        ))
-                      ) : null}
                       <Button
                         variant="outline"
                         className="w-full rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
@@ -4207,7 +4315,16 @@ export default function App() {
                                 : "border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800"
                             }`}
                           >
-                            <div className="text-sm font-semibold">{badge.title}</div>
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`inline-flex h-6 min-w-6 items-center justify-center rounded-md border text-xs font-bold ${
+                                  getBadgeTheme(badge.key).icon
+                                }`}
+                              >
+                                {getBadgeSymbol(badge.key)}
+                              </span>
+                              <div className="text-sm font-semibold">{badge.title}</div>
+                            </div>
                           </button>
                         ))}
                       </div>
@@ -6351,7 +6468,12 @@ export default function App() {
                           >
                             <Avatar src={p.avatar ?? null} name={p.name} size={32} />
                             {p.selectedBadgeKey ? (
-                              <span className="inline-flex h-4 min-w-4 items-center justify-center rounded border border-red-500/45 bg-red-600/20 px-1 text-[9px] font-bold leading-none text-red-200">
+                              <span
+                                className={`inline-flex h-4 min-w-4 items-center justify-center px-0.5 text-[11px] font-bold leading-none ${
+                                  getBadgeTheme(p.selectedBadgeKey).iconOnly ?? "text-zinc-300"
+                                }`}
+                                title={getBadgeTitleByKey(p.selectedBadgeKey)}
+                              >
                                 {getBadgeSymbol(p.selectedBadgeKey)}
                               </span>
                             ) : null}
