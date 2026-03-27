@@ -2411,6 +2411,11 @@ export default function App() {
                           className={`mt-2 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs ${
                             getBadgeTheme(viewPlayerProfile.selectedBadgeKey).chip
                           }`}
+                          title={
+                            viewPlayerProfile.badges?.find(
+                              (badge) => badge.key === viewPlayerProfile.selectedBadgeKey,
+                            )?.description ?? ""
+                          }
                         >
                           <BadgeGlyph
                             badgeKey={viewPlayerProfile.selectedBadgeKey}
@@ -5105,7 +5110,7 @@ export default function App() {
                     <Button
                       variant="outline"
                       onClick={() => setProfileMenuOpen((prev) => !prev)}
-                      className="h-10 w-full sm:w-auto rounded-full border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100 px-3.5 gap-2 transition-all duration-200 hover:-translate-y-0.5"
+                      className="h-10 w-full sm:w-auto rounded-full border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100 pl-1 pr-3 gap-2.5 justify-start transition-all duration-200 hover:-translate-y-0.5"
                     >
                       <Avatar src={avatar} name={playerName || "Игрок"} size={32} />
                       <span className="max-w-[130px] truncate text-sm">{playerName || "Игрок"}</span>
@@ -7551,12 +7556,22 @@ export default function App() {
             </InfoBlock>
           </div>
           {matchExpiresAt !== null && !game.finished && (
-            <div className="fixed bottom-4 left-4 z-30 rounded-xl border border-zinc-700/80 bg-zinc-950/85 px-3 py-2 text-xs font-semibold text-zinc-200 shadow-[0_8px_22px_rgba(0,0,0,0.45)] backdrop-blur-sm">
-              До авто-закрытия:{" "}
-              <span className="text-red-300">
-                {String(matchHoursLeft).padStart(2, "0")}:
-                {String(matchMinutesLeft).padStart(2, "0")}:
-                {String(matchSecondsLeft).padStart(2, "0")}
+            <div className="fixed bottom-3 left-3 sm:bottom-4 sm:left-4 z-30 rounded-xl border border-zinc-700/80 bg-zinc-950/85 px-2.5 sm:px-3 py-1.5 sm:py-2 text-[11px] sm:text-xs font-semibold text-zinc-200 shadow-[0_8px_22px_rgba(0,0,0,0.45)] backdrop-blur-sm">
+              <span className="sm:hidden">
+                ⏱{" "}
+                <span className="text-red-300">
+                  {String(matchHoursLeft).padStart(2, "0")}:
+                  {String(matchMinutesLeft).padStart(2, "0")}:
+                  {String(matchSecondsLeft).padStart(2, "0")}
+                </span>
+              </span>
+              <span className="hidden sm:inline">
+                До авто-закрытия:{" "}
+                <span className="text-red-300">
+                  {String(matchHoursLeft).padStart(2, "0")}:
+                  {String(matchMinutesLeft).padStart(2, "0")}:
+                  {String(matchSecondsLeft).padStart(2, "0")}
+                </span>
               </span>
             </div>
           )}
