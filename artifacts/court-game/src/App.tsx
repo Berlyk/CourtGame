@@ -122,16 +122,16 @@ const BADGE_ICONS: Record<string, LucideIcon> = {
   plaintiff: Scale,
   defendant: Shield,
   plaintiffLawyer: UserCircle2,
-  defenseLawyer: UserCircle2,
-  prosecutor: Gavel,
+  defenseLawyer: Lock,
+  prosecutor: AlertCircle,
   judge: Gavel,
   winner: Sparkles,
-  legend: Sparkles,
+  legend: CircleHelp,
   media: Camera,
   creator: Laptop,
   host: MessageSquare,
   innovator: Wrench,
-  moderator: Wrench,
+  moderator: Shield,
   admin: Shield,
 };
 
@@ -190,8 +190,8 @@ const BADGE_THEME: Record<
   },
   creator: {
     chip: "border-red-500/65 bg-red-600/25 text-red-100",
-    icon: "bg-red-700/45 text-emerald-300",
-    iconOnly: "text-emerald-300",
+    icon: "bg-red-700/55 text-red-100",
+    iconOnly: "text-red-200",
   },
   host: {
     chip: "border-rose-500/55 bg-rose-500/20 text-rose-200",
@@ -1553,6 +1553,35 @@ function computeAgeFromIsoDate(isoDate: string | undefined): number | undefined 
   return age;
 }
 
+function formatIsoDateToRu(value: string | undefined): string {
+  if (!value) return "";
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return "";
+  return `${match[3]}.${match[2]}.${match[1]}`;
+}
+
+function parseRuDateToIso(value: string): string | null {
+  const normalized = value.trim();
+  if (!normalized) return null;
+  const match = normalized.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if (!match) return null;
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+  if (!Number.isFinite(day) || !Number.isFinite(month) || !Number.isFinite(year)) return null;
+  const date = new Date(year, month - 1, day);
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return null;
+  }
+  return `${year.toString().padStart(4, "0")}-${month.toString().padStart(2, "0")}-${day
+    .toString()
+    .padStart(2, "0")}`;
+}
+
 type CropTarget = "avatar" | "banner";
 
 function clampNumber(value: number, min: number, max: number): number {
@@ -1691,7 +1720,6 @@ function localizeAuthError(message: string): string {
     normalized.includes("email is already in use") ||
     normalized.includes("email already taken") ||
     (normalized.includes("email") && normalized.includes("already")) ||
-    normalized.includes("duplicate key") ||
     normalized.includes("email_normalized")
   ) {
     return "Эта почта уже используется.";
@@ -1699,8 +1727,13 @@ function localizeAuthError(message: string): string {
   if (
     normalized.includes("nickname is already taken") ||
     normalized.includes("nickname already taken") ||
-    (normalized.includes("nickname") && normalized.includes("already"))
+    (normalized.includes("nickname") && normalized.includes("already")) ||
+    normalized.includes("nickname_normalized") ||
+    normalized.includes("login_normalized")
   ) {
+    return "Никнейм уже занят.";
+  }
+  if (normalized.includes("duplicate key")) {
     return "Никнейм уже занят.";
   }
   if (normalized.includes("passwords do not match")) {
@@ -1773,6 +1806,9 @@ function isEmailTakenError(message: string): boolean {
 function getBadgeTheme(
   badgeKey?: string,
 ): { chip: string; icon: string; iconOnly?: string } {
+  const visualKey = (badgeKey ?? "").startsWith("role_")
+    ? (badgeKey ?? "").slice("role_".length)
+    : badgeKey;
   if (!badgeKey) {
     return {
       chip: "border-zinc-600 bg-zinc-800/60 text-zinc-200",
@@ -1780,7 +1816,7 @@ function getBadgeTheme(
       iconOnly: "text-zinc-300",
     };
   }
-  return BADGE_THEME[badgeKey] ?? {
+  return BADGE_THEME[visualKey ?? ""] ?? {
     chip: "border-zinc-600 bg-zinc-800/60 text-zinc-200",
     icon: "border-zinc-600 bg-zinc-800/60 text-zinc-200",
     iconOnly: "text-zinc-300",
@@ -1794,7 +1830,10 @@ function BadgeGlyph({
   badgeKey?: string;
   className?: string;
 }) {
-  const Icon = badgeKey ? BADGE_ICONS[badgeKey] : undefined;
+  const visualKey = (badgeKey ?? "").startsWith("role_")
+    ? (badgeKey ?? "").slice("role_".length)
+    : badgeKey;
+  const Icon = visualKey ? BADGE_ICONS[visualKey] : undefined;
   if (!Icon) {
     return <span className={className}>★</span>;
   }
@@ -1863,7 +1902,7 @@ function PlayerCard({
                 <span className="truncate">{player.name}</span>
                 {player.selectedBadgeKey ? (
                   <span
-                    className={`inline-flex h-5 min-w-5 items-center justify-center rounded-md px-1 ${badgeTheme.icon}`}
+                    className={`inline-flex h-5 min-w-5 items-center justify-center rounded-md border border-zinc-700/80 px-1 shadow-[0_0_0_1px_rgba(0,0,0,0.25)] ${badgeTheme.icon}`}
                     title={getBadgeTitleByKey(player.selectedBadgeKey)}
                   >
                     <BadgeGlyph badgeKey={player.selectedBadgeKey} className="h-3.5 w-3.5" />
@@ -2066,6 +2105,8 @@ export default function App() {
   const [myProfile, setMyProfile] = useState<PublicUserProfile | null>(null);
   const [profileMatchesOpen, setProfileMatchesOpen] = useState(false);
   const [selectedBadgeKey, setSelectedBadgeKey] = useState<string>("");
+  const [badgePickerOpen, setBadgePickerOpen] = useState(false);
+  const [profileExitConfirmOpen, setProfileExitConfirmOpen] = useState(false);
   const [viewPlayerProfileOpen, setViewPlayerProfileOpen] = useState(false);
   const [viewPlayerProfileLoading, setViewPlayerProfileLoading] = useState(false);
   const [viewPlayerProfileError, setViewPlayerProfileError] = useState("");
@@ -2331,7 +2372,7 @@ export default function App() {
                             getBadgeTheme(viewPlayerProfile.selectedBadgeKey).chip
                           }`}
                         >
-                          <span className={`inline-flex items-center justify-center ${getBadgeTheme(viewPlayerProfile.selectedBadgeKey).iconOnly ?? "text-zinc-300"}`}>
+                          <span className={`inline-flex h-5 min-w-5 items-center justify-center rounded-md bg-black/35 ${getBadgeTheme(viewPlayerProfile.selectedBadgeKey).iconOnly ?? "text-zinc-300"}`}>
                             <BadgeGlyph badgeKey={viewPlayerProfile.selectedBadgeKey} className="h-3.5 w-3.5" />
                           </span>
                           <span>
@@ -2473,7 +2514,7 @@ export default function App() {
         ? authUser.gender
         : "",
     );
-    setProfileBirthDate(authUser.birthDate ?? "");
+    setProfileBirthDate(formatIsoDateToRu(authUser.birthDate));
     setProfileHideAge(!!authUser.hideAge);
   }, [authUser]);
 
@@ -3243,24 +3284,27 @@ export default function App() {
     setProfileBannerDraft(null);
   }, []);
 
-  const saveExtendedProfile = useCallback(async () => {
-    if (!authToken) return;
+  const saveExtendedProfile = useCallback(async (): Promise<boolean> => {
+    if (!authToken) return false;
     setProfileNicknameError("");
     setProfileBirthDateError("");
     const normalizedName = profileNicknameDraft.trim();
     if (!normalizedName) {
       setProfileNicknameError("Введите никнейм.");
-      return;
+      return false;
     }
-    const normalizedBirthDate = profileBirthDate.trim();
-    if (normalizedBirthDate && !/^\d{4}-\d{2}-\d{2}$/.test(normalizedBirthDate)) {
+    const normalizedBirthDateRaw = profileBirthDate.trim();
+    const normalizedBirthDate = normalizedBirthDateRaw
+      ? parseRuDateToIso(normalizedBirthDateRaw)
+      : null;
+    if (normalizedBirthDateRaw && !normalizedBirthDate) {
       setProfileBirthDateError("Укажите верную дату рождения.");
-      return;
+      return false;
     }
     const age = computeAgeFromIsoDate(normalizedBirthDate || undefined);
-    if (normalizedBirthDate && typeof age !== "number") {
+    if (normalizedBirthDateRaw && typeof age !== "number") {
       setProfileBirthDateError("Укажите верную дату рождения.");
-      return;
+      return false;
     }
     setProfileActionLoading(true);
     try {
@@ -3306,14 +3350,19 @@ export default function App() {
         });
       }
       await reloadMyProfile();
+      return true;
     } catch (err) {
       const message = err instanceof Error ? localizeAuthError(err.message) : "Ошибка обновления профиля.";
       if (isNicknameTakenError(message)) {
         setProfileNicknameError("Этот ник уже занят.");
+      } else if (isEmailTakenError(message)) {
+        setError("Эта почта уже занята.");
+        setTimeout(() => setError(""), 3500);
       } else {
         setError(message);
         setTimeout(() => setError(""), 3500);
       }
+      return false;
     } finally {
       setProfileActionLoading(false);
     }
@@ -4050,6 +4099,31 @@ export default function App() {
     const totalWins = profileData?.stats?.totalWins ?? 0;
     const totalWinRate = profileData?.stats?.totalWinRate ?? 0;
     const badges = profileData?.badges ?? [];
+    const activeBadges = badges.filter((badge) => badge.active);
+    const currentSelectedBadgeTitle =
+      getBadgeTitleByKey(selectedBadgeKey, badges) || "Без бейджа";
+    const baseSelectedBadgeKey =
+      myProfile?.selectedBadgeKey ?? myProfile?.badges?.find((badge) => badge.active)?.key ?? "";
+    const hasUnsavedProfileChanges =
+      profileNicknameDraft.trim() !== (authUser?.nickname ?? "").trim() ||
+      profileBio !== (authUser?.bio ?? "") ||
+      profileGender !==
+        (authUser?.gender === "male" || authUser?.gender === "female" || authUser?.gender === "other"
+          ? authUser.gender
+          : "") ||
+      profileBirthDate !== formatIsoDateToRu(authUser?.birthDate) ||
+      profileHideAge !== !!authUser?.hideAge ||
+      (profileAvatarDraft ?? null) !== (avatar ?? null) ||
+      (profileBannerDraft ?? null) !== (banner ?? null) ||
+      (selectedBadgeKey || "") !== (baseSelectedBadgeKey || "");
+    const requestLeaveProfile = async () => {
+      if (profileActionLoading) return;
+      if (!hasUnsavedProfileChanges) {
+        setScreen("home");
+        return;
+      }
+      setProfileExitConfirmOpen(true);
+    };
 
     return (
       <motion.div
@@ -4075,7 +4149,9 @@ export default function App() {
                 <Button
                   variant="outline"
                   className="rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
-                  onClick={() => setScreen("home")}
+                  onClick={() => {
+                    void requestLeaveProfile();
+                  }}
                 >
                   Назад
                 </Button>
@@ -4089,8 +4165,8 @@ export default function App() {
                 >
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/45 to-black/15" />
                   <div className="absolute inset-0 opacity-0 group-hover/banner:opacity-100 transition-opacity bg-black/15" />
-                  <div className="relative z-10 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-                      <div className="flex items-end gap-4">
+                  <div className="relative z-10 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                      <div className="flex items-center gap-4">
                       <div
                         className="relative cursor-pointer group/avatar"
                         onClick={(e) => {
@@ -4103,16 +4179,16 @@ export default function App() {
                           <Camera className="w-6 h-6 text-white" />
                         </div>
                       </div>
-                        <div className="pb-1">
+                        <div>
                           <div className="flex flex-wrap items-center gap-2">
-                            <div className="text-2xl font-bold leading-none">{playerName || "Игрок"}</div>
+                            <div className="text-3xl font-bold leading-none">{playerName || "Игрок"}</div>
                             {selectedBadgeKey && (
                               <span
                                 className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs ${
                                   getBadgeTheme(selectedBadgeKey).chip
                                 }`}
                               >
-                                <span className={`inline-flex items-center justify-center ${getBadgeTheme(selectedBadgeKey).iconOnly ?? "text-zinc-300"}`}>
+                                <span className={`inline-flex h-5 min-w-5 items-center justify-center rounded-md bg-black/35 ${getBadgeTheme(selectedBadgeKey).iconOnly ?? "text-zinc-300"}`}>
                                   <BadgeGlyph badgeKey={selectedBadgeKey} className="h-3.5 w-3.5" />
                                 </span>
                                 {getBadgeTitleByKey(selectedBadgeKey, badges)}
@@ -4230,27 +4306,27 @@ export default function App() {
                         <div className="relative mt-2">
                           <Input
                             ref={profileBirthDateRef}
-                            type="date"
+                            type="text"
                             value={profileBirthDate}
+                            placeholder="ДД.ММ.ГГГГ"
                             onChange={(e) => {
-                              setProfileBirthDate(e.target.value);
+                              const next = e.target.value
+                                .replace(/[^\d.]/g, "")
+                                .replace(/^(\d{2})(\d)/, "$1.$2")
+                                .replace(/^(\d{2}\.\d{2})(\d)/, "$1.$2")
+                                .slice(0, 10);
+                              setProfileBirthDate(next);
                               if (profileBirthDateError) setProfileBirthDateError("");
                             }}
-                            className="h-11 rounded-xl border border-zinc-700 bg-zinc-900 pr-11 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-red-500/40 [color-scheme:dark] appearance-none [-webkit-appearance:none] [-moz-appearance:textfield] [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-0 [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:w-10 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+                            className="h-11 rounded-xl border border-zinc-700 bg-zinc-900 pr-11 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-red-500/40"
                           />
                           <button
                             type="button"
                             className="absolute right-2 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md border border-zinc-700 bg-zinc-900 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
                             onClick={() => {
-                              const picker = profileBirthDateRef.current;
-                              if (!picker) return;
-                              if ("showPicker" in picker) {
-                                (picker as HTMLInputElement & { showPicker?: () => void }).showPicker?.();
-                              } else {
-                                picker.focus();
-                              }
+                              profileBirthDateRef.current?.focus();
                             }}
-                            aria-label="Выбрать дату рождения"
+                            aria-label="Поле даты рождения"
                           >
                             <CalendarDays className="h-4 w-4" />
                           </button>
@@ -4282,7 +4358,9 @@ export default function App() {
                       <Button
                         variant="outline"
                         className="rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
-                        onClick={() => setScreen("home")}
+                        onClick={() => {
+                          void requestLeaveProfile();
+                        }}
                       >
                         В главное меню
                       </Button>
@@ -4359,26 +4437,56 @@ export default function App() {
                     </div>
                     <div className="mt-3 rounded-xl border border-zinc-800 bg-zinc-900/55 p-2">
                       <div className="text-xs text-zinc-500 px-1 pb-2">Выбранный бейдж</div>
-                      <div className="grid grid-cols-1 gap-2">
-                        {(badges.filter((badge) => badge.active)).map((badge) => (
-                          <button
-                            key={`select-${badge.key}`}
-                            type="button"
-                            onClick={() => setSelectedBadgeKey(badge.key)}
-                            className={`rounded-lg border px-3 py-2 text-left transition-colors ${
-                              selectedBadgeKey === badge.key
-                                ? "border-red-500 bg-red-600/20 text-red-200"
-                                : "border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800"
-                            }`}
-                          >
-                            <div className="flex items-center gap-2">
-                              <span className={`inline-flex items-center justify-center ${getBadgeTheme(badge.key).iconOnly ?? "text-zinc-300"}`}>
-                                <BadgeGlyph badgeKey={badge.key} className="h-4 w-4" />
-                              </span>
-                              <div className="text-sm font-semibold">{badge.title}</div>
+                      <div className="relative">
+                        <button
+                          type="button"
+                          onClick={() => setBadgePickerOpen((prev) => !prev)}
+                          className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-left text-zinc-100 hover:bg-zinc-800 transition-colors"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex min-w-0 items-center gap-2">
+                              {selectedBadgeKey ? (
+                                <span className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-zinc-700/70 ${getBadgeTheme(selectedBadgeKey).icon}`}>
+                                  <BadgeGlyph badgeKey={selectedBadgeKey} className="h-3.5 w-3.5" />
+                                </span>
+                              ) : null}
+                              <span className="truncate text-sm font-semibold">{currentSelectedBadgeTitle}</span>
                             </div>
-                          </button>
-                        ))}
+                            <ChevronDown
+                              className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform ${
+                                badgePickerOpen ? "rotate-180" : ""
+                              }`}
+                            />
+                          </div>
+                        </button>
+                        {badgePickerOpen && (
+                          <div className="absolute z-20 mt-2 w-full overflow-hidden rounded-lg border border-zinc-700 bg-zinc-950 shadow-[0_16px_36px_rgba(0,0,0,0.45)]">
+                            <div className="max-h-52 overflow-y-auto p-1.5 [scrollbar-width:thin] [scrollbar-color:rgba(113,113,122,0.9)_rgba(24,24,27,0.45)] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-zinc-900/55 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-700/85 [&::-webkit-scrollbar-thumb:hover]:bg-zinc-500">
+                              {activeBadges.map((badge) => (
+                                <button
+                                  key={`select-${badge.key}`}
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedBadgeKey(badge.key);
+                                    setBadgePickerOpen(false);
+                                  }}
+                                  className={`w-full rounded-md border px-2.5 py-2 text-left transition-colors ${
+                                    selectedBadgeKey === badge.key
+                                      ? "border-red-500 bg-red-600/20 text-red-200"
+                                      : "border-zinc-800 bg-zinc-900 text-zinc-200 hover:bg-zinc-800"
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <span className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-zinc-700/70 ${getBadgeTheme(badge.key).icon}`}>
+                                      <BadgeGlyph badgeKey={badge.key} className="h-3.5 w-3.5" />
+                                    </span>
+                                    <span className="truncate text-sm font-semibold">{badge.title}</span>
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                       <Button
                         variant="outline"
@@ -4470,50 +4578,146 @@ export default function App() {
                 Прокрутите вниз, чтобы увидеть больше
               </div>
               <div className="max-h-[60vh] overflow-y-auto pr-1 space-y-2 [scrollbar-width:thin] [scrollbar-color:rgba(113,113,122,0.9)_rgba(24,24,27,0.45)] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-zinc-900/55 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-700/85 [&::-webkit-scrollbar-thumb:hover]:bg-zinc-500">
-                {badges.map((badge) => (
-                  <div
-                    key={`rules-${badge.key}`}
-                    className={`rounded-xl border px-3 py-3 ${getBadgeTheme(badge.key).chip}`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className={`inline-flex shrink-0 items-center justify-center ${getBadgeTheme(badge.key).iconOnly ?? "text-zinc-300"}`}>
-                          <BadgeGlyph badgeKey={badge.key} className="h-4 w-4" />
-                        </span>
-                        <div className="text-sm font-semibold truncate">{badge.title}</div>
+                <div className="sticky top-0 z-10 rounded-lg border border-zinc-800 bg-zinc-950/90 px-3 py-2 text-xs uppercase tracking-[0.12em] text-zinc-400">
+                  Получаемые
+                </div>
+                {badges
+                  .filter((badge) =>
+                    !["media", "creator", "host", "innovator", "moderator", "admin"].includes(
+                      badge.key,
+                    ),
+                  )
+                  .map((badge) => (
+                    <div
+                      key={`rules-${badge.key}`}
+                      className={`rounded-xl border px-3 py-3 ${getBadgeTheme(badge.key).chip}`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-zinc-700/70 bg-black/30">
+                            <BadgeGlyph badgeKey={badge.key} className={`h-4 w-4 ${getBadgeTheme(badge.key).iconOnly ?? "text-zinc-300"}`} />
+                          </span>
+                          <div className="text-sm font-semibold truncate">{badge.title}</div>
+                        </div>
+                        <div className="text-xs text-zinc-300">{badge.active ? "Доступен" : "Закрыт"}</div>
                       </div>
-                      <div className="text-xs text-zinc-400">{badge.active ? "Доступен" : "Закрыт"}</div>
+                      <div className="mt-2 text-xs text-zinc-300/90">{badge.description}</div>
+                      <div className="mt-2">
+                        <div className="flex items-center justify-between text-[11px] text-zinc-300/80">
+                          <span>Прогресс</span>
+                          <span>{badge.progressLabel ?? (badge.active ? "Получен" : "Не получен")}</span>
+                        </div>
+                        <div className="mt-1 h-1.5 w-full rounded-full bg-black/35">
+                          <div
+                            className={`h-1.5 rounded-full transition-all ${
+                              badge.active ? "bg-red-400" : "bg-zinc-500"
+                            }`}
+                            style={{
+                              width: `${Math.max(
+                                0,
+                                Math.min(
+                                  100,
+                                  badge.progressTarget && badge.progressTarget > 0
+                                    ? ((badge.progressCurrent ?? 0) / badge.progressTarget) * 100
+                                    : badge.active
+                                      ? 100
+                                      : 0,
+                                ),
+                              )}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
                     </div>
-                    <div className="mt-2 text-xs text-zinc-400">{badge.description}</div>
-                    <div className="mt-2">
-                      <div className="flex items-center justify-between text-[11px] text-zinc-500">
-                        <span>Прогресс</span>
-                        <span>{badge.progressLabel ?? (badge.active ? "Получен" : "Не получен")}</span>
+                  ))}
+                <div className="sticky top-0 z-10 rounded-lg border border-zinc-800 bg-zinc-950/90 px-3 py-2 text-xs uppercase tracking-[0.12em] text-zinc-400">
+                  Выдаваемые
+                </div>
+                {badges
+                  .filter((badge) =>
+                    ["media", "creator", "host", "innovator", "moderator", "admin"].includes(
+                      badge.key,
+                    ),
+                  )
+                  .map((badge) => (
+                    <div
+                      key={`rules-${badge.key}`}
+                      className={`rounded-xl border px-3 py-3 ${getBadgeTheme(badge.key).chip}`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-zinc-700/70 bg-black/30">
+                            <BadgeGlyph badgeKey={badge.key} className={`h-4 w-4 ${getBadgeTheme(badge.key).iconOnly ?? "text-zinc-300"}`} />
+                          </span>
+                          <div className="text-sm font-semibold truncate">{badge.title}</div>
+                        </div>
+                        <div className="text-xs text-zinc-300">{badge.active ? "Доступен" : "Закрыт"}</div>
                       </div>
-                      <div className="mt-1 h-1.5 w-full rounded-full bg-zinc-800">
-                        <div
-                          className={`h-1.5 rounded-full transition-all ${
-                            badge.active ? "bg-red-500" : "bg-zinc-700"
-                          }`}
-                          style={{
-                            width: `${Math.max(
-                              0,
-                              Math.min(
-                                100,
-                                badge.progressTarget && badge.progressTarget > 0
-                                  ? ((badge.progressCurrent ?? 0) / badge.progressTarget) * 100
-                                  : badge.active
-                                    ? 100
-                                    : 0,
-                              ),
-                            )}%`,
-                          }}
-                        />
+                      <div className="mt-2 text-xs text-zinc-300/90">{badge.description}</div>
+                      <div className="mt-2">
+                        <div className="flex items-center justify-between text-[11px] text-zinc-300/80">
+                          <span>Прогресс</span>
+                          <span>{badge.progressLabel ?? (badge.active ? "Получен" : "Не получен")}</span>
+                        </div>
+                        <div className="mt-1 h-1.5 w-full rounded-full bg-black/35">
+                          <div
+                            className={`h-1.5 rounded-full transition-all ${
+                              badge.active ? "bg-red-400" : "bg-zinc-500"
+                            }`}
+                            style={{
+                              width: `${Math.max(
+                                0,
+                                Math.min(
+                                  100,
+                                  badge.progressTarget && badge.progressTarget > 0
+                                    ? ((badge.progressCurrent ?? 0) / badge.progressTarget) * 100
+                                    : badge.active
+                                      ? 100
+                                      : 0,
+                                ),
+                              )}%`,
+                            }}
+                          />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
               </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+        <Dialog open={profileExitConfirmOpen} onOpenChange={setProfileExitConfirmOpen}>
+          <DialogContent className="max-w-md border-zinc-800 bg-zinc-950 text-zinc-100">
+            <DialogHeader>
+              <DialogTitle>Сохранить изменения?</DialogTitle>
+              <DialogDescription className="text-zinc-400">
+                В профиле есть несохраненные изменения.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex gap-2">
+              <Button
+                className="flex-1 rounded-xl bg-red-600 text-white hover:bg-red-500 border-0"
+                disabled={profileActionLoading}
+                onClick={async () => {
+                  const ok = await saveExtendedProfile();
+                  if (!ok) return;
+                  setProfileExitConfirmOpen(false);
+                  setScreen("home");
+                }}
+              >
+                Сохранить
+              </Button>
+              <Button
+                variant="outline"
+                className="flex-1 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                disabled={profileActionLoading}
+                onClick={() => {
+                  setProfileExitConfirmOpen(false);
+                  setScreen("home");
+                }}
+              >
+                Сбросить
+              </Button>
             </div>
           </DialogContent>
         </Dialog>
@@ -4609,27 +4813,68 @@ export default function App() {
             {imageCropSource ? (
               <div className="space-y-4">
                 <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
-                  <div
-                    className={`relative mx-auto overflow-hidden bg-zinc-950 ${imageCropTarget === "avatar" ? "h-[280px] w-[280px] rounded-full border border-zinc-700" : "w-full max-w-[820px] aspect-[32/9] rounded-xl border border-zinc-700"}`}
-                    onPointerDown={startImageCropDrag}
-                    onPointerMove={moveImageCropDrag}
-                    onPointerUp={endImageCropDrag}
-                    onPointerCancel={endImageCropDrag}
-                  >
-                    <img
-                      src={imageCropSource}
-                      alt="crop"
-                      draggable={false}
-                      className="absolute left-1/2 top-1/2 max-w-none select-none pointer-events-none"
-                      style={{
-                        transform: `translate(calc(-50% + ${imageCropOffsetX}px), calc(-50% + ${imageCropOffsetY}px)) scaleX(${imageCropFlipX ? -1 : 1}) scale(${imageCropZoom})`,
-                        transformOrigin: "center center",
-                        width: imageCropTarget === "avatar" ? "280px" : "100%",
-                        height: imageCropTarget === "avatar" ? "280px" : "100%",
-                        objectFit: "cover",
-                      }}
-                    />
-                  </div>
+                  {imageCropTarget === "avatar" ? (
+                    <div
+                      className="relative mx-auto h-[280px] w-[280px] overflow-hidden rounded-full border border-zinc-700 bg-zinc-950"
+                      onPointerDown={startImageCropDrag}
+                      onPointerMove={moveImageCropDrag}
+                      onPointerUp={endImageCropDrag}
+                      onPointerCancel={endImageCropDrag}
+                    >
+                      <img
+                        src={imageCropSource}
+                        alt="crop"
+                        draggable={false}
+                        className="absolute left-1/2 top-1/2 max-w-none select-none pointer-events-none"
+                        style={{
+                          transform: `translate(calc(-50% + ${imageCropOffsetX}px), calc(-50% + ${imageCropOffsetY}px)) scaleX(${imageCropFlipX ? -1 : 1}) scale(${imageCropZoom})`,
+                          transformOrigin: "center center",
+                          width: "280px",
+                          height: "280px",
+                          objectFit: "cover",
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <div
+                      className="relative mx-auto h-[280px] w-full overflow-hidden rounded-xl border border-zinc-700 bg-zinc-950"
+                      onPointerDown={startImageCropDrag}
+                      onPointerMove={moveImageCropDrag}
+                      onPointerUp={endImageCropDrag}
+                      onPointerCancel={endImageCropDrag}
+                    >
+                      <img
+                        src={imageCropSource}
+                        alt="crop-bg"
+                        draggable={false}
+                        className="absolute left-1/2 top-1/2 max-w-none select-none pointer-events-none opacity-35"
+                        style={{
+                          transform: `translate(calc(-50% + ${imageCropOffsetX}px), calc(-50% + ${imageCropOffsetY}px)) scaleX(${imageCropFlipX ? -1 : 1}) scale(${imageCropZoom})`,
+                          transformOrigin: "center center",
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                        }}
+                      />
+                      <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-4">
+                        <div className="relative aspect-[32/9] w-full max-w-[820px] overflow-hidden rounded-xl border border-zinc-500/70 shadow-[0_0_0_1px_rgba(0,0,0,0.45)]">
+                          <img
+                            src={imageCropSource}
+                            alt="crop-active"
+                            draggable={false}
+                            className="absolute left-1/2 top-1/2 max-w-none select-none"
+                            style={{
+                              transform: `translate(calc(-50% + ${imageCropOffsetX}px), calc(-50% + ${imageCropOffsetY}px)) scaleX(${imageCropFlipX ? -1 : 1}) scale(${imageCropZoom})`,
+                              transformOrigin: "center center",
+                              width: "100%",
+                              height: "100%",
+                              objectFit: "cover",
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="space-y-1">
@@ -6528,12 +6773,12 @@ export default function App() {
                             <span className="truncate">{p.name}</span>
                             {p.selectedBadgeKey ? (
                               <span
-                                className={`inline-flex h-4 min-w-4 items-center justify-center rounded px-0.5 ${
+                                className={`inline-flex h-5 min-w-5 items-center justify-center rounded-md border border-zinc-700/80 px-1 shadow-[0_0_0_1px_rgba(0,0,0,0.25)] ${
                                   getBadgeTheme(p.selectedBadgeKey).icon
                                 }`}
                                 title={getBadgeTitleByKey(p.selectedBadgeKey)}
                               >
-                                <BadgeGlyph badgeKey={p.selectedBadgeKey} className="h-3 w-3" />
+                                <BadgeGlyph badgeKey={p.selectedBadgeKey} className="h-3.5 w-3.5" />
                               </span>
                             ) : null}
                           </div>
