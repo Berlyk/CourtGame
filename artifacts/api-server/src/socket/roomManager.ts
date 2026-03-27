@@ -139,6 +139,8 @@ export interface GameState {
   verdict: string;
   verdictEvaluation: string;
   verdictCloseAt?: number | null;
+  matchStartedAt?: number;
+  matchExpiresAt?: number;
 }
 
 export interface Room {
@@ -210,6 +212,7 @@ const ROOM_MODE_MAX_PLAYERS: Record<RoomModeKey, number> = {
 
 const rooms = new Map<string, Room>();
 const ROOM_HARD_TTL_MS = 24 * 60 * 60 * 1000;
+const MATCH_TTL_MS = 2.5 * 60 * 60 * 1000;
 
 function normalizeLoadedPlayer(player: any): Player | null {
   if (!player || typeof player.id !== "string" || typeof player.name !== "string") {
@@ -308,6 +311,20 @@ export function restoreRoomsFromSnapshots(snapshots: unknown[]): number {
           typeof snapshot.game.verdictCloseAt === "number"
             ? snapshot.game.verdictCloseAt
             : null,
+        matchStartedAt:
+          typeof snapshot.game.matchStartedAt === "number"
+            ? snapshot.game.matchStartedAt
+            : typeof snapshot.createdAt === "number"
+              ? snapshot.createdAt
+              : Date.now(),
+        matchExpiresAt:
+          typeof snapshot.game.matchExpiresAt === "number"
+            ? snapshot.game.matchExpiresAt
+            : typeof snapshot.game.matchStartedAt === "number"
+              ? snapshot.game.matchStartedAt + MATCH_TTL_MS
+              : typeof snapshot.createdAt === "number"
+                ? snapshot.createdAt + MATCH_TTL_MS
+                : Date.now() + MATCH_TTL_MS,
       };
       loadedRoom.started = true;
     }
@@ -713,7 +730,6 @@ export function markPlayerDisconnected(
 }
 
 export function listPublicMatches(): PublicMatchInfo[] {
-  cleanupStaleRooms();
   return [...rooms.values()]
     .map((room) => {
       const hostPlayer =
@@ -750,8 +766,6 @@ function isPlayerConnected(player: Player): boolean {
 }
 
 function canStillReconnect(player: Player, nowMs: number): boolean {
-  const hasAccount = typeof player.userId === "string" && player.userId.trim().length > 0;
-  if (hasAccount) return true;
   return (
     !isPlayerConnected(player) &&
     typeof player?.disconnectedUntil === "number" &&
@@ -800,8 +814,24 @@ export function cleanupStaleRooms(nowMs = Date.now()): number {
     const finishedWithoutPeople = !!room.game?.finished && !hasConnectedPlayers && !hasReconnectWindow;
     const emptyRoom = sourcePlayers.length === 0;
     const disconnectedAndExpired = !hasConnectedPlayers && !hasReconnectWindow;
+    const activeMatchWithoutConnectedPlayers =
+      !!room.game && !room.game.finished && !hasConnectedPlayers;
+    const matchExpiresAt =
+      room.game && typeof room.game.matchExpiresAt === "number"
+        ? room.game.matchExpiresAt
+        : room.game
+          ? room.createdAt + MATCH_TTL_MS
+          : null;
+    const matchExpired = matchExpiresAt !== null && nowMs >= matchExpiresAt;
 
-    if (hardExpired || finishedWithoutPeople || emptyRoom || disconnectedAndExpired) {
+    if (
+      hardExpired ||
+      finishedWithoutPeople ||
+      emptyRoom ||
+      disconnectedAndExpired ||
+      activeMatchWithoutConnectedPlayers ||
+      matchExpired
+    ) {
       rooms.delete(code);
       removedCount += 1;
     }
@@ -1012,6 +1042,8 @@ const stages = buildStagesByPlayerCount(count);
     verdict: "",
     verdictEvaluation: "",
     verdictCloseAt: null,
+    matchStartedAt: Date.now(),
+    matchExpiresAt: Date.now() + MATCH_TTL_MS,
   };
   room.started = true;
   return room;

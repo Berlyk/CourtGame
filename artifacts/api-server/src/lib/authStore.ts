@@ -197,7 +197,10 @@ function normalizeBirthDateInput(value: string | null | undefined): string | nul
   if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
     age -= 1;
   }
-  if (age < 0 || age > 120) {
+  if (age < 13) {
+    throw new Error("Игрок должен быть не младше 13 лет.");
+  }
+  if (age > 120) {
     throw new Error("Укажите корректную дату рождения.");
   }
   return `${match[1]}-${match[2]}-${match[3]}`;

@@ -297,6 +297,10 @@ function getRoomState(room: any, playerId: string) {
       typeof room.game.verdictCloseAt === "number"
         ? room.game.verdictCloseAt
         : null,
+    matchExpiresAt:
+      typeof room.game.matchExpiresAt === "number"
+        ? room.game.matchExpiresAt
+        : null,
     players: mapGamePlayers(room.game.players),
     me: myPlayer ? {
       id: myPlayer.id,
@@ -315,8 +319,6 @@ function getRoomState(room: any, playerId: string) {
 }
 
 function emitPublicMatches(io: SocketIOServer) {
-  markMissingSocketPlayersDisconnected((socketId) => io.sockets.sockets.has(socketId));
-  cleanupStaleRooms();
   io.emit("public_matches_updated", {
     matches: listPublicMatches(),
   });
@@ -677,6 +679,7 @@ export function setupSocket(httpServer: HttpServer) {
   io.on("connection", (socket) => {
     socket.on("list_public_matches", () => {
       markMissingSocketPlayersDisconnected((socketId) => io.sockets.sockets.has(socketId));
+      cleanupStaleRooms();
       cleanupDanglingRoomCaches();
       socket.emit("public_matches_updated", {
         matches: listPublicMatches(),
@@ -1971,6 +1974,17 @@ export function setupSocket(httpServer: HttpServer) {
             io.to(info.roomCode).emit("game_players_updated", {
               players: mapGamePlayers(updatedRoom.game.players),
             });
+            const connectedPlayersCount = updatedRoom.game.players.filter(
+              (player: any) =>
+                typeof player?.socketId === "string" && player.socketId.trim().length > 0,
+            ).length;
+            if (connectedPlayersCount === 0) {
+              closeRoomAndNotify(
+                info.roomCode,
+                "Матч закрыт, так как в комнате не осталось активных игроков.",
+              );
+              return;
+            }
           }
           emitPublicMatches(io);
           scheduleReconnectCleanup(info.roomCode, info.playerId);
@@ -1987,6 +2001,17 @@ export function setupSocket(httpServer: HttpServer) {
             io.to(info.roomCode).emit("game_players_updated", {
               players: mapGamePlayers(updatedRoom.game.players),
             });
+            const connectedPlayersCount = updatedRoom.game.players.filter(
+              (player: any) =>
+                typeof player?.socketId === "string" && player.socketId.trim().length > 0,
+            ).length;
+            if (connectedPlayersCount === 0) {
+              closeRoomAndNotify(
+                info.roomCode,
+                "Матч закрыт, так как в комнате не осталось активных игроков.",
+              );
+              return;
+            }
           }
           emitPublicMatches(io);
         }

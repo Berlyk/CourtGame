@@ -1447,6 +1447,7 @@ interface GameState {
   verdict: string;
   verdictEvaluation: string;
   verdictCloseAt?: number | null;
+  matchExpiresAt?: number | null;
   me: MyPlayer | null;
   code: string;
   hostId: string;
@@ -1551,7 +1552,7 @@ function computeAgeFromIsoDate(isoDate: string | undefined): number | undefined 
   const monthDiff = now.getMonth() + 1 - month;
   const dayDiff = now.getDate() - day;
   if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) age -= 1;
-  if (age < 0 || age > 120) return undefined;
+  if (age < 13 || age > 120) return undefined;
   return age;
 }
 
@@ -1763,6 +1764,12 @@ function localizeAuthError(message: string): string {
   }
   if (normalized.includes("invalid birth date")) {
     return "Укажите корректную дату рождения.";
+  }
+  if (
+    normalized.includes("must be at least 13") ||
+    normalized.includes("не младше 13")
+  ) {
+    return "Вам должно быть не меньше 13 лет.";
   }
   if (normalized.includes("login must be at least 3")) {
     return "Логин должен быть не короче 3 символов.";
@@ -3337,7 +3344,7 @@ export default function App() {
     }
     const age = computeAgeFromIsoDate(normalizedBirthDate || undefined);
     if (normalizedBirthDateRaw && typeof age !== "number") {
-      setProfileBirthDateError("Укажите верную дату рождения.");
+      setProfileBirthDateError("Вам должно быть не меньше 13 лет.");
       return false;
     }
     setProfileActionLoading(true);
@@ -4638,12 +4645,8 @@ export default function App() {
               </DialogDescription>
             </DialogHeader>
             <div className="relative">
-              <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-10 bg-gradient-to-t from-zinc-950 to-transparent" />
-              <div className="pointer-events-none absolute inset-x-0 bottom-2 z-10 flex items-center justify-center text-[11px] text-zinc-500">
-                Прокрутите вниз, чтобы увидеть больше
-              </div>
-              <div className="max-h-[60vh] overflow-y-auto pr-1 space-y-2 [scrollbar-width:thin] [scrollbar-color:rgba(113,113,122,0.9)_rgba(24,24,27,0.45)] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-zinc-900/55 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-700/85 [&::-webkit-scrollbar-thumb:hover]:bg-zinc-500">
-                <div className="sticky top-0 z-10 rounded-lg border border-zinc-800 bg-zinc-950/90 px-3 py-2 text-center text-xs uppercase tracking-[0.12em] text-zinc-400">
+              <div className="max-h-[60vh] overflow-y-auto pr-1 pb-2 space-y-3 [scrollbar-width:thin] [scrollbar-color:rgba(113,113,122,0.9)_rgba(24,24,27,0.45)] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-zinc-900/55 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-700/85 [&::-webkit-scrollbar-thumb:hover]:bg-zinc-500">
+                <div className="sticky top-0 z-20 -mx-1 border-y border-zinc-800 bg-zinc-950/95 px-3 py-2 text-center text-xs uppercase tracking-[0.12em] text-zinc-400">
                   Получаемые
                 </div>
                 {badges
@@ -4695,7 +4698,7 @@ export default function App() {
                       </div>
                     </div>
                   ))}
-                <div className="sticky top-0 z-10 rounded-lg border border-zinc-800 bg-zinc-950/90 px-3 py-2 text-center text-xs uppercase tracking-[0.12em] text-zinc-400">
+                <div className="sticky top-0 z-20 -mx-1 border-y border-zinc-800 bg-zinc-950/95 px-3 py-2 text-center text-xs uppercase tracking-[0.12em] text-zinc-400">
                   Выдаваемые
                 </div>
                 {badges
@@ -6388,6 +6391,13 @@ export default function App() {
       !hasActiveProtest &&
       isCrossExaminationStage &&
       protestCooldownLeft <= 0;
+    const matchExpiresAt =
+      typeof game.matchExpiresAt === "number" ? game.matchExpiresAt : null;
+    const matchMsLeft =
+      matchExpiresAt !== null ? Math.max(0, matchExpiresAt - nowMs) : 0;
+    const matchHoursLeft = Math.floor(matchMsLeft / (60 * 60 * 1000));
+    const matchMinutesLeft = Math.floor((matchMsLeft % (60 * 60 * 1000)) / (60 * 1000));
+    const matchSecondsLeft = Math.floor((matchMsLeft % (60 * 1000)) / 1000);
     const canUseJudgeSilence = isJudge && !game.finished && silenceCooldownLeft <= 0;
     const canUseJudgeWarning = isJudge && !game.finished;
     const isCardAnnouncement = influenceAnnouncement?.kind === "card";
@@ -7540,6 +7550,16 @@ export default function App() {
               </div>
             </InfoBlock>
           </div>
+          {matchExpiresAt !== null && !game.finished && (
+            <div className="fixed bottom-4 left-4 z-30 rounded-xl border border-zinc-700/80 bg-zinc-950/85 px-3 py-2 text-xs font-semibold text-zinc-200 shadow-[0_8px_22px_rgba(0,0,0,0.45)] backdrop-blur-sm">
+              До авто-закрытия:{" "}
+              <span className="text-red-300">
+                {String(matchHoursLeft).padStart(2, "0")}:
+                {String(matchMinutesLeft).padStart(2, "0")}:
+                {String(matchSecondsLeft).padStart(2, "0")}
+              </span>
+            </div>
+          )}
           <ContextHelp
             open={contextHelpOpen}
             onOpenChange={setContextHelpOpen}
