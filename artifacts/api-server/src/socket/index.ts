@@ -2078,6 +2078,17 @@ export function setupSocket(httpServer: HttpServer) {
             requiresPassword: !!updatedRoom.password,
             lobbyChat: updatedRoom.lobbyChat,
           });
+          const connectedPlayersCount = updatedRoom.players.filter(
+            (player: any) =>
+              typeof player?.socketId === "string" && player.socketId.trim().length > 0,
+          ).length;
+          if (connectedPlayersCount === 0) {
+            clearReconnectCleanup(info.roomCode, info.playerId);
+            deleteRoom(info.roomCode);
+            emitPublicMatches(io);
+            deleteRoomSnapshot(info.roomCode);
+            return;
+          }
           emitPublicMatches(io);
           if (!isRegisteredPlayer) {
             scheduleReconnectCleanup(info.roomCode, info.playerId);
@@ -2099,6 +2110,16 @@ export function setupSocket(httpServer: HttpServer) {
               requiresPassword: !!updatedRoom.password,
               lobbyChat: updatedRoom.lobbyChat,
             });
+            const connectedPlayersCount = updatedRoom.players.filter(
+              (player: any) =>
+                typeof player?.socketId === "string" && player.socketId.trim().length > 0,
+            ).length;
+            if (connectedPlayersCount === 0) {
+              deleteRoom(info.roomCode);
+              emitPublicMatches(io);
+              deleteRoomSnapshot(info.roomCode);
+              return;
+            }
           }
           emitPublicMatches(io);
         }

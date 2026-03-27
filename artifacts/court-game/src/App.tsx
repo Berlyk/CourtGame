@@ -2798,6 +2798,18 @@ export default function App() {
         }
         if (state.type === "room") {
           const roomState = state as RoomState;
+          if (!roomState || !Array.isArray(roomState.players)) {
+            clearReconnectWindow();
+            localStorage.removeItem("court_session");
+            localStorage.removeItem("court_session_token");
+            setHasSession(false);
+            setError("Комната недоступна или уже закрыта.");
+            setRoom(null);
+            setGame(null);
+            setLobbyChatMessages([]);
+            setScreen("home");
+            return;
+          }
           setRoom({
             ...roomState,
             players: roomState.players.map((p) =>
@@ -2810,6 +2822,25 @@ export default function App() {
           setScreen("room");
         } else {
           const gameState = state as GameState;
+          if (
+            !gameState ||
+            !Array.isArray(gameState.players) ||
+            !gameState.me ||
+            !Array.isArray(gameState.stages) ||
+            gameState.stages.length === 0 ||
+            !gameState.caseData
+          ) {
+            clearReconnectWindow();
+            localStorage.removeItem("court_session");
+            localStorage.removeItem("court_session_token");
+            setHasSession(false);
+            setError("Матч недоступен или уже завершен.");
+            setRoom(null);
+            setGame(null);
+            setLobbyChatMessages([]);
+            setScreen("home");
+            return;
+          }
           setGame({
             ...gameState,
             players: gameState.players.map((p) =>
