@@ -20,6 +20,8 @@ import {
   Sparkles,
   Camera,
   CircleHelp,
+  Crown,
+  ScrollText,
   Gamepad2,
   Search,
   Wrench,
@@ -123,10 +125,10 @@ const BADGE_ICONS: Record<string, LucideIcon> = {
   defendant: Shield,
   plaintiffLawyer: UserCircle2,
   defenseLawyer: Lock,
-  prosecutor: AlertCircle,
+  prosecutor: ScrollText,
   judge: Gavel,
   winner: Sparkles,
-  legend: CircleHelp,
+  legend: Crown,
   media: Camera,
   creator: Laptop,
   host: MessageSquare,
@@ -164,9 +166,9 @@ const BADGE_THEME: Record<
     iconOnly: "text-emerald-300",
   },
   prosecutor: {
-    chip: "border-orange-500/55 bg-orange-500/20 text-orange-200",
-    icon: "bg-orange-500/35 text-orange-100",
-    iconOnly: "text-orange-300",
+    chip: "border-amber-500/65 bg-amber-500/25 text-amber-100",
+    icon: "bg-amber-500/40 text-amber-100",
+    iconOnly: "text-amber-200",
   },
   judge: {
     chip: "border-violet-500/55 bg-violet-500/20 text-violet-200",
@@ -179,9 +181,9 @@ const BADGE_THEME: Record<
     iconOnly: "text-yellow-300",
   },
   legend: {
-    chip: "border-fuchsia-500/55 bg-fuchsia-500/20 text-fuchsia-200",
-    icon: "bg-fuchsia-500/35 text-fuchsia-100",
-    iconOnly: "text-fuchsia-300",
+    chip: "border-violet-500/65 bg-violet-500/25 text-violet-100",
+    icon: "bg-violet-500/40 text-violet-100",
+    iconOnly: "text-violet-200",
   },
   media: {
     chip: "border-cyan-500/55 bg-cyan-500/20 text-cyan-200",
@@ -190,7 +192,7 @@ const BADGE_THEME: Record<
   },
   creator: {
     chip: "border-red-500/65 bg-red-600/25 text-red-100",
-    icon: "bg-red-700/55 text-red-100",
+    icon: "bg-red-600/45 text-red-100",
     iconOnly: "text-red-200",
   },
   host: {
@@ -1510,7 +1512,7 @@ function getBannerStyle(
     return {
       backgroundImage: `url(${normalizedBanner})`,
       backgroundSize: "cover",
-      backgroundPosition: "center",
+      backgroundPosition: "50% 35%",
       backgroundRepeat: "no-repeat",
     };
   }
@@ -1583,6 +1585,23 @@ function parseRuDateToIso(value: string): string | null {
 }
 
 type CropTarget = "avatar" | "banner";
+const AVATAR_CROP_VIEW_SIZE = 280;
+const BANNER_CROP_VIEW_WIDTH = 960;
+const BANNER_CROP_VIEW_HEIGHT = 270;
+
+function normalizeBadgeVisualKey(badgeKey?: string): string | undefined {
+  if (!badgeKey) return undefined;
+  const trimmed = badgeKey.trim();
+  const roleKey = trimmed.startsWith("role_") ? trimmed.slice("role_".length) : trimmed;
+  const roleAliases: Record<string, string> = {
+    plaintiff_lawyer: "plaintiffLawyer",
+    defense_lawyer: "defenseLawyer",
+    defense_lawer: "defenseLawyer",
+    plaintifflawyer: "plaintiffLawyer",
+    defenselawyer: "defenseLawyer",
+  };
+  return roleAliases[roleKey] ?? roleKey;
+}
 
 function clampNumber(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -1598,11 +1617,10 @@ async function cropImageDataUrl(options: {
 }): Promise<string> {
   const { sourceDataUrl, target, flipX } = options;
   const zoom = clampNumber(options.zoom, 1, 3);
-  const offsetX = clampNumber(options.offsetX, -120, 120) / 120;
-  const offsetY = clampNumber(options.offsetY, -120, 120) / 120;
+  const viewWidth = target === "avatar" ? AVATAR_CROP_VIEW_SIZE : BANNER_CROP_VIEW_WIDTH;
+  const viewHeight = target === "avatar" ? AVATAR_CROP_VIEW_SIZE : BANNER_CROP_VIEW_HEIGHT;
   const outputWidth = target === "avatar" ? 512 : 1280;
   const outputHeight = target === "avatar" ? 512 : 360;
-  const outputAspect = outputWidth / outputHeight;
 
   return new Promise((resolve) => {
     const image = new Image();
@@ -1614,25 +1632,26 @@ async function cropImageDataUrl(options: {
         return;
       }
 
-      const sourceAspect = sourceWidth / sourceHeight;
-      let cropWidth = 0;
-      let cropHeight = 0;
+      const baseScale = Math.max(viewWidth / sourceWidth, viewHeight / sourceHeight);
+      const displayWidth = sourceWidth * baseScale * zoom;
+      const displayHeight = sourceHeight * baseScale * zoom;
+      const maxOffsetX = Math.max(0, (displayWidth - viewWidth) / 2);
+      const maxOffsetY = Math.max(0, (displayHeight - viewHeight) / 2);
+      const offsetX = clampNumber(options.offsetX, -maxOffsetX, maxOffsetX);
+      const offsetY = clampNumber(options.offsetY, -maxOffsetY, maxOffsetY);
 
-      if (sourceAspect > outputAspect) {
-        cropHeight = sourceHeight / zoom;
-        cropWidth = cropHeight * outputAspect;
-      } else {
-        cropWidth = sourceWidth / zoom;
-        cropHeight = cropWidth / outputAspect;
-      }
-
-      cropWidth = clampNumber(cropWidth, 1, sourceWidth);
-      cropHeight = clampNumber(cropHeight, 1, sourceHeight);
-
-      const extraX = Math.max(0, sourceWidth - cropWidth);
-      const extraY = Math.max(0, sourceHeight - cropHeight);
-      const sx = clampNumber(extraX / 2 - (extraX / 2) * offsetX, 0, extraX);
-      const sy = clampNumber(extraY / 2 - (extraY / 2) * offsetY, 0, extraY);
+      const sx = clampNumber(
+        ((displayWidth - viewWidth) / 2 - offsetX) / (baseScale * zoom),
+        0,
+        sourceWidth - 1,
+      );
+      const sy = clampNumber(
+        ((displayHeight - viewHeight) / 2 - offsetY) / (baseScale * zoom),
+        0,
+        sourceHeight - 1,
+      );
+      const cropWidth = clampNumber(viewWidth / (baseScale * zoom), 1, sourceWidth - sx);
+      const cropHeight = clampNumber(viewHeight / (baseScale * zoom), 1, sourceHeight - sy);
 
       const canvas = document.createElement("canvas");
       canvas.width = outputWidth;
@@ -1806,9 +1825,7 @@ function isEmailTakenError(message: string): boolean {
 function getBadgeTheme(
   badgeKey?: string,
 ): { chip: string; icon: string; iconOnly?: string } {
-  const visualKey = (badgeKey ?? "").startsWith("role_")
-    ? (badgeKey ?? "").slice("role_".length)
-    : badgeKey;
+  const visualKey = normalizeBadgeVisualKey(badgeKey);
   if (!badgeKey) {
     return {
       chip: "border-zinc-600 bg-zinc-800/60 text-zinc-200",
@@ -1830,9 +1847,7 @@ function BadgeGlyph({
   badgeKey?: string;
   className?: string;
 }) {
-  const visualKey = (badgeKey ?? "").startsWith("role_")
-    ? (badgeKey ?? "").slice("role_".length)
-    : badgeKey;
+  const visualKey = normalizeBadgeVisualKey(badgeKey);
   const Icon = visualKey ? BADGE_ICONS[visualKey] : undefined;
   if (!Icon) {
     return <span className={className}>★</span>;
@@ -1892,7 +1907,7 @@ function PlayerCard({
             onClick={() => canOpenProfile && onOpenProfile?.(player.userId)}
             className={`relative z-10 flex items-center gap-3 min-w-0 text-left ${
               canOpenProfile
-                ? "cursor-pointer transition-colors hover:text-red-300"
+                ? "cursor-pointer transition-colors hover:text-zinc-100"
                 : "cursor-default"
             }`}
           >
@@ -1902,7 +1917,7 @@ function PlayerCard({
                 <span className="truncate">{player.name}</span>
                 {player.selectedBadgeKey ? (
                   <span
-                    className={`inline-flex h-5 min-w-5 items-center justify-center rounded-md border border-zinc-700/80 px-1 shadow-[0_0_0_1px_rgba(0,0,0,0.25)] ${badgeTheme.icon}`}
+                    className={`inline-flex h-6 min-w-6 items-center justify-center rounded-md border border-zinc-600/80 px-1 shadow-[0_0_0_1px_rgba(0,0,0,0.28)] ${badgeTheme.icon}`}
                     title={getBadgeTitleByKey(player.selectedBadgeKey)}
                   >
                     <BadgeGlyph badgeKey={player.selectedBadgeKey} className="h-3.5 w-3.5" />
@@ -2146,6 +2161,8 @@ export default function App() {
   const [imageCropOffsetY, setImageCropOffsetY] = useState(0);
   const [imageCropFlipX, setImageCropFlipX] = useState(false);
   const [imageCropLoading, setImageCropLoading] = useState(false);
+  const [imageCropNaturalWidth, setImageCropNaturalWidth] = useState(1024);
+  const [imageCropNaturalHeight, setImageCropNaturalHeight] = useState(1024);
   const [lobbyChatInput, setLobbyChatInput] = useState("");
   const [lobbyChatMessages, setLobbyChatMessages] = useState<LobbyChatMessage[]>([]);
   const [influenceView, setInfluenceView] = useState<
@@ -2195,6 +2212,22 @@ export default function App() {
     startOffsetX: number;
     startOffsetY: number;
   } | null>(null);
+  const imageCropViewport = useMemo(() => {
+    if (imageCropTarget === "avatar") {
+      return { width: AVATAR_CROP_VIEW_SIZE, height: AVATAR_CROP_VIEW_SIZE };
+    }
+    return { width: BANNER_CROP_VIEW_WIDTH, height: BANNER_CROP_VIEW_HEIGHT };
+  }, [imageCropTarget]);
+  const imageCropBaseScale = useMemo(() => {
+    return Math.max(
+      imageCropViewport.width / Math.max(1, imageCropNaturalWidth),
+      imageCropViewport.height / Math.max(1, imageCropNaturalHeight),
+    );
+  }, [imageCropNaturalHeight, imageCropNaturalWidth, imageCropViewport.height, imageCropViewport.width]);
+  const imageCropDisplayWidth = imageCropNaturalWidth * imageCropBaseScale * imageCropZoom;
+  const imageCropDisplayHeight = imageCropNaturalHeight * imageCropBaseScale * imageCropZoom;
+  const imageCropMaxOffsetX = Math.max(0, (imageCropDisplayWidth - imageCropViewport.width) / 2);
+  const imageCropMaxOffsetY = Math.max(0, (imageCropDisplayHeight - imageCropViewport.height) / 2);
   const joinPasswordDialogOpenRef = useRef(false);
   const influenceViewRef = useRef<
     "main" | "chat" | "notes" | "verdict" | "warnings"
@@ -2333,7 +2366,7 @@ export default function App() {
 
     return (
       <Dialog open={viewPlayerProfileOpen} onOpenChange={setViewPlayerProfileOpen}>
-        <DialogContent className="max-w-[460px] border-zinc-800 bg-zinc-950 text-zinc-100">
+        <DialogContent className="max-w-[420px] border-zinc-800 bg-zinc-950 text-zinc-100">
           <DialogHeader>
             <DialogTitle>Профиль игрока</DialogTitle>
             <DialogDescription className="text-zinc-400">
@@ -2352,7 +2385,7 @@ export default function App() {
             <div className="space-y-4">
               <div className="rounded-3xl border border-zinc-800 bg-zinc-950/70 overflow-hidden">
                 <div
-                  className="relative min-h-[132px] p-5 flex items-end"
+                  className="relative min-h-[122px] p-4 flex items-end"
                   style={getBannerStyle(
                     viewPlayerProfile.banner,
                     viewPlayerProfile.avatar,
@@ -2361,7 +2394,7 @@ export default function App() {
                 >
                   <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/35 to-black/10" />
                   <div className="relative z-10 flex items-end gap-3">
-                    <Avatar src={viewPlayerProfile.avatar ?? null} name={viewPlayerProfile.nickname} size={88} />
+                    <Avatar src={viewPlayerProfile.avatar ?? null} name={viewPlayerProfile.nickname} size={82} />
                     <div>
                       <div className="text-xl font-bold leading-none truncate max-w-[240px] sm:max-w-[320px]">
                         {viewPlayerProfile.nickname}
@@ -2372,9 +2405,10 @@ export default function App() {
                             getBadgeTheme(viewPlayerProfile.selectedBadgeKey).chip
                           }`}
                         >
-                          <span className={`inline-flex h-5 min-w-5 items-center justify-center rounded-md bg-black/35 ${getBadgeTheme(viewPlayerProfile.selectedBadgeKey).iconOnly ?? "text-zinc-300"}`}>
-                            <BadgeGlyph badgeKey={viewPlayerProfile.selectedBadgeKey} className="h-3.5 w-3.5" />
-                          </span>
+                          <BadgeGlyph
+                            badgeKey={viewPlayerProfile.selectedBadgeKey}
+                            className={`h-3.5 w-3.5 ${getBadgeTheme(viewPlayerProfile.selectedBadgeKey).iconOnly ?? "text-zinc-300"}`}
+                          />
                           <span>
                             {getBadgeTitleByKey(
                               viewPlayerProfile.selectedBadgeKey,
@@ -2409,7 +2443,7 @@ export default function App() {
               {viewPlayerProfile.bio?.trim() && (
                 <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2">
                   <div className="text-zinc-500 text-xs">О себе</div>
-                  <div className="text-zinc-100 mt-1 whitespace-pre-wrap break-all overflow-hidden">
+                  <div className="text-zinc-100 mt-1 whitespace-pre-wrap break-words overflow-hidden">
                     {viewPlayerProfile.bio}
                   </div>
                 </div>
@@ -3937,13 +3971,30 @@ export default function App() {
       reader.onload = (ev) => {
         const dataUrl = (ev.target?.result as string) || "";
         if (!dataUrl) return;
-        setImageCropTarget(target);
-        setImageCropSource(dataUrl);
-        setImageCropZoom(1);
-        setImageCropOffsetX(0);
-        setImageCropOffsetY(0);
-        setImageCropFlipX(false);
-        setImageCropDialogOpen(true);
+        const img = new Image();
+        img.onload = () => {
+          setImageCropNaturalWidth(Math.max(1, img.naturalWidth || img.width || 1024));
+          setImageCropNaturalHeight(Math.max(1, img.naturalHeight || img.height || 1024));
+          setImageCropTarget(target);
+          setImageCropSource(dataUrl);
+          setImageCropZoom(1);
+          setImageCropOffsetX(0);
+          setImageCropOffsetY(0);
+          setImageCropFlipX(false);
+          setImageCropDialogOpen(true);
+        };
+        img.onerror = () => {
+          setImageCropNaturalWidth(1024);
+          setImageCropNaturalHeight(1024);
+          setImageCropTarget(target);
+          setImageCropSource(dataUrl);
+          setImageCropZoom(1);
+          setImageCropOffsetX(0);
+          setImageCropOffsetY(0);
+          setImageCropFlipX(false);
+          setImageCropDialogOpen(true);
+        };
+        img.src = dataUrl;
       };
       reader.readAsDataURL(file);
     },
@@ -4015,9 +4066,9 @@ export default function App() {
     if (!dragState?.dragging || dragState.pointerId !== event.pointerId) return;
     const deltaX = event.clientX - dragState.startX;
     const deltaY = event.clientY - dragState.startY;
-    setImageCropOffsetX(clampNumber(dragState.startOffsetX + deltaX, -120, 120));
-    setImageCropOffsetY(clampNumber(dragState.startOffsetY + deltaY, -120, 120));
-  }, []);
+    setImageCropOffsetX(clampNumber(dragState.startOffsetX + deltaX, -imageCropMaxOffsetX, imageCropMaxOffsetX));
+    setImageCropOffsetY(clampNumber(dragState.startOffsetY + deltaY, -imageCropMaxOffsetY, imageCropMaxOffsetY));
+  }, [imageCropMaxOffsetX, imageCropMaxOffsetY]);
 
   const endImageCropDrag = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     const dragState = imageCropDragStateRef.current;
@@ -4025,6 +4076,18 @@ export default function App() {
     imageCropDragStateRef.current = null;
     (event.currentTarget as HTMLDivElement).releasePointerCapture(event.pointerId);
   }, []);
+  const onImageCropWheel = useCallback(
+    (event: React.WheelEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      const nextZoom = clampNumber(imageCropZoom + (event.deltaY < 0 ? 0.08 : -0.08), 1, 3);
+      setImageCropZoom(nextZoom);
+    },
+    [imageCropZoom],
+  );
+  useEffect(() => {
+    setImageCropOffsetX((prev) => clampNumber(prev, -imageCropMaxOffsetX, imageCropMaxOffsetX));
+    setImageCropOffsetY((prev) => clampNumber(prev, -imageCropMaxOffsetY, imageCropMaxOffsetY));
+  }, [imageCropMaxOffsetX, imageCropMaxOffsetY]);
 
   const handleAvatarChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -4159,14 +4222,14 @@ export default function App() {
 
               <div className="rounded-3xl border border-zinc-800 bg-zinc-950/70 overflow-hidden">
                 <div
-                  className="relative min-h-[124px] md:min-h-[136px] p-5 md:p-6 flex flex-col justify-end cursor-pointer group/banner"
+                  className="relative min-h-[122px] md:min-h-[122px] p-5 md:p-6 flex flex-col justify-end cursor-pointer group/banner"
                   style={getBannerStyle(profileBannerDraft, profileAvatarDraft, playerName || "Игрок")}
                   onClick={() => bannerInputRef.current?.click()}
                 >
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/45 to-black/15" />
                   <div className="absolute inset-0 opacity-0 group-hover/banner:opacity-100 transition-opacity bg-black/15" />
                   <div className="relative z-10 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                      <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-4 min-w-0">
                       <div
                         className="relative cursor-pointer group/avatar"
                         onClick={(e) => {
@@ -4174,12 +4237,12 @@ export default function App() {
                           avatarInputRef.current?.click();
                         }}
                       >
-                        <Avatar src={profileAvatarDraft} name={playerName || "?"} size={146} />
+                        <Avatar src={profileAvatarDraft} name={playerName || "?"} size={138} />
                         <div className="absolute inset-0 rounded-full bg-black/55 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity">
                           <Camera className="w-6 h-6 text-white" />
                         </div>
                       </div>
-                        <div>
+                        <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
                             <div className="text-3xl font-bold leading-none">{playerName || "Игрок"}</div>
                             {selectedBadgeKey && (
@@ -4188,21 +4251,22 @@ export default function App() {
                                   getBadgeTheme(selectedBadgeKey).chip
                                 }`}
                               >
-                                <span className={`inline-flex h-5 min-w-5 items-center justify-center rounded-md bg-black/35 ${getBadgeTheme(selectedBadgeKey).iconOnly ?? "text-zinc-300"}`}>
-                                  <BadgeGlyph badgeKey={selectedBadgeKey} className="h-3.5 w-3.5" />
-                                </span>
+                                <BadgeGlyph
+                                  badgeKey={selectedBadgeKey}
+                                  className={`h-3.5 w-3.5 ${getBadgeTheme(selectedBadgeKey).iconOnly ?? "text-zinc-300"}`}
+                                />
                                 {getBadgeTitleByKey(selectedBadgeKey, badges)}
                               </span>
                             )}
                           </div>
-                          <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                            <span className="rounded-full border border-zinc-600 bg-black/35 px-3 py-1">
+                          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                            <span className="inline-flex h-8 items-center rounded-full border border-zinc-600 bg-black/35 px-3 whitespace-nowrap">
                               Возраст: {ageLabel}
                           </span>
-                          <span className="rounded-full border border-zinc-600 bg-black/35 px-3 py-1">
+                          <span className="inline-flex h-8 items-center rounded-full border border-zinc-600 bg-black/35 px-3 whitespace-nowrap">
                             Пол: {genderLabel}
                           </span>
-                            <span className="rounded-full border border-zinc-600 bg-black/35 px-3 py-1">
+                            <span className="inline-flex h-8 items-center rounded-full border border-zinc-600 bg-black/35 px-3 whitespace-nowrap">
                               С нами с: {registeredAtLabel}
                             </span>
                           </div>
@@ -4396,6 +4460,16 @@ export default function App() {
                 </div>
 
                 <div className="space-y-4">
+                  <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4 md:p-5 space-y-3">
+                    <div className="text-lg font-semibold">Подписка</div>
+                    <div className="rounded-xl border border-zinc-800 bg-zinc-900/55 px-3 py-3">
+                      <div className="text-sm text-zinc-500">Текущий статус</div>
+                      <div className="mt-1 text-base font-semibold text-zinc-100">
+                        {profileData?.subscription?.label ?? "Нет подписки"}
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4 md:p-5">
                     <div className="text-lg font-semibold">Статистика</div>
                     <div className="mt-3 grid grid-cols-3 gap-2 text-center">
@@ -4446,7 +4520,7 @@ export default function App() {
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex min-w-0 items-center gap-2">
                               {selectedBadgeKey ? (
-                                <span className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-zinc-700/70 ${getBadgeTheme(selectedBadgeKey).icon}`}>
+                                <span className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${getBadgeTheme(selectedBadgeKey).icon}`}>
                                   <BadgeGlyph badgeKey={selectedBadgeKey} className="h-3.5 w-3.5" />
                                 </span>
                               ) : null}
@@ -4477,7 +4551,7 @@ export default function App() {
                                   }`}
                                 >
                                   <div className="flex items-center gap-2">
-                                    <span className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-zinc-700/70 ${getBadgeTheme(badge.key).icon}`}>
+                                    <span className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${getBadgeTheme(badge.key).icon}`}>
                                       <BadgeGlyph badgeKey={badge.key} className="h-3.5 w-3.5" />
                                     </span>
                                     <span className="truncate text-sm font-semibold">{badge.title}</span>
@@ -4498,15 +4572,6 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4 md:p-5 space-y-3">
-                    <div className="text-lg font-semibold">Подписка</div>
-                    <div className="rounded-xl border border-zinc-800 bg-zinc-900/55 px-3 py-3">
-                      <div className="text-sm text-zinc-500">Текущий статус</div>
-                      <div className="mt-1 text-base font-semibold text-zinc-100">
-                        {profileData?.subscription?.label ?? "Нет подписки"}
-                      </div>
-                    </div>
-                  </div>
                 </div>
               </div>
             </CardContent>
@@ -4578,12 +4643,12 @@ export default function App() {
                 Прокрутите вниз, чтобы увидеть больше
               </div>
               <div className="max-h-[60vh] overflow-y-auto pr-1 space-y-2 [scrollbar-width:thin] [scrollbar-color:rgba(113,113,122,0.9)_rgba(24,24,27,0.45)] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-zinc-900/55 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-700/85 [&::-webkit-scrollbar-thumb:hover]:bg-zinc-500">
-                <div className="sticky top-0 z-10 rounded-lg border border-zinc-800 bg-zinc-950/90 px-3 py-2 text-xs uppercase tracking-[0.12em] text-zinc-400">
+                <div className="sticky top-0 z-10 rounded-lg border border-zinc-800 bg-zinc-950/90 px-3 py-2 text-center text-xs uppercase tracking-[0.12em] text-zinc-400">
                   Получаемые
                 </div>
                 {badges
                   .filter((badge) =>
-                    !["media", "creator", "host", "innovator", "moderator", "admin"].includes(
+                    !["media", "creator", "host", "innovator", "moderator", "admin", "legend"].includes(
                       badge.key,
                     ),
                   )
@@ -4630,12 +4695,12 @@ export default function App() {
                       </div>
                     </div>
                   ))}
-                <div className="sticky top-0 z-10 rounded-lg border border-zinc-800 bg-zinc-950/90 px-3 py-2 text-xs uppercase tracking-[0.12em] text-zinc-400">
+                <div className="sticky top-0 z-10 rounded-lg border border-zinc-800 bg-zinc-950/90 px-3 py-2 text-center text-xs uppercase tracking-[0.12em] text-zinc-400">
                   Выдаваемые
                 </div>
                 {badges
                   .filter((badge) =>
-                    ["media", "creator", "host", "innovator", "moderator", "admin"].includes(
+                    ["media", "creator", "host", "innovator", "moderator", "admin", "legend"].includes(
                       badge.key,
                     ),
                   )
@@ -4803,7 +4868,7 @@ export default function App() {
             }
           }}
         >
-          <DialogContent className="max-w-3xl border-zinc-800 bg-zinc-950 text-zinc-100">
+          <DialogContent className="max-w-[1120px] border-zinc-800 bg-zinc-950 text-zinc-100">
             <DialogHeader>
               <DialogTitle>Редактировать изображение</DialogTitle>
               <DialogDescription className="text-zinc-400">
@@ -4815,23 +4880,38 @@ export default function App() {
                 <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
                   {imageCropTarget === "avatar" ? (
                     <div
-                      className="relative mx-auto h-[280px] w-[280px] overflow-hidden rounded-full border border-zinc-700 bg-zinc-950"
+                      className="relative mx-auto h-[320px] w-[320px] overflow-hidden rounded-2xl border border-zinc-700 bg-zinc-950"
                       onPointerDown={startImageCropDrag}
                       onPointerMove={moveImageCropDrag}
                       onPointerUp={endImageCropDrag}
                       onPointerCancel={endImageCropDrag}
+                      onWheel={onImageCropWheel}
                     >
                       <img
                         src={imageCropSource}
-                        alt="crop"
+                        alt="crop-bg"
                         draggable={false}
                         className="absolute left-1/2 top-1/2 max-w-none select-none pointer-events-none"
                         style={{
-                          transform: `translate(calc(-50% + ${imageCropOffsetX}px), calc(-50% + ${imageCropOffsetY}px)) scaleX(${imageCropFlipX ? -1 : 1}) scale(${imageCropZoom})`,
+                          transform: `translate(calc(-50% + ${imageCropOffsetX}px), calc(-50% + ${imageCropOffsetY}px)) scaleX(${imageCropFlipX ? -1 : 1})`,
                           transformOrigin: "center center",
-                          width: "280px",
-                          height: "280px",
-                          objectFit: "cover",
+                          width: `${imageCropDisplayWidth}px`,
+                          height: `${imageCropDisplayHeight}px`,
+                        }}
+                      />
+                      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                        <div className="h-[280px] w-[280px] rounded-full border border-zinc-200/90 shadow-[0_0_0_9999px_rgba(0,0,0,0.42)]" />
+                      </div>
+                      <img
+                        src={imageCropSource}
+                        alt="crop-active"
+                        draggable={false}
+                        className="absolute left-1/2 top-1/2 max-w-none select-none pointer-events-none opacity-0"
+                        style={{
+                          transform: `translate(calc(-50% + ${imageCropOffsetX}px), calc(-50% + ${imageCropOffsetY}px)) scaleX(${imageCropFlipX ? -1 : 1})`,
+                          transformOrigin: "center center",
+                          width: `${imageCropDisplayWidth}px`,
+                          height: `${imageCropDisplayHeight}px`,
                         }}
                       />
                     </div>
@@ -4842,33 +4922,32 @@ export default function App() {
                       onPointerMove={moveImageCropDrag}
                       onPointerUp={endImageCropDrag}
                       onPointerCancel={endImageCropDrag}
+                      onWheel={onImageCropWheel}
                     >
                       <img
                         src={imageCropSource}
                         alt="crop-bg"
                         draggable={false}
-                        className="absolute left-1/2 top-1/2 max-w-none select-none pointer-events-none opacity-35"
+                        className="absolute left-1/2 top-1/2 max-w-none select-none pointer-events-none"
                         style={{
-                          transform: `translate(calc(-50% + ${imageCropOffsetX}px), calc(-50% + ${imageCropOffsetY}px)) scaleX(${imageCropFlipX ? -1 : 1}) scale(${imageCropZoom})`,
+                          transform: `translate(calc(-50% + ${imageCropOffsetX}px), calc(-50% + ${imageCropOffsetY}px)) scaleX(${imageCropFlipX ? -1 : 1})`,
                           transformOrigin: "center center",
-                          width: "100%",
-                          height: "100%",
-                          objectFit: "cover",
+                          width: `${imageCropDisplayWidth}px`,
+                          height: `${imageCropDisplayHeight}px`,
                         }}
                       />
-                      <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-4">
-                        <div className="relative aspect-[32/9] w-full max-w-[820px] overflow-hidden rounded-xl border border-zinc-500/70 shadow-[0_0_0_1px_rgba(0,0,0,0.45)]">
+                      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                        <div className="relative h-[270px] w-[960px] max-w-[96%] overflow-hidden rounded-xl border border-zinc-500/70 shadow-[0_0_0_9999px_rgba(0,0,0,0.42)]">
                           <img
                             src={imageCropSource}
                             alt="crop-active"
                             draggable={false}
                             className="absolute left-1/2 top-1/2 max-w-none select-none"
                             style={{
-                              transform: `translate(calc(-50% + ${imageCropOffsetX}px), calc(-50% + ${imageCropOffsetY}px)) scaleX(${imageCropFlipX ? -1 : 1}) scale(${imageCropZoom})`,
+                              transform: `translate(calc(-50% + ${imageCropOffsetX}px), calc(-50% + ${imageCropOffsetY}px)) scaleX(${imageCropFlipX ? -1 : 1})`,
                               transformOrigin: "center center",
-                              width: "100%",
-                              height: "100%",
-                              objectFit: "cover",
+                              width: `${imageCropDisplayWidth}px`,
+                              height: `${imageCropDisplayHeight}px`,
                             }}
                           />
                         </div>
@@ -4901,7 +4980,6 @@ export default function App() {
                         <FlipHorizontal className="h-4 w-4" />
                         Перевернуть
                       </Button>
-                      <div className="text-xs text-zinc-500">Перемещайте изображение мышью или пальцем.</div>
                     </div>
                   </div>
                 </div>
@@ -6765,7 +6843,7 @@ export default function App() {
                           <div
                             className={`inline-flex items-center gap-2 min-w-0 rounded-md px-1 py-0.5 text-left ${
                               p.userId
-                                ? "text-zinc-300 hover:text-red-300 transition-colors"
+                                ? "text-zinc-300 hover:text-zinc-100 transition-colors"
                                 : "text-zinc-400"
                             }`}
                           >
@@ -6773,7 +6851,7 @@ export default function App() {
                             <span className="truncate">{p.name}</span>
                             {p.selectedBadgeKey ? (
                               <span
-                                className={`inline-flex h-5 min-w-5 items-center justify-center rounded-md border border-zinc-700/80 px-1 shadow-[0_0_0_1px_rgba(0,0,0,0.25)] ${
+                                className={`inline-flex h-6 min-w-6 items-center justify-center rounded-md border border-zinc-600/80 px-1 shadow-[0_0_0_1px_rgba(0,0,0,0.28)] ${
                                   getBadgeTheme(p.selectedBadgeKey).icon
                                 }`}
                                 title={getBadgeTitleByKey(p.selectedBadgeKey)}
