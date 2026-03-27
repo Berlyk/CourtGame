@@ -2396,7 +2396,7 @@ export default function App() {
             </div>
           ) : viewPlayerProfile ? (
             <div className="space-y-4">
-              <div className="rounded-3xl border border-zinc-800 bg-zinc-950/70 overflow-hidden">
+              <div className="rounded-3xl border border-zinc-800 bg-zinc-950/70 overflow-visible">
                 <div
                   className="relative min-h-[122px] p-4 flex items-end"
                   style={getBannerStyle(
@@ -2435,7 +2435,7 @@ export default function App() {
                             </span>
                           </button>
                           {viewProfileBadgeHintOpen ? (
-                            <div className="absolute top-full left-0 z-30 mt-2 max-w-[260px] rounded-xl border border-zinc-700 bg-zinc-900/95 px-3 py-2 text-xs text-zinc-200 shadow-[0_10px_24px_rgba(0,0,0,0.45)] backdrop-blur-sm">
+                            <div className="absolute top-full left-0 z-40 mt-2 max-w-[260px] rounded-xl border border-zinc-700 bg-zinc-900/95 px-3 py-2 text-xs text-zinc-200 shadow-[0_10px_24px_rgba(0,0,0,0.45)] backdrop-blur-sm">
                               {viewPlayerProfile.badges?.find(
                                 (badge) => badge.key === viewPlayerProfile.selectedBadgeKey,
                               )?.description ?? "Информация о бейдже отсутствует."}
@@ -4666,7 +4666,7 @@ export default function App() {
             </DialogHeader>
             <div className="relative">
               <div className="max-h-[60vh] overflow-y-auto pr-1 pb-2 space-y-3 [scrollbar-width:thin] [scrollbar-color:rgba(113,113,122,0.9)_rgba(24,24,27,0.45)] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-zinc-900/55 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-700/85 [&::-webkit-scrollbar-thumb:hover]:bg-zinc-500">
-                <div className="sticky top-0 z-20 -mx-1 border-y border-zinc-800 bg-zinc-950/95 px-3 py-2 text-center text-xs uppercase tracking-[0.12em] text-zinc-400">
+                <div className="-mx-1 rounded-md border-y border-zinc-800 bg-zinc-950/95 px-3 py-2 text-center text-xs uppercase tracking-[0.12em] text-zinc-400">
                   Получаемые
                 </div>
                 {badges
@@ -4718,7 +4718,7 @@ export default function App() {
                       </div>
                     </div>
                   ))}
-                <div className="sticky top-0 z-20 -mx-1 border-y border-zinc-800 bg-zinc-950/95 px-3 py-2 text-center text-xs uppercase tracking-[0.12em] text-zinc-400">
+                <div className="-mx-1 rounded-md border-y border-zinc-800 bg-zinc-950/95 px-3 py-2 text-center text-xs uppercase tracking-[0.12em] text-zinc-400">
                   Выдаваемые
                 </div>
                 {badges
@@ -7570,9 +7570,9 @@ export default function App() {
             </InfoBlock>
           </div>
           {matchExpiresAt !== null && !game.finished && (
-            <div className="fixed bottom-3 left-3 sm:bottom-4 sm:left-4 z-30 rounded-xl border border-zinc-700/80 bg-zinc-950/85 px-2.5 sm:px-3 py-1.5 sm:py-2 text-[11px] sm:text-xs font-semibold text-zinc-200 shadow-[0_8px_22px_rgba(0,0,0,0.45)] backdrop-blur-sm">
-              <span className="sm:hidden">
-                ⏱{" "}
+            <div className="fixed bottom-5 left-3 sm:bottom-5 sm:left-4 z-30 rounded-xl border border-zinc-700/80 bg-zinc-950/85 px-2.5 sm:px-3 py-1.5 sm:py-2 text-[11px] sm:text-xs font-semibold text-zinc-200 shadow-[0_8px_22px_rgba(0,0,0,0.45)] backdrop-blur-sm">
+              <span className="sm:hidden inline-flex items-center gap-1.5">
+                <span>⏱</span>
                 <span className="text-red-300">
                   {String(matchHoursLeft).padStart(2, "0")}:
                   {String(matchMinutesLeft).padStart(2, "0")}:

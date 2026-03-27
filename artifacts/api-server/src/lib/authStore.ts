@@ -120,7 +120,7 @@ const MANUAL_BADGE_META: Record<
 > = {
   media: {
     title: "Медиа",
-    description: "Выдается вручную.",
+    description: "За медиа-статус и вклад в контент по CourtGame.",
   },
   creator: {
     title: "Создатель",
