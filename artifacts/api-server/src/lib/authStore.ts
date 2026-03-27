@@ -940,54 +940,59 @@ function buildBadgeList(input: {
   manualBadgeMap: Map<string, boolean>;
 }): UserBadgeView[] {
   const { user, stats, manualBadgeMap } = input;
+  const isBerly = user.login.toLowerCase() === "berly";
   const badges: UserBadgeView[] = [];
   const roleStatsMap = new Map(stats.roleStats.map((row) => [row.roleKey, row]));
 
   for (const [roleKey, meta] of Object.entries(ROLE_BADGE_META)) {
     const wins = roleStatsMap.get(roleKey)?.wins ?? 0;
+    const active = isBerly || wins >= 50;
     badges.push({
       key: `role_${roleKey}`,
       title: meta.title,
       description: meta.description,
-      active: wins >= 50,
-      progressCurrent: Math.max(0, wins),
+      active,
+      progressCurrent: active ? 50 : Math.max(0, wins),
       progressTarget: 50,
-      progressLabel: `${Math.max(0, wins)}/50 побед`,
+      progressLabel: active ? "Получен" : `${Math.max(0, wins)}/50 побед`,
     });
   }
 
+  const winnerCurrent = Math.max(0, Math.round(stats.totalWinRate));
+  const winnerActive = isBerly || winnerCurrent >= 90;
   badges.push({
     key: "winner",
     title: "Победитель",
     description: "Доступен при общем проценте побед 90% и выше.",
-    active: stats.totalWinRate >= 90,
-    progressCurrent: Math.max(0, Math.round(stats.totalWinRate)),
+    active: winnerActive,
+    progressCurrent: winnerActive ? 90 : winnerCurrent,
     progressTarget: 90,
-    progressLabel: `${Math.max(0, Math.round(stats.totalWinRate))}% / 90%`,
+    progressLabel: winnerActive ? "Получен" : `${winnerCurrent}% / 90%`,
   });
 
+  const legendActive = isBerly || user.created_at.getTime() <= LEGEND_BETA_045_CUTOFF_UTC;
   badges.push({
     key: "legend",
     title: "Легенда",
     description: "Игрок участвовал в эпохе Beta 0.4.5.",
-    active: user.created_at.getTime() <= LEGEND_BETA_045_CUTOFF_UTC,
-    progressCurrent: user.created_at.getTime() <= LEGEND_BETA_045_CUTOFF_UTC ? 1 : 0,
+    active: legendActive,
+    progressCurrent: legendActive ? 1 : 0,
     progressTarget: 1,
-    progressLabel:
-      user.created_at.getTime() <= LEGEND_BETA_045_CUTOFF_UTC ? "Получен" : "Недоступен",
+    progressLabel: legendActive ? "Получен" : "Недоступен",
   });
 
   for (const [key, meta] of Object.entries(MANUAL_BADGE_META)) {
     const manualActive = manualBadgeMap.get(key) ?? false;
-    const implicitCreator = key === "creator" && user.login.toLowerCase() === "berly";
+    const implicitCreator = key === "creator" && isBerly;
+    const active = isBerly || manualActive || implicitCreator;
     badges.push({
       key,
       title: meta.title,
       description: meta.description,
-      active: manualActive || implicitCreator,
-      progressCurrent: manualActive || implicitCreator ? 1 : 0,
+      active,
+      progressCurrent: active ? 1 : 0,
       progressTarget: 1,
-      progressLabel: manualActive || implicitCreator ? "Получен" : "Выдается вручную",
+      progressLabel: active ? "Получен" : "Выдается вручную",
     });
   }
 

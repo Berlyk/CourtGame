@@ -32,7 +32,10 @@ import {
   ArrowLeft,
   LogIn,
   FlipHorizontal,
+  Laptop,
+  CalendarDays,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { getSocket } from "@/lib/socket";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -115,21 +118,21 @@ const BANNER_STORAGE_KEY = "court_banner";
 const GUEST_NAME_PREFIX = "Гость-";
 const PROFILE_BIO_MAX = 150;
 
-const BADGE_SYMBOLS: Record<string, string> = {
-  plaintiff: "⚖",
-  defendant: "🛡",
-  plaintiffLawyer: "📘",
-  defenseLawyer: "📗",
-  prosecutor: "⚔",
-  judge: "🏛",
-  winner: "🏆",
-  legend: "✦",
-  media: "🎥",
-  creator: "💻",
-  host: "🎙",
-  innovator: "💡",
-  moderator: "🛠",
-  admin: "👑",
+const BADGE_ICONS: Record<string, LucideIcon> = {
+  plaintiff: Scale,
+  defendant: Shield,
+  plaintiffLawyer: UserCircle2,
+  defenseLawyer: UserCircle2,
+  prosecutor: Gavel,
+  judge: Gavel,
+  winner: Sparkles,
+  legend: Sparkles,
+  media: Camera,
+  creator: Laptop,
+  host: MessageSquare,
+  innovator: Wrench,
+  moderator: Wrench,
+  admin: Shield,
 };
 
 const BADGE_THEME: Record<
@@ -142,72 +145,72 @@ const BADGE_THEME: Record<
 > = {
   plaintiff: {
     chip: "border-sky-500/55 bg-sky-500/20 text-sky-200",
-    icon: "border-sky-500/45 bg-sky-500/25 text-sky-200",
+    icon: "bg-sky-500/30 text-sky-100",
     iconOnly: "text-sky-300",
   },
   defendant: {
     chip: "border-zinc-500/65 bg-zinc-500/20 text-zinc-200",
-    icon: "border-zinc-500/45 bg-zinc-500/25 text-zinc-200",
+    icon: "bg-zinc-500/35 text-zinc-100",
     iconOnly: "text-zinc-200",
   },
   plaintiffLawyer: {
     chip: "border-indigo-500/55 bg-indigo-500/20 text-indigo-200",
-    icon: "border-indigo-500/45 bg-indigo-500/25 text-indigo-200",
+    icon: "bg-indigo-500/35 text-indigo-100",
     iconOnly: "text-indigo-300",
   },
   defenseLawyer: {
     chip: "border-emerald-500/55 bg-emerald-500/20 text-emerald-200",
-    icon: "border-emerald-500/45 bg-emerald-500/25 text-emerald-200",
+    icon: "bg-emerald-500/35 text-emerald-100",
     iconOnly: "text-emerald-300",
   },
   prosecutor: {
     chip: "border-orange-500/55 bg-orange-500/20 text-orange-200",
-    icon: "border-orange-500/45 bg-orange-500/25 text-orange-200",
+    icon: "bg-orange-500/35 text-orange-100",
     iconOnly: "text-orange-300",
   },
   judge: {
     chip: "border-violet-500/55 bg-violet-500/20 text-violet-200",
-    icon: "border-violet-500/45 bg-violet-500/25 text-violet-200",
+    icon: "bg-violet-500/35 text-violet-100",
     iconOnly: "text-violet-300",
   },
   winner: {
     chip: "border-yellow-500/55 bg-yellow-500/20 text-yellow-200",
-    icon: "border-yellow-500/45 bg-yellow-500/25 text-yellow-200",
+    icon: "bg-yellow-500/35 text-yellow-100",
     iconOnly: "text-yellow-300",
   },
   legend: {
     chip: "border-fuchsia-500/55 bg-fuchsia-500/20 text-fuchsia-200",
-    icon: "border-fuchsia-500/45 bg-fuchsia-500/25 text-fuchsia-200",
+    icon: "bg-fuchsia-500/35 text-fuchsia-100",
     iconOnly: "text-fuchsia-300",
   },
   media: {
     chip: "border-cyan-500/55 bg-cyan-500/20 text-cyan-200",
-    icon: "border-cyan-500/45 bg-cyan-500/25 text-cyan-200",
+    icon: "bg-cyan-500/35 text-cyan-100",
     iconOnly: "text-cyan-300",
   },
   creator: {
     chip: "border-red-500/65 bg-red-600/25 text-red-100",
-    icon: "border-red-500/55 bg-red-700/35 text-emerald-300",
+    icon: "bg-red-700/45 text-emerald-300",
     iconOnly: "text-emerald-300",
   },
   host: {
     chip: "border-rose-500/55 bg-rose-500/20 text-rose-200",
-    icon: "border-rose-500/45 bg-rose-500/25 text-rose-200",
+    icon: "bg-rose-500/35 text-rose-100",
     iconOnly: "text-rose-300",
   },
   innovator: {
     chip: "border-lime-500/55 bg-lime-500/20 text-lime-200",
-    icon: "border-lime-500/45 bg-lime-500/25 text-lime-200",
+    icon: "bg-lime-500/35 text-lime-100",
     iconOnly: "text-lime-300",
   },
   moderator: {
     chip: "border-amber-500/55 bg-amber-500/20 text-amber-200",
-    icon: "border-amber-500/45 bg-amber-500/25 text-amber-200",
+    icon: "bg-amber-500/35 text-amber-100",
     iconOnly: "text-amber-300",
   },
   admin: {
     chip: "border-purple-500/55 bg-purple-500/20 text-purple-200",
-    icon: "border-purple-500/45 bg-purple-500/25 text-purple-200",
+    icon: "bg-purple-500/35 text-purple-100",
     iconOnly: "text-purple-300",
   },
 };
@@ -1493,34 +1496,17 @@ function Avatar({
   );
 }
 
-function hashSeed(value: string): number {
-  let hash = 0;
-  for (let index = 0; index < value.length; index += 1) {
-    hash = (hash << 5) - hash + value.charCodeAt(index);
-    hash |= 0;
-  }
-  return Math.abs(hash);
-}
-
-function buildAutoBannerGradient(seedRaw: string): string {
-  const seed = hashSeed(seedRaw || "courtgame");
-  const hue = seed % 360;
-  const accentHue = (hue + 20) % 360;
-  return `linear-gradient(135deg, hsla(${hue}, 65%, 42%, 0.42) 0%, hsla(${accentHue}, 58%, 30%, 0.28) 52%, hsla(228, 20%, 11%, 0.94) 100%)`;
-}
-
 function buildNeutralBannerGradient(): string {
   return "linear-gradient(180deg, rgba(70,74,84,0.88) 0%, rgba(46,49,58,0.9) 100%)";
 }
 
 function getBannerStyle(
   banner: string | null | undefined,
-  avatar: string | null | undefined,
-  seedName: string,
+  _avatar: string | null | undefined,
+  _seedName: string,
 ): React.CSSProperties {
   const normalizedBanner = typeof banner === "string" ? banner.trim() : "";
-  const normalizedAvatar = typeof avatar === "string" ? avatar.trim() : "";
-  if (normalizedBanner && normalizedBanner !== normalizedAvatar) {
+  if (normalizedBanner) {
     return {
       backgroundImage: `url(${normalizedBanner})`,
       backgroundSize: "cover",
@@ -1528,13 +1514,8 @@ function getBannerStyle(
       backgroundRepeat: "no-repeat",
     };
   }
-  if (!normalizedAvatar) {
-    return {
-      backgroundImage: buildNeutralBannerGradient(),
-    };
-  }
   return {
-    backgroundImage: buildAutoBannerGradient(normalizedAvatar || seedName),
+    backgroundImage: buildNeutralBannerGradient(),
   };
 }
 
@@ -1621,8 +1602,8 @@ async function cropImageDataUrl(options: {
 
       const extraX = Math.max(0, sourceWidth - cropWidth);
       const extraY = Math.max(0, sourceHeight - cropHeight);
-      const sx = clampNumber(extraX / 2 + (extraX / 2) * offsetX, 0, extraX);
-      const sy = clampNumber(extraY / 2 + (extraY / 2) * offsetY, 0, extraY);
+      const sx = clampNumber(extraX / 2 - (extraX / 2) * offsetX, 0, extraX);
+      const sy = clampNumber(extraY / 2 - (extraY / 2) * offsetY, 0, extraY);
 
       const canvas = document.createElement("canvas");
       canvas.width = outputWidth;
@@ -1770,9 +1751,23 @@ function localizeAuthError(message: string): string {
   return "Произошла ошибка. Попробуйте снова.";
 }
 
-function getBadgeSymbol(badgeKey?: string): string {
-  if (!badgeKey) return "★";
-  return BADGE_SYMBOLS[badgeKey] ?? "★";
+function isNicknameTakenError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("никнейм уже занят") ||
+    normalized.includes("логин уже занят") ||
+    normalized.includes("nickname already taken") ||
+    normalized.includes("login already taken")
+  );
+}
+
+function isEmailTakenError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("эта почта уже используется") ||
+    normalized.includes("эта почта уже занята") ||
+    normalized.includes("email already taken")
+  );
 }
 
 function getBadgeTheme(
@@ -1790,6 +1785,20 @@ function getBadgeTheme(
     icon: "border-zinc-600 bg-zinc-800/60 text-zinc-200",
     iconOnly: "text-zinc-300",
   };
+}
+
+function BadgeGlyph({
+  badgeKey,
+  className = "",
+}: {
+  badgeKey?: string;
+  className?: string;
+}) {
+  const Icon = badgeKey ? BADGE_ICONS[badgeKey] : undefined;
+  if (!Icon) {
+    return <span className={className}>★</span>;
+  }
+  return <Icon className={className} />;
 }
 
 function getBadgeTitleByKey(
@@ -1816,7 +1825,6 @@ function PlayerCard({
   nowTs: number;
 }) {
   const canOpenProfile = !!player.userId && !!onOpenProfile;
-  const badgeSymbol = getBadgeSymbol(player.selectedBadgeKey);
   const badgeTheme = getBadgeTheme(player.selectedBadgeKey);
   const disconnectRemainingMs =
     typeof player.disconnectedUntil === "number"
@@ -1852,15 +1860,15 @@ function PlayerCard({
             <Avatar src={player.avatar ?? null} name={player.name} size={72} />
             <div className="min-w-0">
               <div className="font-semibold text-base truncate inline-flex items-center gap-2">
+                <span className="truncate">{player.name}</span>
                 {player.selectedBadgeKey ? (
                   <span
-                    className={`inline-flex h-5 min-w-5 items-center justify-center px-0.5 text-xs font-bold leading-none ${badgeTheme.iconOnly ?? "text-zinc-300"}`}
+                    className={`inline-flex h-5 min-w-5 items-center justify-center rounded-md px-1 ${badgeTheme.icon}`}
                     title={getBadgeTitleByKey(player.selectedBadgeKey)}
                   >
-                    {badgeSymbol}
+                    <BadgeGlyph badgeKey={player.selectedBadgeKey} className="h-3.5 w-3.5" />
                   </span>
                 ) : null}
-                <span className="truncate">{player.name}</span>
               </div>
               <div className="text-sm text-zinc-400">
                 {isHost ? "Ведущий комнаты" : "Игрок"}
@@ -2028,6 +2036,8 @@ export default function App() {
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState("");
+  const [registerLoginError, setRegisterLoginError] = useState("");
+  const [registerEmailError, setRegisterEmailError] = useState("");
   const [loginOrEmail, setLoginOrEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [registerLogin, setRegisterLogin] = useState("");
@@ -2042,6 +2052,8 @@ export default function App() {
   const [profileBio, setProfileBio] = useState("");
   const [profileGender, setProfileGender] = useState<"" | "male" | "female" | "other">("");
   const [profileBirthDate, setProfileBirthDate] = useState("");
+  const [profileNicknameError, setProfileNicknameError] = useState("");
+  const [profileBirthDateError, setProfileBirthDateError] = useState("");
   const [profileHideAge, setProfileHideAge] = useState(false);
   const [emailChangeCurrentPassword, setEmailChangeCurrentPassword] = useState("");
   const [emailChangeNext, setEmailChangeNext] = useState("");
@@ -2131,6 +2143,7 @@ export default function App() {
 
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
+  const profileBirthDateRef = useRef<HTMLInputElement>(null);
   const lobbyChatScrollRef = useRef<HTMLDivElement>(null);
   const lawyerChatScrollRef = useRef<HTMLDivElement>(null);
   const imageCropDragStateRef = useRef<{
@@ -2318,12 +2331,8 @@ export default function App() {
                             getBadgeTheme(viewPlayerProfile.selectedBadgeKey).chip
                           }`}
                         >
-                          <span
-                            className={`inline-flex h-5 min-w-5 items-center justify-center rounded-md border px-1 text-[10px] font-bold leading-none ${
-                              getBadgeTheme(viewPlayerProfile.selectedBadgeKey).icon
-                            }`}
-                          >
-                            {getBadgeSymbol(viewPlayerProfile.selectedBadgeKey)}
+                          <span className={`inline-flex items-center justify-center ${getBadgeTheme(viewPlayerProfile.selectedBadgeKey).iconOnly ?? "text-zinc-300"}`}>
+                            <BadgeGlyph badgeKey={viewPlayerProfile.selectedBadgeKey} className="h-3.5 w-3.5" />
                           </span>
                           <span>
                             {getBadgeTitleByKey(
@@ -2340,22 +2349,30 @@ export default function App() {
                   </div>
                 </div>
               </div>
-              <div className="grid grid-cols-1 gap-3 text-sm">
+              {(viewPlayerProfile.gender || typeof viewPlayerProfile.age === "number") && (
+                <div className="grid grid-cols-1 gap-3 text-sm">
+                  {viewPlayerProfile.gender && (
+                    <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2">
+                      <div className="text-zinc-500 text-xs">Пол</div>
+                      <div className="text-zinc-100 mt-1">{genderLabel}</div>
+                    </div>
+                  )}
+                  {typeof viewPlayerProfile.age === "number" && (
+                    <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2">
+                      <div className="text-zinc-500 text-xs">Возраст</div>
+                      <div className="text-zinc-100 mt-1">{ageLabel}</div>
+                    </div>
+                  )}
+                </div>
+              )}
+              {viewPlayerProfile.bio?.trim() && (
                 <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2">
-                  <div className="text-zinc-500 text-xs">Пол</div>
-                  <div className="text-zinc-100 mt-1">{genderLabel}</div>
+                  <div className="text-zinc-500 text-xs">О себе</div>
+                  <div className="text-zinc-100 mt-1 whitespace-pre-wrap break-all overflow-hidden">
+                    {viewPlayerProfile.bio}
+                  </div>
                 </div>
-                <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2">
-                  <div className="text-zinc-500 text-xs">Возраст</div>
-                  <div className="text-zinc-100 mt-1">{ageLabel}</div>
-                </div>
-              </div>
-              <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2">
-                <div className="text-zinc-500 text-xs">О себе</div>
-                <div className="text-zinc-100 mt-1 whitespace-pre-wrap break-all overflow-hidden">
-                  {viewPlayerProfile.bio?.trim() ? viewPlayerProfile.bio : "Пока без описания."}
-                </div>
-              </div>
+              )}
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-2 py-2">
                   <div className="text-[11px] text-zinc-500">Матчей</div>
@@ -3228,22 +3245,21 @@ export default function App() {
 
   const saveExtendedProfile = useCallback(async () => {
     if (!authToken) return;
+    setProfileNicknameError("");
+    setProfileBirthDateError("");
     const normalizedName = profileNicknameDraft.trim();
     if (!normalizedName) {
-      setError("Введите никнейм.");
-      setTimeout(() => setError(""), 2500);
+      setProfileNicknameError("Введите никнейм.");
       return;
     }
     const normalizedBirthDate = profileBirthDate.trim();
     if (normalizedBirthDate && !/^\d{4}-\d{2}-\d{2}$/.test(normalizedBirthDate)) {
-      setError("Дата рождения должна быть в формате ГГГГ-ММ-ДД.");
-      setTimeout(() => setError(""), 3000);
+      setProfileBirthDateError("Укажите верную дату рождения.");
       return;
     }
     const age = computeAgeFromIsoDate(normalizedBirthDate || undefined);
     if (normalizedBirthDate && typeof age !== "number") {
-      setError("Укажите корректную дату рождения.");
-      setTimeout(() => setError(""), 3000);
+      setProfileBirthDateError("Укажите верную дату рождения.");
       return;
     }
     setProfileActionLoading(true);
@@ -3292,8 +3308,12 @@ export default function App() {
       await reloadMyProfile();
     } catch (err) {
       const message = err instanceof Error ? localizeAuthError(err.message) : "Ошибка обновления профиля.";
-      setError(message);
-      setTimeout(() => setError(""), 3500);
+      if (isNicknameTakenError(message)) {
+        setProfileNicknameError("Этот ник уже занят.");
+      } else {
+        setError(message);
+        setTimeout(() => setError(""), 3500);
+      }
     } finally {
       setProfileActionLoading(false);
     }
@@ -3516,6 +3536,8 @@ export default function App() {
     if (authLoading) return;
     setAuthLoading(true);
     setAuthError("");
+    setRegisterLoginError("");
+    setRegisterEmailError("");
     try {
       const payload = await authRequest<{ user: AuthUser; token: string }>("/auth/register", {
         method: "POST",
@@ -3532,7 +3554,14 @@ export default function App() {
       setRegisterConfirmPassword("");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Не удалось зарегистрироваться.";
-      setAuthError(localizeAuthError(message));
+      const localized = localizeAuthError(message);
+      if (isNicknameTakenError(localized)) {
+        setRegisterLoginError("Этот ник уже занят.");
+      } else if (isEmailTakenError(localized)) {
+        setRegisterEmailError("Эта почта уже занята.");
+      } else {
+        setAuthError(localized);
+      }
     } finally {
       setAuthLoading(false);
     }
@@ -4083,12 +4112,8 @@ export default function App() {
                                   getBadgeTheme(selectedBadgeKey).chip
                                 }`}
                               >
-                                <span
-                                  className={`inline-flex h-5 min-w-5 items-center justify-center rounded-md border px-1 text-[10px] font-bold leading-none ${
-                                    getBadgeTheme(selectedBadgeKey).icon
-                                  }`}
-                                >
-                                  {getBadgeSymbol(selectedBadgeKey)}
+                                <span className={`inline-flex items-center justify-center ${getBadgeTheme(selectedBadgeKey).iconOnly ?? "text-zinc-300"}`}>
+                                  <BadgeGlyph badgeKey={selectedBadgeKey} className="h-3.5 w-3.5" />
                                 </span>
                                 {getBadgeTitleByKey(selectedBadgeKey, badges)}
                               </span>
@@ -4149,10 +4174,16 @@ export default function App() {
                         <label className="text-sm text-zinc-300">Никнейм</label>
                         <Input
                           value={profileNicknameDraft}
-                          onChange={(e) => handlePlayerNameChange(e.target.value)}
+                          onChange={(e) => {
+                            handlePlayerNameChange(e.target.value);
+                            if (profileNicknameError) setProfileNicknameError("");
+                          }}
                           placeholder="Например: Berly"
                           className="mt-2 h-11 rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-red-500/40"
                         />
+                        {profileNicknameError ? (
+                          <div className="mt-1 px-1 text-xs text-red-300">{profileNicknameError}</div>
+                        ) : null}
                       </div>
                       <div className="md:col-span-2">
                         <label className="text-sm text-zinc-300">О себе</label>
@@ -4196,12 +4227,37 @@ export default function App() {
                       </div>
                       <div className="max-w-[240px]">
                         <label className="text-sm text-zinc-300">Дата рождения</label>
-                        <Input
-                          type="date"
-                          value={profileBirthDate}
-                          onChange={(e) => setProfileBirthDate(e.target.value)}
-                          className="mt-2 h-11 rounded-xl border border-zinc-700 bg-zinc-900 pr-3 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-red-500/40 [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:opacity-80"
-                        />
+                        <div className="relative mt-2">
+                          <Input
+                            ref={profileBirthDateRef}
+                            type="date"
+                            value={profileBirthDate}
+                            onChange={(e) => {
+                              setProfileBirthDate(e.target.value);
+                              if (profileBirthDateError) setProfileBirthDateError("");
+                            }}
+                            className="h-11 rounded-xl border border-zinc-700 bg-zinc-900 pr-11 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-red-500/40 [color-scheme:dark] appearance-none [-webkit-appearance:none] [-moz-appearance:textfield] [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-0 [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:w-10 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+                          />
+                          <button
+                            type="button"
+                            className="absolute right-2 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md border border-zinc-700 bg-zinc-900 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+                            onClick={() => {
+                              const picker = profileBirthDateRef.current;
+                              if (!picker) return;
+                              if ("showPicker" in picker) {
+                                (picker as HTMLInputElement & { showPicker?: () => void }).showPicker?.();
+                              } else {
+                                picker.focus();
+                              }
+                            }}
+                            aria-label="Выбрать дату рождения"
+                          >
+                            <CalendarDays className="h-4 w-4" />
+                          </button>
+                        </div>
+                        {profileBirthDateError ? (
+                          <div className="mt-1 px-1 text-xs text-red-300">{profileBirthDateError}</div>
+                        ) : null}
                       </div>
                     </div>
 
@@ -4316,12 +4372,8 @@ export default function App() {
                             }`}
                           >
                             <div className="flex items-center gap-2">
-                              <span
-                                className={`inline-flex h-6 min-w-6 items-center justify-center rounded-md border text-xs font-bold ${
-                                  getBadgeTheme(badge.key).icon
-                                }`}
-                              >
-                                {getBadgeSymbol(badge.key)}
+                              <span className={`inline-flex items-center justify-center ${getBadgeTheme(badge.key).iconOnly ?? "text-zinc-300"}`}>
+                                <BadgeGlyph badgeKey={badge.key} className="h-4 w-4" />
                               </span>
                               <div className="text-sm font-semibold">{badge.title}</div>
                             </div>
@@ -4421,22 +4473,12 @@ export default function App() {
                 {badges.map((badge) => (
                   <div
                     key={`rules-${badge.key}`}
-                    className={`rounded-xl border px-3 py-3 ${
-                      badge.active
-                        ? "border-red-500/45 bg-red-600/12"
-                        : "border-zinc-800 bg-zinc-900/55"
-                    }`}
+                    className={`rounded-xl border px-3 py-3 ${getBadgeTheme(badge.key).chip}`}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-2 min-w-0">
-                        <span
-                          className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-[11px] ${
-                            badge.active
-                              ? "border-red-400/70 bg-red-500/25 text-red-100"
-                              : "border-zinc-700 bg-zinc-800 text-zinc-300"
-                          }`}
-                        >
-                          ★
+                        <span className={`inline-flex shrink-0 items-center justify-center ${getBadgeTheme(badge.key).iconOnly ?? "text-zinc-300"}`}>
+                          <BadgeGlyph badgeKey={badge.key} className="h-4 w-4" />
                         </span>
                         <div className="text-sm font-semibold truncate">{badge.title}</div>
                       </div>
@@ -4451,7 +4493,7 @@ export default function App() {
                       <div className="mt-1 h-1.5 w-full rounded-full bg-zinc-800">
                         <div
                           className={`h-1.5 rounded-full transition-all ${
-                            badge.active ? "bg-red-500" : "bg-zinc-600"
+                            badge.active ? "bg-red-500" : "bg-zinc-700"
                           }`}
                           style={{
                             width: `${Math.max(
@@ -4568,7 +4610,7 @@ export default function App() {
               <div className="space-y-4">
                 <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
                   <div
-                    className={`relative mx-auto overflow-hidden bg-zinc-950 ${imageCropTarget === "avatar" ? "h-[280px] w-[280px] rounded-full border border-zinc-700" : "h-[220px] w-full rounded-xl border border-zinc-700"}`}
+                    className={`relative mx-auto overflow-hidden bg-zinc-950 ${imageCropTarget === "avatar" ? "h-[280px] w-[280px] rounded-full border border-zinc-700" : "w-full max-w-[820px] aspect-[32/9] rounded-xl border border-zinc-700"}`}
                     onPointerDown={startImageCropDrag}
                     onPointerMove={moveImageCropDrag}
                     onPointerUp={endImageCropDrag}
@@ -4583,7 +4625,7 @@ export default function App() {
                         transform: `translate(calc(-50% + ${imageCropOffsetX}px), calc(-50% + ${imageCropOffsetY}px)) scaleX(${imageCropFlipX ? -1 : 1}) scale(${imageCropZoom})`,
                         transformOrigin: "center center",
                         width: imageCropTarget === "avatar" ? "280px" : "100%",
-                        height: imageCropTarget === "avatar" ? "280px" : "220px",
+                        height: imageCropTarget === "avatar" ? "280px" : "100%",
                         objectFit: "cover",
                       }}
                     />
@@ -4846,6 +4888,8 @@ export default function App() {
                           onClick={() => {
                             setAuthMode("login");
                             setAuthError("");
+                            setRegisterLoginError("");
+                            setRegisterEmailError("");
                           }}
                           className={
                             authMode === "login"
@@ -4861,6 +4905,8 @@ export default function App() {
                           onClick={() => {
                             setAuthMode("register");
                             setAuthError("");
+                            setRegisterLoginError("");
+                            setRegisterEmailError("");
                           }}
                           className={
                             authMode === "register"
@@ -4914,16 +4960,28 @@ export default function App() {
                         <div className="space-y-2">
                           <Input
                             value={registerLogin}
-                            onChange={(e) => setRegisterLogin(e.target.value.slice(0, 20))}
+                            onChange={(e) => {
+                              setRegisterLogin(e.target.value.slice(0, 20));
+                              if (registerLoginError) setRegisterLoginError("");
+                            }}
                             placeholder="Логин"
                             className="h-11 rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-red-500/40"
                           />
+                          {registerLoginError ? (
+                            <div className="px-1 text-xs text-red-300">{registerLoginError}</div>
+                          ) : null}
                           <Input
                             value={registerEmail}
-                            onChange={(e) => setRegisterEmail(e.target.value)}
+                            onChange={(e) => {
+                              setRegisterEmail(e.target.value);
+                              if (registerEmailError) setRegisterEmailError("");
+                            }}
                             placeholder="Почта"
                             className="h-11 rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-red-500/40"
                           />
+                          {registerEmailError ? (
+                            <div className="px-1 text-xs text-red-300">{registerEmailError}</div>
+                          ) : null}
                           <div className="relative">
                             <Input
                               type={showRegisterPassword ? "text" : "password"}
@@ -6467,17 +6525,17 @@ export default function App() {
                             }`}
                           >
                             <Avatar src={p.avatar ?? null} name={p.name} size={32} />
+                            <span className="truncate">{p.name}</span>
                             {p.selectedBadgeKey ? (
                               <span
-                                className={`inline-flex h-4 min-w-4 items-center justify-center px-0.5 text-[11px] font-bold leading-none ${
-                                  getBadgeTheme(p.selectedBadgeKey).iconOnly ?? "text-zinc-300"
+                                className={`inline-flex h-4 min-w-4 items-center justify-center rounded px-0.5 ${
+                                  getBadgeTheme(p.selectedBadgeKey).icon
                                 }`}
                                 title={getBadgeTitleByKey(p.selectedBadgeKey)}
                               >
-                                {getBadgeSymbol(p.selectedBadgeKey)}
+                                <BadgeGlyph badgeKey={p.selectedBadgeKey} className="h-3 w-3" />
                               </span>
                             ) : null}
-                            <span className="truncate">{p.name}</span>
                           </div>
                           {(p.warningCount ?? 0) > 0 && (
                             <Badge className="bg-red-950/70 text-red-300 border border-red-700/70">
