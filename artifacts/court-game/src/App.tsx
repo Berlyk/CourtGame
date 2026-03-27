@@ -117,6 +117,7 @@ const AUTH_TOKEN_STORAGE_KEY = "court_auth_token";
 const AUTH_USER_STORAGE_KEY = "court_auth_user";
 const GUEST_NAME_STORAGE_KEY = "court_guest_name";
 const BANNER_STORAGE_KEY = "court_banner";
+const RECONNECT_PERSISTENT_STORAGE_KEY = "court_reconnect_persistent";
 const GUEST_NAME_PREFIX = "Гость-";
 const PROFILE_BIO_MAX = 150;
 
@@ -2144,6 +2145,9 @@ export default function App() {
     const parsed = raw ? Number(raw) : NaN;
     return Number.isFinite(parsed) ? parsed : null;
   });
+  const [reconnectPersistent, setReconnectPersistent] = useState<boolean>(() => {
+    return localStorage.getItem(RECONNECT_PERSISTENT_STORAGE_KEY) === "1";
+  });
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [createMatchDialogOpen, setCreateMatchDialogOpen] = useState(false);
@@ -2274,11 +2278,13 @@ export default function App() {
 
   const clearReconnectWindow = useCallback(() => {
     localStorage.removeItem("court_reconnect_expires_at");
+    localStorage.removeItem(RECONNECT_PERSISTENT_STORAGE_KEY);
     setReconnectExpiresAt(null);
+    setReconnectPersistent(false);
   }, []);
 
   const startReconnectWindow = useCallback(
-    (expiresAt?: number | null) => {
+    (expiresAt?: number | null, persistent = false) => {
       const fallbackCode = room?.code ?? game?.code ?? localStorage.getItem("court_session");
       const fallbackToken = mySessionToken ?? localStorage.getItem("court_session_token");
       if (!fallbackCode || !fallbackToken) {
@@ -2286,14 +2292,25 @@ export default function App() {
         return;
       }
 
-      const safeExpiresAt =
-        typeof expiresAt === "number" && Number.isFinite(expiresAt)
+      const safeExpiresAt = persistent
+        ? null
+        : typeof expiresAt === "number" && Number.isFinite(expiresAt)
           ? expiresAt
           : Date.now() + RECONNECT_GRACE_MS;
       localStorage.setItem("court_session", fallbackCode);
       localStorage.setItem("court_session_token", fallbackToken);
-      localStorage.setItem("court_reconnect_expires_at", String(safeExpiresAt));
+      if (safeExpiresAt !== null) {
+        localStorage.setItem("court_reconnect_expires_at", String(safeExpiresAt));
+      } else {
+        localStorage.removeItem("court_reconnect_expires_at");
+      }
+      if (persistent) {
+        localStorage.setItem(RECONNECT_PERSISTENT_STORAGE_KEY, "1");
+      } else {
+        localStorage.removeItem(RECONNECT_PERSISTENT_STORAGE_KEY);
+      }
       setReconnectExpiresAt(safeExpiresAt);
+      setReconnectPersistent(persistent);
       setHasSession(true);
     },
     [clearReconnectWindow, game?.code, mySessionToken, room?.code],
@@ -2379,7 +2396,7 @@ export default function App() {
           if (!open) setViewProfileBadgeHintOpen(false);
         }}
       >
-        <DialogContent className="max-w-[420px] border-zinc-800 bg-zinc-950 text-zinc-100">
+        <DialogContent className="max-w-[520px] border-zinc-800 bg-zinc-950 text-zinc-100">
           <DialogHeader>
             <DialogTitle>Профиль игрока</DialogTitle>
             <DialogDescription className="text-zinc-400">
@@ -2435,7 +2452,7 @@ export default function App() {
                             </span>
                           </button>
                           {viewProfileBadgeHintOpen ? (
-                            <div className="absolute top-full left-0 z-40 mt-2 max-w-[260px] rounded-xl border border-zinc-700 bg-zinc-900/95 px-3 py-2 text-xs text-zinc-200 shadow-[0_10px_24px_rgba(0,0,0,0.45)] backdrop-blur-sm">
+                            <div className="absolute top-full left-0 z-[120] mt-2 w-[260px] max-w-[calc(100vw-64px)] rounded-xl border border-zinc-700 bg-zinc-900/95 px-3 py-2 text-sm leading-relaxed text-zinc-200 shadow-[0_10px_24px_rgba(0,0,0,0.45)] backdrop-blur-sm whitespace-normal break-words">
                               {viewPlayerProfile.badges?.find(
                                 (badge) => badge.key === viewPlayerProfile.selectedBadgeKey,
                               )?.description ?? "Информация о бейдже отсутствует."}
@@ -2718,6 +2735,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (reconnectPersistent) return;
     if (reconnectExpiresAt === null) return;
     if (reconnectExpiresAt > nowMs) return;
     if (room || game) return;
@@ -2727,7 +2745,7 @@ export default function App() {
     localStorage.removeItem("court_session_token");
     setHasSession(false);
     setMySessionToken(null);
-  }, [clearReconnectWindow, game, nowMs, reconnectExpiresAt, room]);
+  }, [clearReconnectWindow, game, nowMs, reconnectExpiresAt, reconnectPersistent, room]);
 
   useEffect(() => {
     if (screen !== "game" || !game || !mySessionToken) return;
@@ -3048,10 +3066,12 @@ export default function App() {
         code,
         sessionToken,
         expiresAt,
+        persistent,
       }: {
         code?: string;
         sessionToken?: string;
         expiresAt?: number;
+        persistent?: boolean;
       }) => {
         if (code) {
           localStorage.setItem("court_session", code);
@@ -3060,7 +3080,7 @@ export default function App() {
           localStorage.setItem("court_session_token", sessionToken);
           setMySessionToken(sessionToken);
         }
-        startReconnectWindow(expiresAt ?? null);
+        startReconnectWindow(expiresAt ?? null, !!persistent);
       },
     );
 
@@ -3710,7 +3730,11 @@ export default function App() {
   }, [authToken]);
 
   const reconnect = useCallback(() => {
-    if (reconnectExpiresAt !== null && reconnectExpiresAt <= Date.now()) {
+    if (
+      !reconnectPersistent &&
+      reconnectExpiresAt !== null &&
+      reconnectExpiresAt <= Date.now()
+    ) {
       clearReconnectWindow();
       localStorage.removeItem("court_session");
       localStorage.removeItem("court_session_token");
@@ -3718,7 +3742,12 @@ export default function App() {
       return;
     }
     attemptSessionRejoin("manual");
-  }, [attemptSessionRejoin, clearReconnectWindow, reconnectExpiresAt]);
+  }, [
+    attemptSessionRejoin,
+    clearReconnectWindow,
+    reconnectExpiresAt,
+    reconnectPersistent,
+  ]);
 
   const roomControlPlayerId =
     room && adminHostId === room.hostId ? adminHostId : myId;
@@ -4718,7 +4747,7 @@ export default function App() {
                       </div>
                     </div>
                   ))}
-                <div className="-mx-1 rounded-md border-y border-zinc-800 bg-zinc-950/95 px-3 py-2 text-center text-xs uppercase tracking-[0.12em] text-zinc-400">
+                <div className="mt-1 -mx-1 rounded-md border-y border-zinc-800 bg-zinc-950/95 px-3 py-2 text-center text-xs uppercase tracking-[0.12em] text-zinc-400">
                   Выдаваемые
                 </div>
                 {badges
@@ -5593,7 +5622,7 @@ export default function App() {
                           </motion.div>
 
                           <AnimatePresence>
-                            {hasSession && reconnectSecondsLeft > 0 && (
+                            {hasSession && (reconnectPersistent || reconnectSecondsLeft > 0) && (
                               <motion.div
                                 initial={{ opacity: 0, height: 0 }}
                                 animate={{ opacity: 1, height: "auto" }}
@@ -5606,7 +5635,9 @@ export default function App() {
                                     variant="outline"
                                     className="w-full h-12 rounded-xl border-red-600/50 text-red-400 hover:bg-red-600/10 hover:text-red-300 gap-2"
                                   >
-                                    ↩ Переподключиться к игре ({reconnectSecondsLeft}s)
+                                    {reconnectPersistent
+                                      ? "↩ Переподключиться к игре"
+                                      : `↩ Переподключиться к игре (${reconnectSecondsLeft}s)`}
                                   </Button>
                                 </motion.div>
                               </motion.div>
@@ -7570,7 +7601,7 @@ export default function App() {
             </InfoBlock>
           </div>
           {matchExpiresAt !== null && !game.finished && (
-            <div className="fixed bottom-5 left-3 sm:bottom-5 sm:left-4 z-30 rounded-xl border border-zinc-700/80 bg-zinc-950/85 px-2.5 sm:px-3 py-1.5 sm:py-2 text-[11px] sm:text-xs font-semibold text-zinc-200 shadow-[0_8px_22px_rgba(0,0,0,0.45)] backdrop-blur-sm">
+            <div className="fixed right-5 bottom-[68px] sm:bottom-[70px] left-auto z-30 rounded-xl border border-zinc-700/80 bg-zinc-950/85 px-2.5 sm:px-3 py-1.5 sm:py-2 text-[11px] sm:text-xs font-semibold text-zinc-200 shadow-[0_8px_22px_rgba(0,0,0,0.45)] backdrop-blur-sm">
               <span className="sm:hidden inline-flex items-center gap-1.5">
                 <span>⏱</span>
                 <span className="text-red-300">
