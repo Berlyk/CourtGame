@@ -220,7 +220,20 @@ function emitFactRevealPermissions(io: SocketIOServer, room: any) {
   });
 }
 function mapGamePlayers(players: any[]) {
-  return players.map((p: any) => ({
+  const now = Date.now();
+  return players
+    .filter((p: any) => {
+      const connected =
+        typeof p?.socketId === "string" && p.socketId.trim().length > 0;
+      if (connected) return true;
+      const isRegistered =
+        typeof p?.userId === "string" && p.userId.trim().length > 0;
+      if (isRegistered) return false;
+      return (
+        typeof p?.disconnectedUntil === "number" && p.disconnectedUntil > now
+      );
+    })
+    .map((p: any) => ({
     id: p.id,
     userId: p.userId ?? undefined,
     name: p.name,
@@ -232,11 +245,24 @@ function mapGamePlayers(players: any[]) {
     warningCount: typeof p?.warningCount === "number" ? p.warningCount : 0,
     disconnectedUntil:
       typeof p?.disconnectedUntil === "number" ? p.disconnectedUntil : undefined,
-  }));
+    }));
 }
 
 function mapLobbyPlayers(players: any[]) {
-  return players.map((p: any) => ({
+  const now = Date.now();
+  return players
+    .filter((p: any) => {
+      const connected =
+        typeof p?.socketId === "string" && p.socketId.trim().length > 0;
+      if (connected) return true;
+      const isRegistered =
+        typeof p?.userId === "string" && p.userId.trim().length > 0;
+      if (isRegistered) return false;
+      return (
+        typeof p?.disconnectedUntil === "number" && p.disconnectedUntil > now
+      );
+    })
+    .map((p: any) => ({
     id: p.id,
     userId: p.userId ?? undefined,
     name: p.name,
@@ -246,7 +272,7 @@ function mapLobbyPlayers(players: any[]) {
     warningCount: typeof p?.warningCount === "number" ? p.warningCount : 0,
     disconnectedUntil:
       typeof p?.disconnectedUntil === "number" ? p.disconnectedUntil : undefined,
-  }));
+    }));
 }
 
 interface LawyerChatMessage {
@@ -1945,6 +1971,9 @@ export function setupSocket(httpServer: HttpServer) {
       const gamePlayer = room?.game?.players.find((p: any) => p.id === info.playerId);
       const leavingPlayer = lobbyPlayer || gamePlayer;
       const leavingName = leavingPlayer?.name || "Игрок";
+      const isRegisteredPlayer =
+        typeof leavingPlayer?.userId === "string" &&
+        leavingPlayer.userId.trim().length > 0;
       const wasInGame = !!room?.game;
       const shouldPreserveReconnect =
         preserveForRejoin &&
@@ -1952,7 +1981,9 @@ export function setupSocket(httpServer: HttpServer) {
 
       if (wasInGame) {
         if (shouldPreserveReconnect) {
-          const disconnectedUntil = Date.now() + RECONNECT_GRACE_MS;
+          const disconnectedUntil = isRegisteredPlayer
+            ? undefined
+            : Date.now() + RECONNECT_GRACE_MS;
           const updatedRoom =
             markPlayerDisconnected(info.roomCode, info.playerId, disconnectedUntil) ??
             room;
@@ -1961,7 +1992,8 @@ export function setupSocket(httpServer: HttpServer) {
             code: info.roomCode,
             sessionToken: info.sessionToken,
             expiresAt: disconnectedUntil,
-            timeoutMs: RECONNECT_GRACE_MS,
+            timeoutMs: isRegisteredPlayer ? undefined : RECONNECT_GRACE_MS,
+            persistent: isRegisteredPlayer,
           });
 
           socket.to(info.roomCode).emit("player_left", {
@@ -1987,7 +2019,9 @@ export function setupSocket(httpServer: HttpServer) {
             }
           }
           emitPublicMatches(io);
-          scheduleReconnectCleanup(info.roomCode, info.playerId);
+          if (!isRegisteredPlayer) {
+            scheduleReconnectCleanup(info.roomCode, info.playerId);
+          }
         } else {
           clearReconnectCleanup(info.roomCode, info.playerId);
           const updatedRoom = removePlayer(info.roomCode, info.playerId);
@@ -2017,7 +2051,9 @@ export function setupSocket(httpServer: HttpServer) {
         }
       } else {
         if (shouldPreserveReconnect) {
-          const disconnectedUntil = Date.now() + RECONNECT_GRACE_MS;
+          const disconnectedUntil = isRegisteredPlayer
+            ? undefined
+            : Date.now() + RECONNECT_GRACE_MS;
           const updatedRoom =
             markPlayerDisconnected(info.roomCode, info.playerId, disconnectedUntil) ??
             room;
@@ -2026,7 +2062,8 @@ export function setupSocket(httpServer: HttpServer) {
             code: info.roomCode,
             sessionToken: info.sessionToken,
             expiresAt: disconnectedUntil,
-            timeoutMs: RECONNECT_GRACE_MS,
+            timeoutMs: isRegisteredPlayer ? undefined : RECONNECT_GRACE_MS,
+            persistent: isRegisteredPlayer,
           });
           socket.to(info.roomCode).emit("room_updated", {
             players: mapLobbyPlayers(updatedRoom.players),
@@ -2042,7 +2079,9 @@ export function setupSocket(httpServer: HttpServer) {
             lobbyChat: updatedRoom.lobbyChat,
           });
           emitPublicMatches(io);
-          scheduleReconnectCleanup(info.roomCode, info.playerId);
+          if (!isRegisteredPlayer) {
+            scheduleReconnectCleanup(info.roomCode, info.playerId);
+          }
         } else {
           clearReconnectCleanup(info.roomCode, info.playerId);
           const updatedRoom = removePlayer(info.roomCode, info.playerId);

@@ -710,7 +710,7 @@ export function removePlayer(code: string, playerId: string): Room | null {
 export function markPlayerDisconnected(
   code: string,
   playerId: string,
-  disconnectedUntil: number,
+  disconnectedUntil?: number,
 ): Room | null {
   const room = rooms.get(code);
   if (!room) return null;
@@ -718,7 +718,11 @@ export function markPlayerDisconnected(
   const applyDisconnected = (player?: Player) => {
     if (!player) return;
     player.socketId = "";
-    player.disconnectedUntil = disconnectedUntil;
+    if (typeof disconnectedUntil === "number") {
+      player.disconnectedUntil = disconnectedUntil;
+    } else {
+      player.disconnectedUntil = undefined;
+    }
   };
 
   applyDisconnected(room.players.find((p) => p.id === playerId));
@@ -766,8 +770,11 @@ function isPlayerConnected(player: Player): boolean {
 }
 
 function canStillReconnect(player: Player, nowMs: number): boolean {
+  if (isPlayerConnected(player)) return false;
+  if (typeof player?.userId === "string" && player.userId.trim().length > 0) {
+    return true;
+  }
   return (
-    !isPlayerConnected(player) &&
     typeof player?.disconnectedUntil === "number" &&
     player.disconnectedUntil > nowMs
   );
@@ -815,7 +822,7 @@ export function cleanupStaleRooms(nowMs = Date.now()): number {
     const emptyRoom = sourcePlayers.length === 0;
     const disconnectedAndExpired = !hasConnectedPlayers && !hasReconnectWindow;
     const activeMatchWithoutConnectedPlayers =
-      !!room.game && !room.game.finished && !hasConnectedPlayers;
+      !!room.game && !room.game.finished && !hasConnectedPlayers && !hasReconnectWindow;
     const matchExpiresAt =
       room.game && typeof room.game.matchExpiresAt === "number"
         ? room.game.matchExpiresAt
@@ -853,7 +860,9 @@ export function markMissingSocketPlayersDisconnected(
     if (isSocketAlive(socketId)) return;
 
     player.socketId = "";
-    if (
+    if (typeof player.userId === "string" && player.userId.trim().length > 0) {
+      player.disconnectedUntil = undefined;
+    } else if (
       typeof player.disconnectedUntil !== "number" ||
       player.disconnectedUntil < nowMs
     ) {
