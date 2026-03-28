@@ -5569,18 +5569,18 @@ export default function App() {
                       animate={
                         rankResultToast.rankUp
                           ? {
-                              scale: [1, 1.06, 1],
+                              scale: [1, 1.045, 1],
                               boxShadow: [
-                                "0 0 0 rgba(248,113,113,0)",
-                                "0 0 22px rgba(248,113,113,0.42)",
-                                "0 0 0 rgba(248,113,113,0)",
+                                "0 0 10px rgba(244,244,245,0.14)",
+                                "0 0 20px rgba(244,244,245,0.28)",
+                                "0 0 10px rgba(244,244,245,0.14)",
                               ],
                             }
                           : undefined
                       }
                       transition={
                         rankResultToast.rankUp
-                          ? { duration: 1.1, repeat: Infinity, ease: "easeInOut" }
+                          ? { duration: 1.6, repeat: Infinity, ease: "easeInOut" }
                           : undefined
                       }
                       className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wide ${getBadgeTheme(rankKeyToBadgeVisualKey(rankResultToast.toKey)).chip}`}
@@ -5596,20 +5596,28 @@ export default function App() {
                     <motion.div
                       initial={{ width: `${rankResultToast.fromProgressPercent}%` }}
                       animate={{ width: `${rankResultToast.toProgressPercent}%` }}
-                      transition={{ duration: 1.35, ease: "easeInOut" }}
+                      transition={{ duration: 2.2, ease: [0.22, 1, 0.36, 1] }}
                       className={`relative h-full rounded-full ${
                         rankResultToast.delta >= 0
-                          ? "bg-gradient-to-r from-red-700 via-red-500 to-rose-300 shadow-[0_0_16px_rgba(248,113,113,0.4)]"
+                          ? "bg-gradient-to-r from-red-700 via-red-500 to-rose-300 shadow-[0_0_12px_rgba(248,113,113,0.35)]"
                           : "bg-gradient-to-r from-zinc-600 to-zinc-500"
                       }`}
                     >
                       {rankResultToast.delta >= 0 && (
-                        <motion.span
-                          aria-hidden
-                          className="absolute inset-y-0 -left-1/3 w-1/3 bg-gradient-to-r from-transparent via-white/35 to-transparent"
-                          animate={{ x: ["-120%", "240%"] }}
-                          transition={{ duration: 1.25, repeat: Infinity, ease: "linear" }}
-                        />
+                        <>
+                          <motion.span
+                            aria-hidden
+                            className="absolute inset-y-0 -left-1/3 w-1/3 bg-gradient-to-r from-transparent via-white/30 to-transparent"
+                            animate={{ x: ["-120%", "240%"] }}
+                            transition={{ duration: 2.2, repeat: Infinity, ease: "linear" }}
+                          />
+                          <motion.span
+                            aria-hidden
+                            className="absolute inset-y-0 -left-1/3 w-1/3 bg-gradient-to-r from-transparent via-white/22 to-transparent"
+                            animate={{ x: ["-120%", "240%"] }}
+                            transition={{ duration: 2.2, repeat: Infinity, ease: "linear", delay: 1.1 }}
+                          />
+                        </>
                       )}
                     </motion.div>
                   </div>
@@ -5634,9 +5642,9 @@ export default function App() {
                       initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.5, duration: 0.35 }}
-                      className="mt-2 inline-flex items-center gap-2 rounded-full border border-red-400/45 bg-red-500/10 px-3 py-1 text-xs font-semibold text-red-200"
+                      className={`mt-2 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${getBadgeTheme(rankKeyToBadgeVisualKey(rankResultToast.toKey)).chip}`}
                     >
-                      <Sparkles className="h-3.5 w-3.5" />
+                      <Sparkles className="h-3.5 w-3.5 text-zinc-100" />
                       Получен новый ранг
                     </motion.div>
                   ) : null}
