@@ -36,6 +36,11 @@ import {
   FlipHorizontal,
   Laptop,
   CalendarDays,
+  Mic2,
+  BrainCircuit,
+  Swords,
+  Gem,
+  BookOpenText,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { getSocket } from "@/lib/socket";
@@ -133,16 +138,16 @@ const BADGE_ICONS: Record<string, LucideIcon> = {
   legend: Crown,
   media: Camera,
   creator: Laptop,
-  host: MessageSquare,
+  host: UserPlus,
   innovator: Wrench,
   moderator: Shield,
   admin: Shield,
-  rankNovice: Sparkles,
-  rankDebater: MessageSquare,
-  rankOrator: ScrollText,
-  rankStrategist: Wrench,
-  rankMaster: Crown,
-  rankVerdict: Gavel,
+  rankNovice: CircleHelp,
+  rankDebater: BookOpenText,
+  rankOrator: Mic2,
+  rankStrategist: BrainCircuit,
+  rankMaster: Swords,
+  rankVerdict: Gem,
 };
 
 const BADGE_THEME: Record<
@@ -224,34 +229,34 @@ const BADGE_THEME: Record<
     iconOnly: "text-purple-300",
   },
   rankNovice: {
-    chip: "border-slate-400/65 bg-slate-500/20 text-slate-100 shadow-[0_0_16px_rgba(148,163,184,0.25)]",
-    icon: "bg-slate-500/35 text-slate-50 shadow-[0_0_14px_rgba(148,163,184,0.4)]",
-    iconOnly: "text-slate-200 drop-shadow-[0_0_8px_rgba(203,213,225,0.55)]",
+    chip: "border-slate-400/65 bg-slate-500/20 text-slate-100 shadow-[0_0_14px_rgba(148,163,184,0.25)]",
+    icon: "bg-slate-500/35 text-slate-50 shadow-[0_0_12px_rgba(148,163,184,0.4)]",
+    iconOnly: "text-slate-200 drop-shadow-[0_0_6px_rgba(203,213,225,0.55)]",
   },
   rankDebater: {
-    chip: "border-sky-400/65 bg-sky-500/20 text-sky-100 shadow-[0_0_16px_rgba(56,189,248,0.28)]",
-    icon: "bg-sky-500/35 text-sky-50 shadow-[0_0_14px_rgba(56,189,248,0.45)]",
-    iconOnly: "text-sky-200 drop-shadow-[0_0_8px_rgba(125,211,252,0.55)]",
+    chip: "border-sky-400/70 bg-sky-500/20 text-sky-100 shadow-[0_0_14px_rgba(56,189,248,0.3)]",
+    icon: "bg-sky-500/35 text-sky-50 shadow-[0_0_12px_rgba(56,189,248,0.45)]",
+    iconOnly: "text-sky-200 drop-shadow-[0_0_6px_rgba(125,211,252,0.55)]",
   },
   rankOrator: {
-    chip: "border-violet-400/65 bg-violet-500/20 text-violet-100 shadow-[0_0_16px_rgba(168,85,247,0.28)]",
-    icon: "bg-violet-500/35 text-violet-50 shadow-[0_0_14px_rgba(168,85,247,0.45)]",
-    iconOnly: "text-violet-200 drop-shadow-[0_0_8px_rgba(196,181,253,0.55)]",
+    chip: "border-violet-400/70 bg-violet-500/20 text-violet-100 shadow-[0_0_14px_rgba(167,139,250,0.28)]",
+    icon: "bg-violet-500/35 text-violet-50 shadow-[0_0_12px_rgba(167,139,250,0.42)]",
+    iconOnly: "text-violet-200 drop-shadow-[0_0_6px_rgba(221,214,254,0.55)]",
   },
   rankStrategist: {
-    chip: "border-emerald-400/65 bg-emerald-500/20 text-emerald-100 shadow-[0_0_16px_rgba(16,185,129,0.3)]",
-    icon: "bg-emerald-500/35 text-emerald-50 shadow-[0_0_14px_rgba(16,185,129,0.45)]",
-    iconOnly: "text-emerald-200 drop-shadow-[0_0_8px_rgba(110,231,183,0.55)]",
+    chip: "border-teal-400/70 bg-teal-500/20 text-teal-100 shadow-[0_0_14px_rgba(45,212,191,0.3)]",
+    icon: "bg-teal-500/35 text-teal-50 shadow-[0_0_12px_rgba(45,212,191,0.42)]",
+    iconOnly: "text-teal-200 drop-shadow-[0_0_6px_rgba(153,246,228,0.55)]",
   },
   rankMaster: {
-    chip: "border-amber-400/70 bg-amber-500/20 text-amber-100 shadow-[0_0_18px_rgba(245,158,11,0.3)]",
-    icon: "bg-amber-500/35 text-amber-50 shadow-[0_0_16px_rgba(245,158,11,0.5)]",
-    iconOnly: "text-amber-200 drop-shadow-[0_0_8px_rgba(253,230,138,0.6)]",
+    chip: "border-red-400/70 bg-red-500/20 text-red-100 shadow-[0_0_14px_rgba(248,113,113,0.3)]",
+    icon: "bg-red-500/35 text-red-50 shadow-[0_0_12px_rgba(248,113,113,0.42)]",
+    iconOnly: "text-red-200 drop-shadow-[0_0_6px_rgba(252,165,165,0.58)]",
   },
   rankVerdict: {
-    chip: "border-red-400/70 bg-red-500/20 text-red-100 shadow-[0_0_18px_rgba(239,68,68,0.32)]",
-    icon: "bg-red-500/35 text-red-50 shadow-[0_0_16px_rgba(239,68,68,0.5)]",
-    iconOnly: "text-red-200 drop-shadow-[0_0_8px_rgba(252,165,165,0.65)]",
+    chip: "border-transparent bg-[linear-gradient(120deg,rgba(239,68,68,0.24),rgba(168,85,247,0.24))] text-red-100 shadow-[0_0_16px_rgba(239,68,68,0.35)]",
+    icon: "bg-[linear-gradient(135deg,rgba(239,68,68,0.55),rgba(168,85,247,0.55))] text-white shadow-[0_0_14px_rgba(239,68,68,0.42)]",
+    iconOnly: "text-red-200 drop-shadow-[0_0_8px_rgba(244,114,182,0.6)]",
   },
 };
 
@@ -1920,12 +1925,14 @@ function BadgeGlyph({
   const Icon = visualKey ? BADGE_ICONS[visualKey] : undefined;
   if (!Icon) {
     return (
-      <span className={`inline-flex items-center justify-center leading-none ${className}`}>
+      <span
+        className={`inline-flex items-center justify-center leading-none align-middle shrink-0 ${className}`}
+      >
         ★
       </span>
     );
   }
-  return <Icon className={className} />;
+  return <Icon className={`inline-block align-middle shrink-0 ${className}`} />;
 }
 
 function rankKeyToBadgeVisualKey(rankKey?: string): string | undefined {
@@ -1946,6 +1953,28 @@ function rankKeyToBadgeVisualKey(rankKey?: string): string | undefined {
     rank_verdict: "rankVerdict",
   };
   return map[normalized];
+}
+
+function getNextRankKey(rankKey?: string): string | undefined {
+  const normalized = rankKey?.trim().toLowerCase();
+  if (!normalized) return undefined;
+  const order = ["novice", "debater", "orator", "strategist", "master", "verdict"];
+  const index = order.findIndex((item) => item === normalized);
+  if (index < 0 || index >= order.length - 1) return undefined;
+  return order[index + 1];
+}
+
+function getRankTitleByKey(rankKey?: string): string {
+  const normalized = rankKey?.trim().toLowerCase();
+  const map: Record<string, string> = {
+    novice: "НОВИЧОК",
+    debater: "СПОРЩИК",
+    orator: "ОРАТОР",
+    strategist: "СТРАТЕГ",
+    master: "МАСТЕР",
+    verdict: "ВЕРДИКТ",
+  };
+  return map[normalized ?? ""] ?? "РАНГ";
 }
 
 function getBadgeTitleByKey(
@@ -2239,6 +2268,8 @@ export default function App() {
   const [error, setError] = useState("");
   const [kickedAlert, setKickedAlert] = useState("");
   const [rankResultToast, setRankResultToast] = useState<{
+    fromKey: string;
+    toKey: string;
     fromTitle: string;
     toTitle: string;
     delta: number;
@@ -2404,6 +2435,20 @@ export default function App() {
       if (!nextRank) return;
       const safePreviousRank = previousRank ?? myProfileRef.current?.rank ?? nextRank;
       const delta = nextRank.points - safePreviousRank.points;
+      if (delta === 0 && nextRank.level === safePreviousRank.level) {
+        return;
+      }
+      const rankUp = nextRank.level > safePreviousRank.level;
+      const nextRankKeyForDisplay =
+        !rankUp && nextRank.nextTitle
+          ? getNextRankKey(nextRank.key) ?? nextRank.key
+          : nextRank.key;
+      const nextRankTitleForDisplay =
+        !rankUp && nextRank.nextTitle
+          ? nextRank.nextTitle
+          : rankUp
+            ? nextRank.title
+            : getRankTitleByKey(nextRankKeyForDisplay);
       const prevTarget = Math.max(1, safePreviousRank.progressTarget || 1);
       const nextTarget = Math.max(1, nextRank.progressTarget || 1);
       const fromProgressPercent = Math.min(
@@ -2415,14 +2460,16 @@ export default function App() {
         Math.max(0, (nextRank.progressCurrent / nextTarget) * 100),
       );
       setRankResultToast({
+        fromKey: safePreviousRank.key,
+        toKey: nextRankKeyForDisplay,
         fromTitle: safePreviousRank.title,
-        toTitle: nextRank.title,
+        toTitle: nextRankTitleForDisplay,
         delta,
         fromPoints: safePreviousRank.points,
         toPoints: nextRank.points,
         fromProgressPercent,
         toProgressPercent,
-        rankUp: nextRank.level > safePreviousRank.level,
+        rankUp,
       });
     },
     [],
@@ -2563,7 +2610,7 @@ export default function App() {
           if (!open) setViewProfileBadgeHintOpen(false);
         }}
       >
-        <DialogContent className="max-w-[520px] border-zinc-800 bg-zinc-950 text-zinc-100">
+        <DialogContent className="max-w-[520px] overflow-visible border-zinc-800 bg-zinc-950 text-zinc-100">
           <DialogHeader>
             <DialogTitle>Профиль игрока</DialogTitle>
             <DialogDescription className="text-zinc-400">
@@ -2580,9 +2627,9 @@ export default function App() {
             </div>
           ) : viewPlayerProfile ? (
             <div className="space-y-4">
-              <div className="rounded-3xl border border-zinc-800 bg-zinc-950/70 overflow-hidden">
+              <div className="rounded-3xl border border-zinc-800 bg-zinc-950/70">
                 <div
-                  className="relative min-h-[122px] rounded-3xl p-4 flex items-end overflow-hidden"
+                  className="relative min-h-[122px] rounded-3xl p-4 flex items-end overflow-visible"
                   style={getBannerStyle(
                     viewPlayerProfile.banner,
                     viewPlayerProfile.avatar,
@@ -2618,14 +2665,6 @@ export default function App() {
                               )}
                             </span>
                           </button>
-                          {viewProfileBadgeHintOpen ? (
-                            <div className="absolute top-full left-0 z-[120] mt-2 w-[280px] max-w-[calc(100vw-64px)] rounded-xl border border-zinc-700 bg-zinc-900/95 px-3 py-2 text-sm leading-relaxed text-zinc-200 shadow-[0_10px_24px_rgba(0,0,0,0.45)] backdrop-blur-sm whitespace-normal break-words">
-                              {viewPlayerProfile.badges?.find(
-                                (badge) => badge.key === viewPlayerProfile.selectedBadgeKey,
-                              )?.description ?? "Информация о бейдже отсутствует."}
-                              <span className="absolute -top-1.5 left-5 h-3 w-3 rotate-45 border-l border-t border-zinc-700 bg-zinc-900/95" />
-                            </div>
-                          ) : null}
                         </div>
                       ) : null}
                       <div className="mt-2 text-xs text-zinc-300">
@@ -2634,6 +2673,13 @@ export default function App() {
                     </div>
                   </div>
                 </div>
+                {viewProfileBadgeHintOpen && viewPlayerProfile.selectedBadgeKey ? (
+                  <div className="relative z-20 mx-3 mb-3 rounded-xl border border-zinc-700 bg-zinc-900/95 px-3 py-2 text-sm leading-relaxed text-zinc-200 shadow-[0_10px_24px_rgba(0,0,0,0.45)]">
+                    {viewPlayerProfile.badges?.find(
+                      (badge) => badge.key === viewPlayerProfile.selectedBadgeKey,
+                    )?.description ?? "Информация о бейдже отсутствует."}
+                  </div>
+                ) : null}
               </div>
               {(viewPlayerProfile.gender || typeof viewPlayerProfile.age === "number") && (
                 <div className="grid grid-cols-1 gap-3 text-sm">
@@ -2816,12 +2862,6 @@ export default function App() {
     const firstActive = myProfile?.badges?.find((badge) => badge.active)?.key;
     if (firstActive) setSelectedBadgeKey(firstActive);
   }, [myProfile]);
-
-  useEffect(() => {
-    if (!rankResultToast) return;
-    const timer = window.setTimeout(() => setRankResultToast(null), 7000);
-    return () => window.clearTimeout(timer);
-  }, [rankResultToast]);
 
   useEffect(() => {
     if (screen !== "home") return;
@@ -4845,7 +4885,7 @@ export default function App() {
                           </div>
                         </button>
                         {badgePickerOpen && (
-                          <div className="absolute bottom-full z-[120] mb-2 w-full overflow-hidden rounded-lg border border-zinc-700 bg-zinc-950 shadow-[0_18px_44px_rgba(0,0,0,0.55)]">
+                          <div className="absolute top-full z-[150] mt-2 w-full overflow-hidden rounded-lg border border-zinc-700 bg-zinc-950 shadow-[0_18px_44px_rgba(0,0,0,0.55)]">
                             <div className="max-h-72 overflow-y-auto p-1.5 [scrollbar-width:thin] [scrollbar-color:rgba(113,113,122,0.9)_rgba(24,24,27,0.45)] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-zinc-900/55 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-700/85 [&::-webkit-scrollbar-thumb:hover]:bg-zinc-500">
                               {activeBadges.map((badge) => (
                                 <button
@@ -5444,7 +5484,7 @@ export default function App() {
                   initial={{ opacity: 0.35, scale: 0.96 }}
                   animate={{ opacity: [0.35, 0.6, 0.35], scale: [0.96, 1.02, 0.96] }}
                   transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
-                  className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(239,68,68,0.22),transparent_62%)]"
+                  className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(239,68,68,0.16),transparent_58%),radial-gradient(circle_at_70%_18%,rgba(168,85,247,0.12),transparent_52%)]"
                 />
                 <div className="flex items-start justify-between gap-4 mb-4">
                   <div>
@@ -5456,18 +5496,38 @@ export default function App() {
                       Прогресс ранга
                     </div>
                   </div>
-                  {rankResultToast.rankUp ? (
-                    <div className="rounded-full border border-amber-400/40 bg-amber-500/15 px-3 py-1 text-xs font-semibold text-amber-200 shadow-[0_0_20px_rgba(251,191,36,0.25)]">
-                      Ранг повышен
-                    </div>
-                  ) : null}
+                  <div
+                    className={`rounded-full border px-3 py-1 text-xs font-semibold shadow-[0_0_20px_rgba(248,113,113,0.22)] ${
+                      rankResultToast.rankUp
+                        ? "border-red-400/45 bg-red-500/15 text-red-200"
+                        : "border-zinc-500/45 bg-zinc-700/30 text-zinc-200"
+                    }`}
+                  >
+                    {rankResultToast.rankUp ? "Ранг повышен" : "Прогресс обновлён"}
+                  </div>
                 </div>
 
                 <div className="rounded-xl border border-zinc-800 bg-zinc-900/80 p-4">
                   <div className="flex items-center justify-between gap-3 text-sm mb-3">
-                    <span className="font-semibold text-zinc-300 uppercase tracking-wide">{rankResultToast.fromTitle}</span>
+                    <span
+                      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wide ${getBadgeTheme(rankKeyToBadgeVisualKey(rankResultToast.fromKey)).chip}`}
+                    >
+                      <BadgeGlyph
+                        badgeKey={rankKeyToBadgeVisualKey(rankResultToast.fromKey)}
+                        className={`h-3.5 w-3.5 ${getBadgeTheme(rankKeyToBadgeVisualKey(rankResultToast.fromKey)).iconOnly ?? "text-zinc-300"}`}
+                      />
+                      {rankResultToast.fromTitle}
+                    </span>
                     <span className="text-zinc-500">→</span>
-                    <span className="font-semibold text-zinc-100 uppercase tracking-wide">{rankResultToast.toTitle}</span>
+                    <span
+                      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wide ${getBadgeTheme(rankKeyToBadgeVisualKey(rankResultToast.toKey)).chip}`}
+                    >
+                      <BadgeGlyph
+                        badgeKey={rankKeyToBadgeVisualKey(rankResultToast.toKey)}
+                        className={`h-3.5 w-3.5 ${getBadgeTheme(rankKeyToBadgeVisualKey(rankResultToast.toKey)).iconOnly ?? "text-zinc-300"}`}
+                      />
+                      {rankResultToast.toTitle}
+                    </span>
                   </div>
                   <div className="h-4 rounded-full bg-zinc-800 overflow-hidden border border-zinc-700">
                     <motion.div
@@ -5476,7 +5536,7 @@ export default function App() {
                       transition={{ duration: 1.35, ease: "easeInOut" }}
                       className={`h-full rounded-full ${
                         rankResultToast.delta >= 0
-                          ? "bg-gradient-to-r from-red-500 via-red-400 to-amber-300 shadow-[0_0_18px_rgba(248,113,113,0.6)]"
+                          ? "bg-gradient-to-r from-red-600 via-red-500 to-rose-400 shadow-[0_0_18px_rgba(248,113,113,0.6)]"
                           : "bg-gradient-to-r from-zinc-600 to-zinc-500"
                       }`}
                     />
@@ -5487,12 +5547,12 @@ export default function App() {
                     </span>
                     <span
                       className={`font-semibold ${
-                        rankResultToast.delta >= 0 ? "text-emerald-300" : "text-red-300"
+                        rankResultToast.delta >= 0 ? "text-red-200" : "text-zinc-300"
                       }`}
                     >
                       {rankResultToast.delta >= 0
-                        ? `+${rankResultToast.delta} к рангу`
-                        : `${rankResultToast.delta} к рангу`}
+                        ? `+${rankResultToast.delta} очк. рейтинга`
+                        : `${rankResultToast.delta} очк. рейтинга`}
                     </span>
                   </div>
                 </div>
@@ -8015,7 +8075,7 @@ export default function App() {
             </InfoBlock>
           </div>
           {matchExpiresAt !== null && !game.finished && (
-            <div className="fixed right-5 bottom-2 sm:bottom-2 left-auto z-30 rounded-xl border border-zinc-700/80 bg-zinc-950/85 px-2.5 sm:px-3 py-1.5 sm:py-2 text-[11px] sm:text-xs font-semibold text-zinc-200 shadow-[0_8px_22px_rgba(0,0,0,0.45)] backdrop-blur-sm">
+            <div className="fixed right-5 bottom-0 sm:bottom-0 left-auto z-30 rounded-xl border border-zinc-700/80 bg-zinc-950/85 px-2.5 sm:px-3 py-1.5 sm:py-2 text-[11px] sm:text-xs font-semibold text-zinc-200 shadow-[0_8px_22px_rgba(0,0,0,0.45)] backdrop-blur-sm">
               <span className="sm:hidden inline-flex items-center gap-1.5">
                 <span>⏱</span>
                 <span className="text-red-300">
