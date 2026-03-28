@@ -1,6 +1,6 @@
 ﻿import crypto from "node:crypto";
 import { pool } from "@workspace/db";
-import { legacyCases } from "./legacyGameContent.js";
+import { cases as legacyCases } from "../socket/gameData.js";
 
 /*
   ======================= КУДА ДОБАВЛЯТЬ НОВЫЕ ПАКИ И ДЕЛА =======================
@@ -8,7 +8,7 @@ import { legacyCases } from "./legacyGameContent.js";
   2) Добавьте дела в таблицу `case_pack_cases` с нужным pack_id и mode_player_count (3..6).
   3) Игра при старте матча берет дело только из БД (по выбранному паку).
 
-  Базовый пак `classic` заполняется автоматически из legacy cases (legacyGameContent.ts),
+  Базовый пак `classic` заполняется автоматически из legacy cases (gameData.ts),
   чтобы после миграции сохранить все существующие дела.
 */
 

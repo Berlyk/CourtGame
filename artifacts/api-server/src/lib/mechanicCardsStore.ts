@@ -1,6 +1,6 @@
 ﻿import crypto from "node:crypto";
 import { pool } from "@workspace/db";
-import { legacyMechanicPool } from "./legacyGameContent.js";
+import { mechanicPool as legacyMechanicPool } from "../socket/gameData.js";
 
 /*
   =================== КУДА ДОБАВЛЯТЬ НОВЫЕ КАРТЫ МЕХАНИК ===================
@@ -9,7 +9,7 @@ import { legacyMechanicPool } from "./legacyGameContent.js";
   Вариант 1 (простой): добавляйте записи в таблицу `mechanic_cards`.
   Поля: key, title, description, sort_order, active.
 
-  Вариант 2 (авто-миграция): положите карты в legacyGameContent.ts,
+  Вариант 2 (авто-миграция): положите карты в gameData.ts,
   и они автоматически засидятся в БД при запуске сервера.
 
   Пример SQL (вручную добавить 1 карту):
