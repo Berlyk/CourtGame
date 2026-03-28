@@ -2526,6 +2526,8 @@ export default function App() {
   const sharedBanner = banner;
   const isAuthenticated = !!authUser && !!authToken;
   const selectedCreateMode = getRoomModeMeta(createRoomMode);
+  const selectedCreatePack =
+    casePacks.find((pack) => pack.key === createRoomPackKey) ?? casePacks[0] ?? null;
   const reconnectSecondsLeft =
     reconnectExpiresAt !== null
       ? Math.max(0, Math.ceil((reconnectExpiresAt - nowMs) / 1000))
@@ -6603,31 +6605,34 @@ export default function App() {
                       <label className="text-sm text-zinc-300">Пак дел</label>
                       <div className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-3">
                         {casePacks.length > 0 ? (
-                          <div className="grid gap-2">
-                            {casePacks.map((pack) => (
-                              <button
-                                key={pack.key}
-                                type="button"
-                                onClick={() => setCreateRoomPackKey(pack.key)}
-                                className={`rounded-xl border px-3 py-3 text-left transition-colors ${
-                                  createRoomPackKey === pack.key
-                                    ? "border-red-500/70 bg-red-600/15"
-                                    : "border-zinc-700 bg-zinc-900 hover:bg-zinc-800"
-                                }`}
+                          <div className="space-y-2">
+                            <div className="relative">
+                              <select
+                                value={selectedCreatePack?.key ?? createRoomPackKey}
+                                onChange={(e) => setCreateRoomPackKey(e.target.value)}
+                                className="h-11 w-full appearance-none rounded-xl border border-zinc-700 bg-zinc-900 px-3 pr-10 text-sm text-zinc-100 outline-none transition-colors focus:border-red-500/60"
                               >
-                                <div className="flex items-center justify-between gap-2">
-                                  <div className="text-sm font-semibold text-zinc-100">
-                                    {pack.title}
-                                  </div>
-                                  <div className="text-[11px] text-zinc-400">
-                                    {pack.caseCount ?? 0} дел
-                                  </div>
+                                {casePacks.map((pack) => (
+                                  <option key={pack.key} value={pack.key}>
+                                    {pack.title} ({pack.caseCount ?? 0} дел)
+                                  </option>
+                                ))}
+                              </select>
+                              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+                            </div>
+                            <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 px-3 py-2.5">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="text-sm font-semibold text-zinc-100">
+                                  {selectedCreatePack?.title ?? "Пак не выбран"}
                                 </div>
-                                <div className="mt-1 text-xs text-zinc-400">
-                                  {pack.description}
+                                <div className="text-[11px] text-zinc-400">
+                                  {selectedCreatePack?.caseCount ?? 0} дел
                                 </div>
-                              </button>
-                            ))}
+                              </div>
+                              <div className="mt-1 text-xs text-zinc-400">
+                                {selectedCreatePack?.description ?? "Описание пака недоступно."}
+                              </div>
+                            </div>
                           </div>
                         ) : (
                           <div className="text-xs text-zinc-500">
