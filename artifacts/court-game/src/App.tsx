@@ -2169,6 +2169,11 @@ export default function App() {
     fromTitle: string;
     toTitle: string;
     delta: number;
+    fromPoints: number;
+    toPoints: number;
+    fromProgressPercent: number;
+    toProgressPercent: number;
+    rankUp: boolean;
   } | null>(null);
   const [copiedRoomCode, setCopiedRoomCode] = useState(false);
   const [startGameLoading, setStartGameLoading] = useState(false);
@@ -2686,7 +2691,7 @@ export default function App() {
 
   useEffect(() => {
     if (!rankResultToast) return;
-    const timer = window.setTimeout(() => setRankResultToast(null), 5200);
+    const timer = window.setTimeout(() => setRankResultToast(null), 7000);
     return () => window.clearTimeout(timer);
   }, [rankResultToast]);
 
@@ -3249,10 +3254,25 @@ export default function App() {
             if (!previousRank || !nextRank) return;
             const delta = nextRank.points - previousRank.points;
             if (delta === 0 && nextRank.key === previousRank.key) return;
+            const prevTarget = Math.max(1, previousRank.progressTarget || 1);
+            const nextTarget = Math.max(1, nextRank.progressTarget || 1);
+            const fromProgressPercent = Math.min(
+              100,
+              Math.max(0, (previousRank.progressCurrent / prevTarget) * 100),
+            );
+            const toProgressPercent = Math.min(
+              100,
+              Math.max(0, (nextRank.progressCurrent / nextTarget) * 100),
+            );
             setRankResultToast({
               fromTitle: previousRank.title,
               toTitle: nextRank.title,
               delta,
+              fromPoints: previousRank.points,
+              toPoints: nextRank.points,
+              fromProgressPercent,
+              toProgressPercent,
+              rankUp: nextRank.level > previousRank.level,
             });
           })
           .catch(() => undefined);
@@ -5281,22 +5301,80 @@ export default function App() {
           )}
           {rankResultToast && (
             <motion.div
-              key={`rank-${rankResultToast.fromTitle}-${rankResultToast.toTitle}-${rankResultToast.delta}`}
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              className="max-w-6xl mx-auto mb-4 rounded-xl border border-zinc-700 bg-zinc-900/95 px-4 py-3 text-sm text-zinc-100 shadow-[0_8px_24px_rgba(0,0,0,0.35)]"
+              key={`rank-overlay-${rankResultToast.fromTitle}-${rankResultToast.toTitle}-${rankResultToast.delta}`}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[220] flex items-center justify-center bg-black/70 backdrop-blur-[2px] p-4"
             >
-              <span className="font-semibold">
-                Ранг: {rankResultToast.fromTitle} → {rankResultToast.toTitle}
-              </span>
-              <span
-                className={`ml-2 font-semibold ${
-                  rankResultToast.delta >= 0 ? "text-emerald-400" : "text-red-300"
-                }`}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9, y: 16 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.96, y: 12 }}
+                transition={{ type: "spring", stiffness: 180, damping: 18 }}
+                className="w-full max-w-xl rounded-2xl border border-red-500/40 bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950 p-5 sm:p-6 shadow-[0_25px_80px_rgba(0,0,0,0.65)]"
               >
-                {rankResultToast.delta >= 0 ? `+${rankResultToast.delta}` : rankResultToast.delta}
-              </span>
+                <div className="flex items-start justify-between gap-4 mb-4">
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.2em] text-zinc-400">
+                      Итоги матча
+                    </div>
+                    <div className="mt-1 text-2xl sm:text-3xl font-bold text-zinc-100 flex items-center gap-2">
+                      <Sparkles className="w-5 h-5 text-red-400" />
+                      Прогресс ранга
+                    </div>
+                  </div>
+                  {rankResultToast.rankUp ? (
+                    <div className="rounded-full border border-amber-400/40 bg-amber-500/15 px-3 py-1 text-xs font-semibold text-amber-200 shadow-[0_0_20px_rgba(251,191,36,0.25)]">
+                      Ранг повышен
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="rounded-xl border border-zinc-800 bg-zinc-900/80 p-4">
+                  <div className="flex items-center justify-between gap-3 text-sm mb-3">
+                    <span className="font-semibold text-zinc-300">{rankResultToast.fromTitle}</span>
+                    <span className="text-zinc-500">→</span>
+                    <span className="font-semibold text-zinc-100">{rankResultToast.toTitle}</span>
+                  </div>
+                  <div className="h-3 rounded-full bg-zinc-800 overflow-hidden">
+                    <motion.div
+                      initial={{ width: `${rankResultToast.fromProgressPercent}%` }}
+                      animate={{ width: `${rankResultToast.toProgressPercent}%` }}
+                      transition={{ duration: 1.2, ease: "easeInOut" }}
+                      className={`h-full rounded-full ${
+                        rankResultToast.delta >= 0
+                          ? "bg-gradient-to-r from-red-500 via-red-400 to-amber-300"
+                          : "bg-gradient-to-r from-zinc-600 to-zinc-500"
+                      }`}
+                    />
+                  </div>
+                  <div className="mt-3 flex items-center justify-between text-xs sm:text-sm">
+                    <span className="text-zinc-400">
+                      Очки: {rankResultToast.fromPoints} → {rankResultToast.toPoints}
+                    </span>
+                    <span
+                      className={`font-semibold ${
+                        rankResultToast.delta >= 0 ? "text-emerald-300" : "text-red-300"
+                      }`}
+                    >
+                      {rankResultToast.delta >= 0
+                        ? `+${rankResultToast.delta} к рангу`
+                        : `${rankResultToast.delta} к рангу`}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mt-5 flex justify-end">
+                  <Button
+                    variant="outline"
+                    onClick={() => setRankResultToast(null)}
+                    className="border-zinc-700 text-zinc-100 hover:bg-zinc-800"
+                  >
+                    Закрыть
+                  </Button>
+                </div>
+              </motion.div>
             </motion.div>
           )}
         </AnimatePresence>
