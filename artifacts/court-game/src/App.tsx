@@ -2235,9 +2235,9 @@ function ScreenTransitionLoader({ open }: { open: boolean }) {
           className="fixed inset-0 z-[260] grid place-items-center bg-[#09090d]"
         >
           <motion.div
-            initial={{ opacity: 0, scale: 0.94 }}
+            initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.97 }}
+            exit={{ opacity: 0, scale: 0.99 }}
             transition={{ duration: 0.18, ease: "easeInOut" }}
             className="relative flex flex-col items-center gap-4"
           >
@@ -2251,8 +2251,8 @@ function ScreenTransitionLoader({ open }: { open: boolean }) {
               src="/favicon.png"
               alt="CourtGame"
               className="relative z-10 h-32 w-32 select-none drop-shadow-[0_0_24px_rgba(248,113,113,0.42)]"
-              animate={{ rotate: [0, 8, 0, -8, 0], y: [0, -2, 0] }}
-              transition={{ duration: 1.25, repeat: Infinity, ease: "easeInOut" }}
+              animate={{ rotate: [0, 5, 0, -5, 0], scale: [1, 1.02, 1] }}
+              transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
             />
             <motion.div
               className="relative z-10 h-2 w-40 overflow-hidden rounded-full bg-zinc-800"
@@ -2497,7 +2497,7 @@ export default function App() {
     screenTransitionTimerRef.current = window.setTimeout(() => {
       setScreenTransitionLoading(false);
       screenTransitionTimerRef.current = null;
-    }, 340);
+    }, 520);
   }, [screen]);
 
   useEffect(() => {
