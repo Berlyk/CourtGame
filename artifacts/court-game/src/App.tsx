@@ -1384,11 +1384,23 @@ interface PublicUserProfile {
       winRate: number;
     }>;
   };
+  rank?: {
+    key: string;
+    title: string;
+    points: number;
+    level: number;
+    minPoints: number;
+    nextPoints?: number;
+    nextTitle?: string;
+    progressCurrent: number;
+    progressTarget: number;
+  };
   badges?: Array<{
     key: string;
     title: string;
     description: string;
     active: boolean;
+    category?: "rank" | "earned" | "manual";
     progressCurrent?: number;
     progressTarget?: number;
     progressLabel?: string;
@@ -1871,6 +1883,22 @@ function getBadgeTitleByKey(
   return badges?.find((item) => item.key === badgeKey)?.title ?? badgeKey;
 }
 
+function getBadgeCategory(badge: {
+  key: string;
+  category?: "rank" | "earned" | "manual";
+}): "rank" | "earned" | "manual" {
+  if (badge.category) return badge.category;
+  if (badge.key.startsWith("rank_")) return "rank";
+  if (
+    ["media", "creator", "host", "innovator", "moderator", "admin", "legend"].includes(
+      badge.key,
+    )
+  ) {
+    return "manual";
+  }
+  return "earned";
+}
+
 function PlayerCard({
   player,
   isHost,
@@ -2137,6 +2165,11 @@ export default function App() {
   const [joinCode, setJoinCode] = useState("");
   const [error, setError] = useState("");
   const [kickedAlert, setKickedAlert] = useState("");
+  const [rankResultToast, setRankResultToast] = useState<{
+    fromTitle: string;
+    toTitle: string;
+    delta: number;
+  } | null>(null);
   const [copiedRoomCode, setCopiedRoomCode] = useState(false);
   const [startGameLoading, setStartGameLoading] = useState(false);
   const [hasSession, setHasSession] = useState(false);
@@ -2244,6 +2277,7 @@ export default function App() {
     "main" | "chat" | "notes" | "verdict" | "warnings"
   >("main");
   const myIdRef = useRef<string | null>(null);
+  const myProfileRef = useRef<PublicUserProfile | null>(null);
   const influenceAnnouncementTimerRef = useRef<number | null>(null);
   const lastAutoRejoinAttemptAtRef = useRef(0);
   const socket = getSocket();
@@ -2413,9 +2447,9 @@ export default function App() {
             </div>
           ) : viewPlayerProfile ? (
             <div className="space-y-4">
-              <div className="rounded-3xl border border-zinc-800 bg-zinc-950/70 overflow-visible">
+              <div className="rounded-3xl border border-zinc-800 bg-zinc-950/70 overflow-hidden">
                 <div
-                  className="relative min-h-[122px] p-4 flex items-end"
+                  className="relative min-h-[122px] rounded-3xl p-4 flex items-end overflow-hidden"
                   style={getBannerStyle(
                     viewPlayerProfile.banner,
                     viewPlayerProfile.avatar,
@@ -2452,7 +2486,7 @@ export default function App() {
                             </span>
                           </button>
                           {viewProfileBadgeHintOpen ? (
-                            <div className="absolute top-full left-0 z-[120] mt-2 w-[260px] max-w-[calc(100vw-64px)] rounded-xl border border-zinc-700 bg-zinc-900/95 px-3 py-2 text-sm leading-relaxed text-zinc-200 shadow-[0_10px_24px_rgba(0,0,0,0.45)] backdrop-blur-sm whitespace-normal break-words">
+                            <div className="absolute top-full left-0 z-[120] mt-2 w-[280px] max-w-[calc(100vw-64px)] rounded-xl border border-zinc-700 bg-zinc-900/95 px-3 py-2 text-sm leading-relaxed text-zinc-200 shadow-[0_10px_24px_rgba(0,0,0,0.45)] backdrop-blur-sm whitespace-normal break-words">
                               {viewPlayerProfile.badges?.find(
                                 (badge) => badge.key === viewPlayerProfile.selectedBadgeKey,
                               )?.description ?? "Информация о бейдже отсутствует."}
@@ -2492,6 +2526,18 @@ export default function App() {
                   </div>
                 </div>
               )}
+              {viewPlayerProfile.rank ? (
+                <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-sm font-semibold text-zinc-100">
+                      Ранг: {viewPlayerProfile.rank.title}
+                    </div>
+                    <div className="text-xs text-zinc-400">
+                      {viewPlayerProfile.rank.points} очк.
+                    </div>
+                  </div>
+                </div>
+              ) : null}
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-2 py-2">
                   <div className="text-[11px] text-zinc-500">Матчей</div>
@@ -2639,6 +2685,12 @@ export default function App() {
   }, [myProfile]);
 
   useEffect(() => {
+    if (!rankResultToast) return;
+    const timer = window.setTimeout(() => setRankResultToast(null), 5200);
+    return () => window.clearTimeout(timer);
+  }, [rankResultToast]);
+
+  useEffect(() => {
     if (screen !== "home") return;
     socket.emit("list_public_matches");
   }, [socket, screen]);
@@ -2678,6 +2730,10 @@ export default function App() {
   useEffect(() => {
     myIdRef.current = myId;
   }, [myId]);
+
+  useEffect(() => {
+    myProfileRef.current = myProfile;
+  }, [myProfile]);
 
   useEffect(() => {
     if (screen !== "game") {
@@ -3162,6 +3218,7 @@ export default function App() {
     });
 
     socket.on("room_closed", () => {
+      const previousRank = myProfileRef.current?.rank;
       clearReconnectWindow();
       localStorage.removeItem("court_session");
       localStorage.removeItem("court_session_token");
@@ -3184,6 +3241,22 @@ export default function App() {
       setProfileMenuOpen(false);
       setCreateMatchDialogOpen(false);
       setScreen("home");
+      if (authToken) {
+        authRequest<{ profile: PublicUserProfile }>("/auth/profile", { token: authToken })
+          .then((payload) => {
+            setMyProfile(payload.profile);
+            const nextRank = payload.profile.rank;
+            if (!previousRank || !nextRank) return;
+            const delta = nextRank.points - previousRank.points;
+            if (delta === 0 && nextRank.key === previousRank.key) return;
+            setRankResultToast({
+              fromTitle: previousRank.title,
+              toTitle: nextRank.title,
+              delta,
+            });
+          })
+          .catch(() => undefined);
+      }
     });
 
     socket.on("game_started", ({ state }: { state: any }) => {
@@ -4248,6 +4321,18 @@ export default function App() {
     const totalMatches = profileData?.stats?.totalMatches ?? 0;
     const totalWins = profileData?.stats?.totalWins ?? 0;
     const totalWinRate = profileData?.stats?.totalWinRate ?? 0;
+    const currentRank = profileData?.rank;
+    const rankProgressPercent = currentRank
+      ? Math.max(
+          0,
+          Math.min(
+            100,
+            currentRank.progressTarget > 0
+              ? (currentRank.progressCurrent / currentRank.progressTarget) * 100
+              : 0,
+          ),
+        )
+      : 0;
     const badges = profileData?.badges ?? [];
     const activeBadges = badges.filter((badge) => badge.active);
     const currentSelectedBadgeTitle =
@@ -4548,6 +4633,34 @@ export default function App() {
 
                 <div className="space-y-4">
                   <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4 md:p-5 space-y-3">
+                    <div className="text-lg font-semibold">Ранг</div>
+                    <div className="rounded-xl border border-zinc-800 bg-zinc-900/55 px-3 py-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-base font-semibold text-zinc-100">
+                          {currentRank?.title ?? "НОВИЧОК"}
+                        </div>
+                        <div className="text-xs text-zinc-400">
+                          Очки: {currentRank?.points ?? 0}
+                        </div>
+                      </div>
+                      <div className="mt-2 h-2 w-full rounded-full bg-zinc-800">
+                        <div
+                          className="h-2 rounded-full bg-red-500 transition-all"
+                          style={{ width: `${rankProgressPercent}%` }}
+                        />
+                      </div>
+                      <div className="mt-2 text-xs text-zinc-400">
+                        {currentRank?.nextTitle
+                          ? `До ранга «${currentRank.nextTitle}»: ${Math.max(
+                              0,
+                              (currentRank.nextPoints ?? 0) - currentRank.points,
+                            )} очк.`
+                          : "Максимальный ранг достигнут"}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4 md:p-5 space-y-3">
                     <div className="text-lg font-semibold">Подписка</div>
                     <div className="rounded-xl border border-zinc-800 bg-zinc-900/55 px-3 py-3">
                       <div className="text-sm text-zinc-500">Текущий статус</div>
@@ -4727,14 +4840,58 @@ export default function App() {
             <div className="relative">
               <div className="max-h-[60vh] overflow-y-auto pr-1 pb-2 space-y-3 [scrollbar-width:thin] [scrollbar-color:rgba(113,113,122,0.9)_rgba(24,24,27,0.45)] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-zinc-900/55 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-700/85 [&::-webkit-scrollbar-thumb:hover]:bg-zinc-500">
                 <div className="-mx-1 rounded-md border-y border-zinc-800 bg-zinc-950/95 px-3 py-2 text-center text-xs uppercase tracking-[0.12em] text-zinc-400">
+                  Ранговые
+                </div>
+                {badges
+                  .filter((badge) => getBadgeCategory(badge) === "rank")
+                  .map((badge) => (
+                    <div
+                      key={`rules-${badge.key}`}
+                      className={`rounded-xl border px-3 py-3 ${getBadgeTheme(badge.key).chip}`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-zinc-700/70 bg-black/30">
+                            <BadgeGlyph badgeKey={badge.key} className={`h-4 w-4 ${getBadgeTheme(badge.key).iconOnly ?? "text-zinc-300"}`} />
+                          </span>
+                          <div className="text-sm font-semibold truncate">{badge.title}</div>
+                        </div>
+                        <div className="text-xs text-zinc-300">{badge.active ? "Доступен" : "Закрыт"}</div>
+                      </div>
+                      <div className="mt-2 text-xs text-zinc-300/90">{badge.description}</div>
+                      <div className="mt-2">
+                        <div className="flex items-center justify-between text-[11px] text-zinc-300/80">
+                          <span>Прогресс</span>
+                          <span>{badge.progressLabel ?? (badge.active ? "Получен" : "Не получен")}</span>
+                        </div>
+                        <div className="mt-1 h-1.5 w-full rounded-full bg-black/35">
+                          <div
+                            className={`h-1.5 rounded-full transition-all ${
+                              badge.active ? "bg-red-400" : "bg-zinc-500"
+                            }`}
+                            style={{
+                              width: `${Math.max(
+                                0,
+                                Math.min(
+                                  100,
+                                  badge.progressTarget && badge.progressTarget > 0
+                                    ? ((badge.progressCurrent ?? 0) / badge.progressTarget) * 100
+                                    : badge.active
+                                      ? 100
+                                      : 0,
+                                ),
+                              )}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                <div className="mt-1 -mx-1 rounded-md border-y border-zinc-800 bg-zinc-950/95 px-3 py-2 text-center text-xs uppercase tracking-[0.12em] text-zinc-400">
                   Получаемые
                 </div>
                 {badges
-                  .filter((badge) =>
-                    !["media", "creator", "host", "innovator", "moderator", "admin", "legend"].includes(
-                      badge.key,
-                    ),
-                  )
+                  .filter((badge) => getBadgeCategory(badge) === "earned")
                   .map((badge) => (
                     <div
                       key={`rules-${badge.key}`}
@@ -4782,11 +4939,7 @@ export default function App() {
                   Выдаваемые
                 </div>
                 {badges
-                  .filter((badge) =>
-                    ["media", "creator", "host", "innovator", "moderator", "admin", "legend"].includes(
-                      badge.key,
-                    ),
-                  )
+                  .filter((badge) => getBadgeCategory(badge) === "manual")
                   .map((badge) => (
                     <div
                       key={`rules-${badge.key}`}
@@ -5124,6 +5277,26 @@ export default function App() {
               className="max-w-6xl mx-auto mb-4 bg-red-600/20 border border-red-600/40 text-red-300 rounded-xl px-4 py-3 text-sm"
             >
               {kickedAlert}
+            </motion.div>
+          )}
+          {rankResultToast && (
+            <motion.div
+              key={`rank-${rankResultToast.fromTitle}-${rankResultToast.toTitle}-${rankResultToast.delta}`}
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              className="max-w-6xl mx-auto mb-4 rounded-xl border border-zinc-700 bg-zinc-900/95 px-4 py-3 text-sm text-zinc-100 shadow-[0_8px_24px_rgba(0,0,0,0.35)]"
+            >
+              <span className="font-semibold">
+                Ранг: {rankResultToast.fromTitle} → {rankResultToast.toTitle}
+              </span>
+              <span
+                className={`ml-2 font-semibold ${
+                  rankResultToast.delta >= 0 ? "text-emerald-400" : "text-red-300"
+                }`}
+              >
+                {rankResultToast.delta >= 0 ? `+${rankResultToast.delta}` : rankResultToast.delta}
+              </span>
             </motion.div>
           )}
         </AnimatePresence>
@@ -7632,7 +7805,7 @@ export default function App() {
             </InfoBlock>
           </div>
           {matchExpiresAt !== null && !game.finished && (
-            <div className="fixed right-5 bottom-[68px] sm:bottom-[70px] left-auto z-30 rounded-xl border border-zinc-700/80 bg-zinc-950/85 px-2.5 sm:px-3 py-1.5 sm:py-2 text-[11px] sm:text-xs font-semibold text-zinc-200 shadow-[0_8px_22px_rgba(0,0,0,0.45)] backdrop-blur-sm">
+            <div className="fixed right-5 bottom-2 sm:bottom-2 left-auto z-30 rounded-xl border border-zinc-700/80 bg-zinc-950/85 px-2.5 sm:px-3 py-1.5 sm:py-2 text-[11px] sm:text-xs font-semibold text-zinc-200 shadow-[0_8px_22px_rgba(0,0,0,0.45)] backdrop-blur-sm">
               <span className="sm:hidden inline-flex items-center gap-1.5">
                 <span>⏱</span>
                 <span className="text-red-300">
@@ -7641,8 +7814,9 @@ export default function App() {
                   {String(matchSecondsLeft).padStart(2, "0")}
                 </span>
               </span>
-              <span className="hidden sm:inline">
-                До авто-закрытия:{" "}
+              <span className="hidden sm:inline-flex items-center gap-1.5">
+                <span>⏱</span>
+                <span>До авто-закрытия:</span>
                 <span className="text-red-300">
                   {String(matchHoursLeft).padStart(2, "0")}:
                   {String(matchMinutesLeft).padStart(2, "0")}:

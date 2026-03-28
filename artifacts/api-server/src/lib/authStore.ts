@@ -30,11 +30,24 @@ export interface UserStatsSummary {
   roleStats: UserRoleStats[];
 }
 
+export interface UserRankView {
+  key: string;
+  title: string;
+  points: number;
+  level: number;
+  minPoints: number;
+  nextPoints?: number;
+  nextTitle?: string;
+  progressCurrent: number;
+  progressTarget: number;
+}
+
 export interface UserBadgeView {
   key: string;
   title: string;
   description: string;
   active: boolean;
+  category?: "rank" | "earned" | "manual";
   progressCurrent?: number;
   progressTarget?: number;
   progressLabel?: string;
@@ -75,6 +88,7 @@ export interface AuthUserPublicProfile {
   hideAge: boolean;
   age?: number;
   createdAt: number;
+  rank: UserRankView;
   stats: UserStatsSummary;
   badges: UserBadgeView[];
   selectedBadgeKey?: string;
@@ -84,6 +98,18 @@ export interface AuthUserPublicProfile {
 
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const LEGEND_BETA_045_CUTOFF_UTC = Date.parse("2026-03-27T00:00:00.000Z");
+const RANK_DEFINITIONS: Array<{
+  key: string;
+  title: string;
+  minPoints: number;
+}> = [
+  { key: "novice", title: "НОВИЧОК", minPoints: 0 },
+  { key: "debater", title: "СПОРЩИК", minPoints: 15 },
+  { key: "orator", title: "ОРАТОР", minPoints: 30 },
+  { key: "strategist", title: "СТРАТЕГ", minPoints: 60 },
+  { key: "master", title: "МАСТЕР", minPoints: 100 },
+  { key: "verdict", title: "ВЕРДИКТ", minPoints: 150 },
+];
 
 const ROLE_BADGE_META: Record<
   string,
@@ -288,6 +314,42 @@ function toPublicProfile(row: {
     hideAge: !!row.hide_age,
     age: row.hide_age ? undefined : age,
     createdAt: row.created_at.getTime(),
+    rank: {
+      key: "novice",
+      title: "НОВИЧОК",
+      points: 0,
+      level: 0,
+      minPoints: 0,
+      nextPoints: 15,
+      nextTitle: "СПОРЩИК",
+      progressCurrent: 0,
+      progressTarget: 15,
+    },
+  };
+}
+
+function getRankByPoints(rawPoints: number): UserRankView {
+  const points = Math.max(0, Math.floor(Number.isFinite(rawPoints) ? rawPoints : 0));
+  let levelIndex = 0;
+  for (let i = 0; i < RANK_DEFINITIONS.length; i += 1) {
+    if (points >= RANK_DEFINITIONS[i].minPoints) {
+      levelIndex = i;
+    } else {
+      break;
+    }
+  }
+  const current = RANK_DEFINITIONS[levelIndex];
+  const next = RANK_DEFINITIONS[levelIndex + 1];
+  return {
+    key: current.key,
+    title: current.title,
+    points,
+    level: levelIndex,
+    minPoints: current.minPoints,
+    nextPoints: next?.minPoints,
+    nextTitle: next?.title,
+    progressCurrent: Math.max(0, points - current.minPoints),
+    progressTarget: Math.max(1, (next?.minPoints ?? current.minPoints + 1) - current.minPoints),
   };
 }
 
@@ -362,6 +424,14 @@ async function ensureTables(): Promise<void> {
           wins INTEGER NOT NULL DEFAULT 0,
           updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           PRIMARY KEY (user_id, role_key)
+        );
+      `);
+
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS auth_user_ranks (
+          user_id UUID PRIMARY KEY REFERENCES auth_users(id) ON DELETE CASCADE,
+          points INTEGER NOT NULL DEFAULT 0,
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
       `);
 
@@ -709,6 +779,41 @@ export async function updateProfileByToken(
       typeof profile.selectedBadgeKey === "string" && profile.selectedBadgeKey.trim()
         ? profile.selectedBadgeKey.trim()
         : null;
+    if (selectedBadgeKey) {
+      const userMeta = await pool.query<{ login: string; created_at: Date }>(
+        `
+          SELECT login, created_at
+          FROM auth_users
+          WHERE id = $1
+          LIMIT 1
+        `,
+        [userId],
+      );
+      if (userMeta.rowCount) {
+        const [stats, rank, manualBadgeMap] = await Promise.all([
+          getRoleStatsByUserId(userId),
+          getRankByUserId(userId),
+          getManualBadgeMap(userId),
+        ]);
+        const available = new Set(
+          buildBadgeList({
+            user: {
+              id: userId,
+              login: userMeta.rows[0].login,
+              created_at: userMeta.rows[0].created_at,
+            },
+            rank,
+            stats,
+            manualBadgeMap,
+          })
+            .filter((badge) => badge.active)
+            .map((badge) => badge.key),
+        );
+        if (!available.has(selectedBadgeKey)) {
+          throw new Error("Бейдж недоступен для выбора.");
+        }
+      }
+    }
     await pool.query(`UPDATE auth_users SET selected_badge_key = $1 WHERE id = $2`, [
       selectedBadgeKey,
       userId,
@@ -882,6 +987,23 @@ async function getManualBadgeMap(userId: string): Promise<Map<string, boolean>> 
   return new Map(result.rows.map((row) => [row.badge_key, !!row.is_active]));
 }
 
+async function getRankByUserId(userId: string): Promise<UserRankView> {
+  await ensureTables();
+  const result = await pool.query<{ points: number }>(
+    `
+      SELECT points
+      FROM auth_user_ranks
+      WHERE user_id = $1
+      LIMIT 1
+    `,
+    [userId],
+  );
+  if (!result.rowCount) {
+    return getRankByPoints(0);
+  }
+  return getRankByPoints(result.rows[0].points);
+}
+
 async function getRecentMatchHistoryByUserId(
   userId: string,
 ): Promise<UserMatchHistoryView[]> {
@@ -939,13 +1061,46 @@ function buildBadgeList(input: {
     login: string;
     created_at: Date;
   };
+  rank: UserRankView;
   stats: UserStatsSummary;
   manualBadgeMap: Map<string, boolean>;
 }): UserBadgeView[] {
-  const { user, stats, manualBadgeMap } = input;
+  const { user, rank, stats, manualBadgeMap } = input;
   const isBerly = user.login.toLowerCase() === "berly";
   const badges: UserBadgeView[] = [];
   const roleStatsMap = new Map(stats.roleStats.map((row) => [row.roleKey, row]));
+
+  for (let i = 0; i < RANK_DEFINITIONS.length; i += 1) {
+    const rankDef = RANK_DEFINITIONS[i];
+    const nextRankDef = RANK_DEFINITIONS[i + 1];
+    const isCurrentRank = rank.key === rankDef.key;
+    const progressCurrent = isCurrentRank
+      ? rank.progressCurrent
+      : rank.points >= rankDef.minPoints
+        ? Math.max(
+            0,
+            (nextRankDef?.minPoints ?? rankDef.minPoints + 1) - rankDef.minPoints,
+          )
+        : Math.max(0, rank.points - rankDef.minPoints);
+    const progressTarget = Math.max(
+      1,
+      (nextRankDef?.minPoints ?? rankDef.minPoints + 1) - rankDef.minPoints,
+    );
+    badges.push({
+      key: `rank_${rankDef.key}`,
+      title: rankDef.title,
+      description: `Доступен при достижении ранга «${rankDef.title}».`,
+      category: "rank",
+      active: isCurrentRank,
+      progressCurrent,
+      progressTarget,
+      progressLabel: isCurrentRank
+        ? "Текущий ранг"
+        : rank.points >= rankDef.minPoints
+          ? "Пройден"
+          : `${Math.max(0, rank.points)}/${rankDef.minPoints}`,
+    });
+  }
 
   for (const [roleKey, meta] of Object.entries(ROLE_BADGE_META)) {
     const wins = roleStatsMap.get(roleKey)?.wins ?? 0;
@@ -954,6 +1109,7 @@ function buildBadgeList(input: {
       key: `role_${roleKey}`,
       title: meta.title,
       description: meta.description,
+      category: "earned",
       active,
       progressCurrent: active ? 50 : Math.max(0, wins),
       progressTarget: 50,
@@ -967,6 +1123,7 @@ function buildBadgeList(input: {
     key: "winner",
     title: "Победитель",
     description: "Доступен при общем проценте побед 90% и выше.",
+    category: "earned",
     active: winnerActive,
     progressCurrent: winnerActive ? 90 : winnerCurrent,
     progressTarget: 90,
@@ -978,6 +1135,7 @@ function buildBadgeList(input: {
     key: "legend",
     title: "Легенда",
     description: "Игрок участвовал в эпохе Beta 0.4.5.",
+    category: "manual",
     active: legendActive,
     progressCurrent: legendActive ? 1 : 0,
     progressTarget: 1,
@@ -992,6 +1150,7 @@ function buildBadgeList(input: {
       key,
       title: meta.title,
       description: meta.description,
+      category: "manual",
       active,
       progressCurrent: active ? 1 : 0,
       progressTarget: 1,
@@ -1032,22 +1191,31 @@ export async function getProfileByToken(
 
   const row = result.rows[0];
   const stats = await getRoleStatsByUserId(row.id);
+  const rank = await getRankByUserId(row.id);
   const manualBadgeMap = await getManualBadgeMap(row.id);
   const recentMatches = await getRecentMatchHistoryByUserId(row.id);
   const base = toPublicProfile(row);
+  const badges = buildBadgeList({
+    user: {
+      id: row.id,
+      login: row.login,
+      created_at: row.created_at,
+    },
+    rank,
+    stats,
+    manualBadgeMap,
+  });
+  const activeBadgeKeys = new Set(badges.filter((badge) => badge.active).map((badge) => badge.key));
+  const selectedBadgeKey =
+    row.selected_badge_key && activeBadgeKeys.has(row.selected_badge_key)
+      ? row.selected_badge_key
+      : undefined;
   return {
     ...base,
+    rank,
     stats,
-    badges: buildBadgeList({
-      user: {
-        id: row.id,
-        login: row.login,
-        created_at: row.created_at,
-      },
-      stats,
-      manualBadgeMap,
-    }),
-    selectedBadgeKey: row.selected_badge_key ?? undefined,
+    badges,
+    selectedBadgeKey,
     recentMatches,
     subscription: {
       tier: "none",
@@ -1084,22 +1252,31 @@ export async function getPublicUserProfileById(
   if (!result.rowCount) return null;
   const row = result.rows[0];
   const stats = await getRoleStatsByUserId(row.id);
+  const rank = await getRankByUserId(row.id);
   const manualBadgeMap = await getManualBadgeMap(row.id);
   const recentMatches = await getRecentMatchHistoryByUserId(row.id);
   const base = toPublicProfile(row);
+  const badges = buildBadgeList({
+    user: {
+      id: row.id,
+      login: row.login,
+      created_at: row.created_at,
+    },
+    rank,
+    stats,
+    manualBadgeMap,
+  });
+  const activeBadgeKeys = new Set(badges.filter((badge) => badge.active).map((badge) => badge.key));
+  const selectedBadgeKey =
+    row.selected_badge_key && activeBadgeKeys.has(row.selected_badge_key)
+      ? row.selected_badge_key
+      : undefined;
   return {
     ...base,
+    rank,
     stats,
-    badges: buildBadgeList({
-      user: {
-        id: row.id,
-        login: row.login,
-        created_at: row.created_at,
-      },
-      stats,
-      manualBadgeMap,
-    }),
-    selectedBadgeKey: row.selected_badge_key ?? undefined,
+    badges,
+    selectedBadgeKey,
     recentMatches,
     subscription: {
       tier: "none",
@@ -1216,6 +1393,18 @@ export async function recordMatchOutcome(input: {
           updated_at = NOW()
       `,
       [userId, roleKey, win ? 1 : 0],
+    );
+
+    await pool.query(
+      `
+        INSERT INTO auth_user_ranks (user_id, points, updated_at)
+        VALUES ($1, $2, NOW())
+        ON CONFLICT (user_id)
+        DO UPDATE SET
+          points = GREATEST(0, auth_user_ranks.points + EXCLUDED.points),
+          updated_at = NOW()
+      `,
+      [userId, win ? 1 : -1],
     );
 
     const participants = input.players.map((entry) => ({
