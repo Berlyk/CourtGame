@@ -2224,6 +2224,13 @@ function ContextHelp({
 }
 
 function ScreenTransitionLoader({ open }: { open: boolean }) {
+  const [logoFailed, setLogoFailed] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const preload = new Image();
+    preload.src = "/favicon.png";
+    preload.onerror = () => setLogoFailed(true);
+  }, [open]);
   if (typeof document === "undefined") return null;
   return createPortal(
     <AnimatePresence>
@@ -2249,13 +2256,24 @@ function ScreenTransitionLoader({ open }: { open: boolean }) {
               animate={{ opacity: [0.45, 0.72, 0.45] }}
               transition={{ duration: 1.3, repeat: Infinity, ease: "easeInOut" }}
             />
-            <motion.img
-              src="/favicon.png"
-              alt="CourtGame"
-              className="relative z-10 h-32 w-32 select-none drop-shadow-[0_0_24px_rgba(248,113,113,0.42)]"
-              animate={{ rotate: [0, 3, 0, -3, 0] }}
-              transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
-            />
+            {logoFailed ? (
+              <motion.div
+                className="relative z-10 grid h-32 w-32 place-items-center rounded-full border border-zinc-700 bg-zinc-900/80 text-zinc-100 drop-shadow-[0_0_24px_rgba(248,113,113,0.35)]"
+                animate={{ rotate: [0, 3, 0, -3, 0] }}
+                transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
+              >
+                <Scale className="h-12 w-12" />
+              </motion.div>
+            ) : (
+              <motion.img
+                src="/favicon.png"
+                alt="CourtGame"
+                className="relative z-10 h-32 w-32 select-none drop-shadow-[0_0_24px_rgba(248,113,113,0.42)]"
+                animate={{ rotate: [0, 3, 0, -3, 0] }}
+                transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
+                onError={() => setLogoFailed(true)}
+              />
+            )}
             <motion.div
               className="relative z-10 h-2 w-40 overflow-hidden rounded-full bg-zinc-800"
               initial={{ opacity: 0.85 }}
@@ -2280,9 +2298,6 @@ export default function App() {
   const [screen, setScreen] = useState<"home" | "profile" | "room" | "game">(
     "home",
   );
-  const [screenTransitionLoading, setScreenTransitionLoading] = useState(false);
-  const prevScreenRef = useRef<"home" | "profile" | "room" | "game">("home");
-  const screenTransitionTimerRef = useRef<number | null>(null);
   const [homeTab, setHomeTab] = useState<HomeTab>("play");
   const [devlogPage, setDevlogPage] = useState(1);
   const [playView, setPlayView] = useState<"quick" | "matches">("quick");
@@ -2489,27 +2504,8 @@ export default function App() {
     reconnectExpiresAt !== null
       ? Math.max(0, Math.ceil((reconnectExpiresAt - nowMs) / 1000))
       : 0;
-
-  useEffect(() => {
-    if (prevScreenRef.current === screen) return;
-    prevScreenRef.current = screen;
-    if (screenTransitionTimerRef.current !== null) {
-      window.clearTimeout(screenTransitionTimerRef.current);
-    }
-    setScreenTransitionLoading(true);
-    screenTransitionTimerRef.current = window.setTimeout(() => {
-      setScreenTransitionLoading(false);
-      screenTransitionTimerRef.current = null;
-    }, 520);
-  }, [screen]);
-
-  useEffect(() => {
-    return () => {
-      if (screenTransitionTimerRef.current !== null) {
-        window.clearTimeout(screenTransitionTimerRef.current);
-      }
-    };
-  }, []);
+  const globalBlockingLoading =
+    authLoading || myProfileLoading || viewPlayerProfileLoading || imageCropLoading;
   const protestCooldownLeft = Math.max(
     0,
     Math.ceil((protestCooldownEndsAt - nowMs) / 1000),
@@ -5605,7 +5601,7 @@ export default function App() {
           </DialogContent>
         </Dialog>
         {renderPublicProfileDialog()}
-        <ScreenTransitionLoader open={screenTransitionLoading} />
+        <ScreenTransitionLoader open={globalBlockingLoading} />
       </motion.div>
     );
   }
@@ -6806,7 +6802,7 @@ export default function App() {
           </div>
         )}
         {renderPublicProfileDialog()}
-        <ScreenTransitionLoader open={screenTransitionLoading} />
+        <ScreenTransitionLoader open={globalBlockingLoading} />
       </motion.div>
     );
   }
@@ -7089,7 +7085,7 @@ export default function App() {
           />
         </div>
         {renderPublicProfileDialog()}
-        <ScreenTransitionLoader open={screenTransitionLoading} />
+        <ScreenTransitionLoader open={globalBlockingLoading} />
       </motion.div>
     );
   }
@@ -8336,7 +8332,7 @@ export default function App() {
           />
         </div>
         {renderPublicProfileDialog()}
-        <ScreenTransitionLoader open={screenTransitionLoading} />
+        <ScreenTransitionLoader open={globalBlockingLoading} />
       </motion.div>
     );
   }
