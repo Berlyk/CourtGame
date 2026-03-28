@@ -820,12 +820,9 @@ export function cleanupStaleRooms(nowMs = Date.now()): number {
     const hardExpired = roomAgeMs > ROOM_HARD_TTL_MS;
     const sourcePlayers = room.game ? room.game.players : room.players;
     const hasConnectedPlayers = sourcePlayers.some((player) => isPlayerConnected(player));
-    const hasReconnectWindow = sourcePlayers.some((player) => {
-      const isRegistered =
-        typeof player?.userId === "string" && player.userId.trim().length > 0;
-      if (isRegistered) return false;
-      return canStillReconnect(player, nowMs);
-    });
+    const hasReconnectWindow = sourcePlayers.some((player) =>
+      canStillReconnect(player, nowMs),
+    );
     const finishedWithoutPeople = !!room.game?.finished && !hasConnectedPlayers && !hasReconnectWindow;
     const emptyRoom = sourcePlayers.length === 0;
     const disconnectedAndExpired = !hasConnectedPlayers && !hasReconnectWindow;

@@ -2010,7 +2010,19 @@ export function setupSocket(httpServer: HttpServer) {
               (player: any) =>
                 typeof player?.socketId === "string" && player.socketId.trim().length > 0,
             ).length;
-            if (connectedPlayersCount === 0) {
+            const reconnectablePlayersCount = updatedRoom.game.players.filter((player: any) => {
+              const isConnected =
+                typeof player?.socketId === "string" && player.socketId.trim().length > 0;
+              if (isConnected) return false;
+              const isRegistered =
+                typeof player?.userId === "string" && player.userId.trim().length > 0;
+              if (isRegistered) return true;
+              return (
+                typeof player?.disconnectedUntil === "number" &&
+                player.disconnectedUntil > Date.now()
+              );
+            }).length;
+            if (connectedPlayersCount === 0 && reconnectablePlayersCount === 0) {
               closeRoomAndNotify(
                 info.roomCode,
                 "Матч закрыт, так как в комнате не осталось активных игроков.",
@@ -2082,7 +2094,19 @@ export function setupSocket(httpServer: HttpServer) {
             (player: any) =>
               typeof player?.socketId === "string" && player.socketId.trim().length > 0,
           ).length;
-          if (connectedPlayersCount === 0) {
+          const reconnectablePlayersCount = updatedRoom.players.filter((player: any) => {
+            const isConnected =
+              typeof player?.socketId === "string" && player.socketId.trim().length > 0;
+            if (isConnected) return false;
+            const isRegistered =
+              typeof player?.userId === "string" && player.userId.trim().length > 0;
+            if (isRegistered) return true;
+            return (
+              typeof player?.disconnectedUntil === "number" &&
+              player.disconnectedUntil > Date.now()
+            );
+          }).length;
+          if (connectedPlayersCount === 0 && reconnectablePlayersCount === 0) {
             clearReconnectCleanup(info.roomCode, info.playerId);
             deleteRoom(info.roomCode);
             emitPublicMatches(io);

@@ -36,6 +36,7 @@ import {
   FlipHorizontal,
   Laptop,
   CalendarDays,
+  Clock3,
   Mic2,
   BrainCircuit,
   Swords,
@@ -1932,7 +1933,7 @@ function BadgeGlyph({
       </span>
     );
   }
-  return <Icon className={`inline-block align-middle shrink-0 ${className}`} />;
+  return <Icon className={`inline-block align-middle leading-none shrink-0 ${className}`} />;
 }
 
 function rankKeyToBadgeVisualKey(rankKey?: string): string | undefined {
@@ -2443,12 +2444,25 @@ export default function App() {
         !rankUp && nextRank.nextTitle
           ? getNextRankKey(nextRank.key) ?? nextRank.key
           : nextRank.key;
+      const fallbackNextRankKey =
+        getNextRankKey(nextRank.key) ?? getNextRankKey(safePreviousRank.key);
+      const fallbackNextRankTitle = fallbackNextRankKey
+        ? getRankTitleByKey(fallbackNextRankKey)
+        : nextRank.title;
+      const fallbackNextTitle =
+        (nextRank.nextTitle && nextRank.nextTitle.trim()) || fallbackNextRankTitle;
       const nextRankTitleForDisplay =
         !rankUp && nextRank.nextTitle
           ? nextRank.nextTitle
           : rankUp
             ? nextRank.title
             : getRankTitleByKey(nextRankKeyForDisplay);
+      const resolvedNextTitle =
+        !rankUp &&
+        nextRankTitleForDisplay.trim().toUpperCase() ===
+          (safePreviousRank.title ?? "").trim().toUpperCase()
+          ? fallbackNextTitle
+          : nextRankTitleForDisplay;
       const prevTarget = Math.max(1, safePreviousRank.progressTarget || 1);
       const nextTarget = Math.max(1, nextRank.progressTarget || 1);
       const fromProgressPercent = Math.min(
@@ -2463,7 +2477,7 @@ export default function App() {
         fromKey: safePreviousRank.key,
         toKey: nextRankKeyForDisplay,
         fromTitle: safePreviousRank.title,
-        toTitle: nextRankTitleForDisplay,
+        toTitle: resolvedNextTitle,
         delta,
         fromPoints: safePreviousRank.points,
         toPoints: nextRank.points,
@@ -2674,7 +2688,7 @@ export default function App() {
                   </div>
                 </div>
                 {viewProfileBadgeHintOpen && viewPlayerProfile.selectedBadgeKey ? (
-                  <div className="relative z-20 mx-3 mb-3 rounded-xl border border-zinc-700 bg-zinc-900/95 px-3 py-2 text-sm leading-relaxed text-zinc-200 shadow-[0_10px_24px_rgba(0,0,0,0.45)]">
+                  <div className="relative z-20 mx-3 mb-3 rounded-xl border border-zinc-700 bg-zinc-900/95 px-3 py-2 text-sm leading-relaxed text-zinc-200 shadow-[0_10px_24px_rgba(0,0,0,0.45)] whitespace-pre-wrap break-words">
                     {viewPlayerProfile.badges?.find(
                       (badge) => badge.key === viewPlayerProfile.selectedBadgeKey,
                     )?.description ?? "Информация о бейдже отсутствует."}
@@ -4860,7 +4874,7 @@ export default function App() {
                     <div className="text-sm text-zinc-500 mt-1">
                       Активные и доступные награды профиля.
                     </div>
-                    <div className="mt-3 rounded-xl border border-zinc-800 bg-zinc-900/55 p-2">
+                    <div className="mt-3 rounded-xl border border-zinc-800 bg-zinc-900/55 p-2 overflow-visible">
                       <div className="text-xs text-zinc-500 px-1 pb-2">Выбранный бейдж</div>
                       <div className="relative">
                         <button
@@ -4885,8 +4899,8 @@ export default function App() {
                           </div>
                         </button>
                         {badgePickerOpen && (
-                          <div className="absolute top-full z-[150] mt-2 w-full overflow-hidden rounded-lg border border-zinc-700 bg-zinc-950 shadow-[0_18px_44px_rgba(0,0,0,0.55)]">
-                            <div className="max-h-72 overflow-y-auto p-1.5 [scrollbar-width:thin] [scrollbar-color:rgba(113,113,122,0.9)_rgba(24,24,27,0.45)] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-zinc-900/55 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-700/85 [&::-webkit-scrollbar-thumb:hover]:bg-zinc-500">
+                          <div className="absolute top-full z-[170] mt-2 w-full overflow-hidden rounded-lg border border-zinc-700 bg-zinc-950 shadow-[0_18px_44px_rgba(0,0,0,0.55)]">
+                            <div className="max-h-[min(18rem,calc(100vh-12rem))] overflow-y-auto p-1.5 [scrollbar-width:thin] [scrollbar-color:rgba(113,113,122,0.9)_rgba(24,24,27,0.45)] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-zinc-900/55 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-700/85 [&::-webkit-scrollbar-thumb:hover]:bg-zinc-500">
                               {activeBadges.map((badge) => (
                                 <button
                                   key={`select-${badge.key}`}
@@ -5072,7 +5086,7 @@ export default function App() {
                       </div>
                     </div>
                   ))}
-                <div className="relative z-20 rounded-lg border border-zinc-800 bg-zinc-950/95 px-3 py-2 text-center text-xs uppercase tracking-[0.12em] text-zinc-400">
+                <div className="relative z-20 mt-1 rounded-lg border border-zinc-800 bg-zinc-950/95 px-3 py-2 text-center text-xs uppercase tracking-[0.12em] text-zinc-400">
                   Ранговые
                 </div>
                 {badges
@@ -5120,7 +5134,7 @@ export default function App() {
                       </div>
                     </div>
                   ))}
-                <div className="relative z-20 rounded-lg border border-zinc-800 bg-zinc-950/95 px-3 py-2 text-center text-xs uppercase tracking-[0.12em] text-zinc-400">
+                <div className="relative z-20 mt-1 rounded-lg border border-zinc-800 bg-zinc-950/95 px-3 py-2 text-center text-xs uppercase tracking-[0.12em] text-zinc-400">
                   Выдаваемые
                 </div>
                 {badges
@@ -5484,7 +5498,7 @@ export default function App() {
                   initial={{ opacity: 0.35, scale: 0.96 }}
                   animate={{ opacity: [0.35, 0.6, 0.35], scale: [0.96, 1.02, 0.96] }}
                   transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
-                  className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(239,68,68,0.16),transparent_58%),radial-gradient(circle_at_70%_18%,rgba(168,85,247,0.12),transparent_52%)]"
+                  className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(239,68,68,0.16),transparent_58%),radial-gradient(circle_at_70%_18%,rgba(113,113,122,0.14),transparent_52%)]"
                 />
                 <div className="flex items-start justify-between gap-4 mb-4">
                   <div>
@@ -6109,9 +6123,20 @@ export default function App() {
                                     variant="outline"
                                     className="w-full h-12 rounded-xl border-red-600/50 text-red-400 hover:bg-red-600/10 hover:text-red-300 gap-2"
                                   >
-                                    {reconnectPersistent
-                                      ? "↩ Переподключиться к игре"
-                                      : `↩ Переподключиться к игре (${reconnectSecondsLeft}s)`}
+                                    {reconnectPersistent ? (
+                                      "↩ Переподключиться к игре"
+                                    ) : (
+                                      <span className="inline-flex items-center gap-2">
+                                        <motion.span
+                                          animate={{ opacity: [0.7, 1, 0.7] }}
+                                          transition={{ duration: 1.15, repeat: Infinity, ease: "easeInOut" }}
+                                          className="inline-flex"
+                                        >
+                                          <DoorOpen className="h-4 w-4" />
+                                        </motion.span>
+                                        <span>{`↩ Переподключиться к игре (${reconnectSecondsLeft}s)`}</span>
+                                      </span>
+                                    )}
                                   </Button>
                                 </motion.div>
                               </motion.div>
@@ -8075,17 +8100,17 @@ export default function App() {
             </InfoBlock>
           </div>
           {matchExpiresAt !== null && !game.finished && (
-            <div className="fixed right-5 bottom-0 sm:bottom-0 left-auto z-30 rounded-xl border border-zinc-700/80 bg-zinc-950/85 px-2.5 sm:px-3 py-1.5 sm:py-2 text-[11px] sm:text-xs font-semibold text-zinc-200 shadow-[0_8px_22px_rgba(0,0,0,0.45)] backdrop-blur-sm">
-              <span className="sm:hidden inline-flex items-center gap-1.5">
-                <span>⏱</span>
+            <div className="fixed right-5 bottom-[4.35rem] sm:bottom-[4.45rem] left-auto z-30 rounded-xl border border-zinc-700/80 bg-zinc-950/85 px-2.5 sm:px-3 py-1.5 sm:py-2 text-[11px] sm:text-xs font-semibold text-zinc-200 shadow-[0_8px_22px_rgba(0,0,0,0.45)] backdrop-blur-sm">
+              <span className="sm:hidden inline-flex items-center gap-2">
+                <Clock3 className="h-3.5 w-3.5 text-zinc-300" />
                 <span className="text-red-300">
                   {String(matchHoursLeft).padStart(2, "0")}:
                   {String(matchMinutesLeft).padStart(2, "0")}:
                   {String(matchSecondsLeft).padStart(2, "0")}
                 </span>
               </span>
-              <span className="hidden sm:inline-flex items-center gap-1.5">
-                <span>⏱</span>
+              <span className="hidden sm:inline-flex items-center gap-2">
+                <Clock3 className="h-3.5 w-3.5 text-zinc-300" />
                 <span>До авто-закрытия:</span>
                 <span className="text-red-300">
                   {String(matchHoursLeft).padStart(2, "0")}:
