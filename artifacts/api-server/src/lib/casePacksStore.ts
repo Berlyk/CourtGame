@@ -95,6 +95,15 @@ function buildRolesFromFacts(
   const roleKeys = Object.keys(ROLE_TITLES) as RoleKey[];
 
   for (const roleKey of roleKeys) {
+    if (roleKey === "judge") {
+      result[roleKey] = {
+        title: ROLE_TITLES[roleKey],
+        goal: ROLE_GOALS[roleKey],
+        facts: [],
+      };
+      continue;
+    }
+
     const roleFactsRaw = facts[roleKey] ?? [];
     const roleFacts = Array.isArray(roleFactsRaw)
       ? roleFactsRaw.filter((item): item is string => typeof item === "string")
