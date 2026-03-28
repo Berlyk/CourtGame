@@ -1,6 +1,6 @@
 ﻿import crypto from "node:crypto";
 import { pool } from "@workspace/db";
-import { cases as legacyCases } from "../socket/gameData.js";
+import { legacyCases } from "./legacyGameContent.js";
 
 /*
   ======================= КУДА ДОБАВЛЯТЬ НОВЫЕ ПАКИ И ДЕЛА =======================
@@ -8,8 +8,32 @@ import { cases as legacyCases } from "../socket/gameData.js";
   2) Добавьте дела в таблицу `case_pack_cases` с нужным pack_id и mode_player_count (3..6).
   3) Игра при старте матча берет дело только из БД (по выбранному паку).
 
-  Базовый пак `classic` заполняется автоматически из legacy cases (gameData.ts),
+  Базовый пак `classic` заполняется автоматически из legacy cases (legacyGameContent.ts),
   чтобы после миграции сохранить все существующие дела.
+*/
+
+/*
+  ПРОСТОЙ ПЛАН ДЛЯ ТЕБЯ:
+  ШАГ 1. Добавить пак:
+    INSERT INTO case_packs (id, key, title, description, is_adult, sort_order, active)
+    VALUES (gen_random_uuid(), 'my_pack', 'Мой пак', 'Описание пака', FALSE, 30, TRUE);
+
+  ШАГ 2. Добавить дело (пример для 4 игроков):
+    INSERT INTO case_pack_cases (
+      id, pack_id, mode_player_count, case_key, mode_label, title, description, truth, evidence, roles
+    )
+    VALUES (
+      gen_random_uuid(),
+      (SELECT id FROM case_packs WHERE key = 'my_pack'),
+      4,
+      'my_pack_case_1',
+      'Режим на 4',
+      'Название дела',
+      'Суть дела...',
+      'Истина...',
+      ARRAY['Улика 1', 'Улика 2'],
+      '{}'::jsonb
+    );
 */
 
 export interface CasePackInfo {

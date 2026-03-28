@@ -38,6 +38,11 @@ import {
   pickCaseForRoom,
 } from "../lib/casePacksStore.js";
 import {
+  ensureMechanicCardsStorage,
+  ensureDefaultMechanicCardsSeeded,
+  pickMechanicCardsForRoom,
+} from "../lib/mechanicCardsStore.js";
+import {
   cleanupOldSnapshots,
   deleteRoomSnapshot,
   findBindingByUser,
@@ -425,8 +430,10 @@ export function setupSocket(httpServer: HttpServer) {
     try {
       await ensureCasePacksStorage();
       await ensureDefaultCasePackSeeded();
+      await ensureMechanicCardsStorage();
+      await ensureDefaultMechanicCardsSeeded();
     } catch (error) {
-      console.error("case packs bootstrap failed", error);
+      console.error("content bootstrap failed", error);
     }
   })();
 
@@ -1126,7 +1133,13 @@ export function setupSocket(httpServer: HttpServer) {
         return;
       }
 
-      const updatedRoom = startGame(roomCode, selectedCase);
+      const mechanicCards = await pickMechanicCardsForRoom(3);
+      if (!mechanicCards.length) {
+        socket.emit("error", { message: "Не найдены карты механик для старта матча." });
+        return;
+      }
+
+      const updatedRoom = startGame(roomCode, selectedCase, mechanicCards);
       if (!updatedRoom) {
         socket.emit("error", { message: "Не удалось начать игру." });
         return;

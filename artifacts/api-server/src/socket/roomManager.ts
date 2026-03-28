@@ -1,5 +1,4 @@
 ﻿import {
-  mechanicPool,
   roleOrderByCount,
 } from "./gameData.js";
 
@@ -1006,10 +1005,15 @@ export function updatePlayerProfile(
   return room;
 }
 
-export function startGame(code: string, selectedCase: any): Room | null {
+export function startGame(
+  code: string,
+  selectedCase: any,
+  mechanicCards: Array<{ name: string; description: string }>,
+): Room | null {
   const room = rooms.get(code);
   if (!room) return null;
   if (!selectedCase || typeof selectedCase !== "object") return null;
+  if (!Array.isArray(mechanicCards) || mechanicCards.length === 0) return null;
   if (room.modeKey === "quick_flex") {
     if (room.players.length < 3 || room.players.length > room.maxPlayers) {
       return null;
@@ -1049,7 +1053,7 @@ export function startGame(code: string, selectedCase: any): Room | null {
         text,
         revealed: false
       })),
-      cards: roleKey === "judge" ? [] : pickRandom(mechanicPool, 3).map((card: any, i: number) => ({
+      cards: roleKey === "judge" ? [] : pickRandom(mechanicCards, 3).map((card: any, i: number) => ({
         ...card,
         id: `${player.id}-card-${i}`,
         used: false
@@ -1173,4 +1177,6 @@ export function setVerdict(code: string, verdict: string): Room | null {
 
   return room;
 }
+
+
 
