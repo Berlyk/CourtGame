@@ -33,7 +33,7 @@ export async function ensureMechanicCardsStorage(): Promise<void> {
   return ensurePromise;
 }
 
-// Карты механик теперь полностью живут в БД. Ничего не сидим с backend-файлов.
+// Карты механик полностью хранятся в БД.
 export async function ensureDefaultMechanicCardsSeeded(): Promise<void> {
   await ensureMechanicCardsStorage();
 }

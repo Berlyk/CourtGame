@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { pool } from "@workspace/db";
 
 export interface CasePackInfo {
@@ -47,6 +48,17 @@ const ROLE_GOALS: Record<RoleKey, string> = {
 
 let ensurePromise: Promise<void> | null = null;
 
+const STATIC_PACKS_FALLBACK: CasePackInfo[] = [
+  { key: "classic", title: "КЛАССИКА", description: "Базовый пак дел.", isAdult: false, sortOrder: 10, caseCount: 0 },
+  { key: "medieval", title: "СРЕДНЕВЕКОВЬЕ", description: "Религия и традиции важнее доказательств.", isAdult: false, sortOrder: 20, caseCount: 0 },
+  { key: "hard", title: "ОСОБО ТЯЖКИЕ", description: "Жесткие дела с серьезными последствиями.", isAdult: false, sortOrder: 30, caseCount: 0 },
+  { key: "cyberpunk_2077", title: "CYBERPUNK 2077", description: "Технологии, импланты и корпорации.", isAdult: false, sortOrder: 40, caseCount: 0 },
+  { key: "wild_west", title: "ДИКИЙ ЗАПАД", description: "Слабый контроль закона, где многое решается силой.", isAdult: false, sortOrder: 50, caseCount: 0 },
+  { key: "the_boys", title: "The Boys", description: "Супергерои и последствия их действий.", isAdult: false, sortOrder: 60, caseCount: 0 },
+  { key: "adult_18_plus", title: "18+", description: "Дела с чувствительными и спорными темами.", isAdult: true, sortOrder: 70, caseCount: 0 },
+  { key: "ancient_rome", title: "ДРЕВНИЙ РИМ", description: "Статус и власть влияют на закон и решения суда.", isAdult: false, sortOrder: 80, caseCount: 0 },
+];
+
 export function normalizeCasePackKey(input?: string | null): string {
   const raw = (input ?? "").trim().toLowerCase();
   if (!raw) return "classic";
@@ -94,6 +106,37 @@ async function ensureTablesInternal(): Promise<void> {
   `);
 }
 
+function titleFromPackKey(packKey: string): string {
+  const normalized = (packKey || "classic").replace(/[_-]+/g, " ").trim();
+  if (!normalized) return "CLASSIC";
+  return normalized
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part.toUpperCase())
+    .join(" ");
+}
+
+async function ensurePackRowsFromCases(): Promise<void> {
+  const keysResult = await pool.query<{ pack_key: string }>(`
+    SELECT DISTINCT pack_key
+    FROM case_pack_cases
+    WHERE active = TRUE
+  `);
+
+  for (const row of keysResult.rows) {
+    const key = normalizeCasePackKey(row.pack_key);
+    await pool.query(
+      `
+        INSERT INTO case_packs (id, key, title, description, is_adult, sort_order, active, updated_at)
+        VALUES ($1, $2, $3, $4, FALSE, 100, TRUE, NOW())
+        ON CONFLICT (key)
+        DO UPDATE SET active = TRUE, updated_at = NOW()
+      `,
+      [crypto.randomUUID(), key, titleFromPackKey(key), "Пак дел из базы данных."],
+    );
+  }
+}
+
 export async function ensureCasePacksStorage(): Promise<void> {
   if (!ensurePromise) {
     ensurePromise = ensureTablesInternal().catch((error) => {
@@ -104,9 +147,13 @@ export async function ensureCasePacksStorage(): Promise<void> {
   return ensurePromise;
 }
 
-// Данные паков теперь полностью живут в БД. Ничего не сидим с backend-файлов.
 export async function ensureDefaultCasePackSeeded(): Promise<void> {
   await ensureCasePacksStorage();
+  try {
+    await ensurePackRowsFromCases();
+  } catch {
+    // Не блокируем сервер на неидеальной схеме БД.
+  }
 }
 
 function buildRolesFromFacts(
@@ -132,40 +179,53 @@ function buildRolesFromFacts(
 }
 
 export async function listCasePacks(): Promise<CasePackInfo[]> {
-  await ensureCasePacksStorage();
+  try {
+    await ensureCasePacksStorage();
+    try {
+      await ensurePackRowsFromCases();
+    } catch {
+      // ignore
+    }
 
-  const dbResult = await pool.query<{
-    key: string;
-    title: string;
-    description: string;
-    is_adult: boolean;
-    sort_order: number;
-    case_count: string;
-  }>(`
-    SELECT
-      p.key,
-      p.title,
-      p.description,
-      p.is_adult,
-      p.sort_order,
-      COUNT(c.id)::text AS case_count
-    FROM case_packs p
-    LEFT JOIN case_pack_cases c
-      ON c.pack_key = p.key
-      AND c.active = TRUE
-    WHERE p.active = TRUE
-    GROUP BY p.key, p.title, p.description, p.is_adult, p.sort_order
-    ORDER BY p.sort_order ASC, p.title ASC
-  `);
+    const dbResult = await pool.query<{
+      key: string;
+      title: string;
+      description: string;
+      is_adult: boolean;
+      sort_order: number;
+      case_count: string;
+    }>(`
+      SELECT
+        p.key,
+        p.title,
+        p.description,
+        p.is_adult,
+        p.sort_order,
+        COUNT(c.id)::text AS case_count
+      FROM case_packs p
+      LEFT JOIN case_pack_cases c
+        ON c.pack_key = p.key
+        AND c.active = TRUE
+      WHERE p.active = TRUE
+      GROUP BY p.key, p.title, p.description, p.is_adult, p.sort_order
+      ORDER BY p.sort_order ASC, p.title ASC
+    `);
 
-  return dbResult.rows.map((row) => ({
-    key: row.key,
-    title: row.title,
-    description: row.description,
-    isAdult: !!row.is_adult,
-    sortOrder: Number.isFinite(row.sort_order) ? row.sort_order : 100,
-    caseCount: Math.max(0, Number(row.case_count ?? "0") || 0),
-  }));
+    const mapped = dbResult.rows.map((row) => ({
+      key: row.key,
+      title: row.title,
+      description: row.description,
+      isAdult: !!row.is_adult,
+      sortOrder: Number.isFinite(row.sort_order) ? row.sort_order : 100,
+      caseCount: Math.max(0, Number(row.case_count ?? "0") || 0),
+    }));
+
+    if (mapped.length > 0) return mapped;
+  } catch {
+    // fallback below
+  }
+
+  return STATIC_PACKS_FALLBACK;
 }
 
 async function pickCaseFromPackDb(packKey: string, modePlayerCount: number): Promise<StoredCaseData | null> {
