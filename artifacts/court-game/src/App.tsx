@@ -131,20 +131,69 @@ const GUEST_NAME_PREFIX = "Гость-";
 const PROFILE_BIO_MAX = 150;
 const PACK_PAYWALL_PREVIEW_ENABLED = false;
 
-function getCasePackTheme(packKey: string | undefined, packTitle: string | undefined): string {
+function getCasePackVisual(packKey: string | undefined, packTitle: string | undefined): {
+  card: string;
+  iconWrap: string;
+  icon: LucideIcon;
+  countChip: string;
+} {
   const key = (packKey ?? "").toLowerCase();
   const title = (packTitle ?? "").toLowerCase();
   const full = `${key} ${title}`;
   if (full.includes("medieval") || full.includes("средневек")) {
-    return "border-amber-500/50 bg-gradient-to-br from-amber-900/35 via-zinc-900 to-zinc-900";
+    return {
+      card: "border-amber-700/60 bg-[radial-gradient(120%_90%_at_10%_0%,rgba(180,83,9,0.22),transparent_52%),linear-gradient(135deg,rgba(24,24,27,0.96),rgba(39,39,42,0.9))]",
+      iconWrap: "border-amber-500/45 bg-amber-700/25 text-amber-100",
+      countChip: "border-amber-400/40 bg-amber-600/25 text-amber-100",
+      icon: ScrollText,
+    };
   }
   if (full.includes("hard") || full.includes("тяж") || full.includes("18+") || full.includes("жест")) {
-    return "border-red-600/55 bg-gradient-to-br from-red-950/40 via-zinc-900 to-zinc-900";
+    return {
+      card: "border-red-700/60 bg-[radial-gradient(120%_90%_at_10%_0%,rgba(185,28,28,0.26),transparent_52%),linear-gradient(135deg,rgba(24,24,27,0.96),rgba(39,39,42,0.9))]",
+      iconWrap: "border-red-500/45 bg-red-700/25 text-red-100",
+      countChip: "border-red-400/40 bg-red-600/25 text-red-100",
+      icon: Shield,
+    };
+  }
+  if (full.includes("cyber") || full.includes("кибер")) {
+    return {
+      card: "border-cyan-700/60 bg-[radial-gradient(120%_90%_at_10%_0%,rgba(8,145,178,0.24),transparent_52%),linear-gradient(135deg,rgba(24,24,27,0.96),rgba(39,39,42,0.9))]",
+      iconWrap: "border-cyan-500/45 bg-cyan-700/25 text-cyan-100",
+      countChip: "border-cyan-400/40 bg-cyan-600/25 text-cyan-100",
+      icon: BrainCircuit,
+    };
+  }
+  if (full.includes("запад") || full.includes("west")) {
+    return {
+      card: "border-orange-700/60 bg-[radial-gradient(120%_90%_at_10%_0%,rgba(154,52,18,0.24),transparent_52%),linear-gradient(135deg,rgba(24,24,27,0.96),rgba(39,39,42,0.9))]",
+      iconWrap: "border-orange-500/45 bg-orange-700/25 text-orange-100",
+      countChip: "border-orange-400/40 bg-orange-600/25 text-orange-100",
+      icon: Swords,
+    };
+  }
+  if (full.includes("рим") || full.includes("roman")) {
+    return {
+      card: "border-yellow-700/60 bg-[radial-gradient(120%_90%_at_10%_0%,rgba(161,98,7,0.2),transparent_52%),linear-gradient(135deg,rgba(24,24,27,0.96),rgba(39,39,42,0.9))]",
+      iconWrap: "border-yellow-500/45 bg-yellow-700/25 text-yellow-100",
+      countChip: "border-yellow-400/40 bg-yellow-600/25 text-yellow-100",
+      icon: Crown,
+    };
   }
   if (full.includes("classic") || full.includes("класс")) {
-    return "border-red-500/55 bg-gradient-to-br from-red-900/30 via-zinc-900 to-zinc-900";
+    return {
+      card: "border-red-700/60 bg-[radial-gradient(120%_90%_at_10%_0%,rgba(127,29,29,0.24),transparent_52%),linear-gradient(135deg,rgba(24,24,27,0.96),rgba(39,39,42,0.9))]",
+      iconWrap: "border-red-500/45 bg-red-700/25 text-red-100",
+      countChip: "border-red-400/40 bg-red-600/25 text-red-100",
+      icon: Gavel,
+    };
   }
-  return "border-zinc-700 bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-950";
+  return {
+    card: "border-zinc-700 bg-[radial-gradient(120%_90%_at_10%_0%,rgba(63,63,70,0.24),transparent_52%),linear-gradient(135deg,rgba(24,24,27,0.96),rgba(39,39,42,0.9))]",
+    iconWrap: "border-zinc-600/60 bg-zinc-800/70 text-zinc-200",
+    countChip: "border-zinc-500/50 bg-zinc-800/80 text-zinc-100",
+    icon: Gem,
+  };
 }
 
 const BADGE_ICONS: Record<string, LucideIcon> = {
@@ -6673,8 +6722,16 @@ export default function App() {
                             </Button>
                           </div>
                         ) : (
-                          <div className="text-xs text-zinc-500">
-                            Загружаем паки дел...
+                          <div className="rounded-xl border border-zinc-700 bg-zinc-950/80 px-3 py-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="text-sm font-semibold text-zinc-100">КЛАССИКА</div>
+                              <div className="inline-flex items-center rounded-full border border-zinc-600/70 bg-zinc-800/80 px-2 py-0.5 text-[11px] font-semibold text-zinc-200">
+                                fallback
+                              </div>
+                            </div>
+                            <div className="mt-1 text-xs text-zinc-400">
+                              Список паков временно недоступен. Для создания комнаты будет использован базовый пак.
+                            </div>
                           </div>
                         )}
                       </div>
@@ -6786,54 +6843,77 @@ export default function App() {
                     </Button>
                   </div>
 
-                  <div className="space-y-2">
-                    <div className="text-xs uppercase tracking-[0.12em] text-zinc-500">Доступные</div>
-                    <div className="grid gap-2">
-                      {availableCreatePacks.map((pack) => (
-                        <button
-                          key={pack.key}
-                          type="button"
-                          onClick={() => {
-                            setCreateRoomPackKey(pack.key);
-                            setCreatePackCatalogOpen(false);
-                          }}
-                          className={`rounded-xl border px-3 py-3 text-left transition-colors hover:brightness-110 ${getCasePackTheme(pack.key, pack.title)} ${
-                            createRoomPackKey === pack.key ? "ring-1 ring-red-500/60" : ""
-                          }`}
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="text-sm font-semibold text-zinc-100">{pack.title}</div>
-                            <div className="inline-flex items-center rounded-full border border-red-400/50 bg-red-500/20 px-2 py-0.5 text-[11px] font-semibold text-red-100">
-                              {pack.caseCount ?? 0} дел
-                            </div>
-                          </div>
-                          <div className="mt-1 text-xs text-zinc-300">{pack.description}</div>
-                        </button>
-                      ))}
+                    <div className="space-y-2">
+                      <div className="text-xs uppercase tracking-[0.12em] text-zinc-500">Доступные</div>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {availableCreatePacks.map((pack) => {
+                          const visual = getCasePackVisual(pack.key, pack.title);
+                          const PackIcon = visual.icon;
+                          return (
+                            <button
+                              key={pack.key}
+                              type="button"
+                              onClick={() => {
+                                setCreateRoomPackKey(pack.key);
+                                setCreatePackCatalogOpen(false);
+                              }}
+                              className={`group relative overflow-hidden rounded-2xl border px-3 py-3 text-left transition-all hover:-translate-y-[1px] hover:brightness-110 ${visual.card} ${
+                                createRoomPackKey === pack.key ? "ring-1 ring-red-500/55 shadow-[0_0_20px_rgba(239,68,68,0.2)]" : ""
+                              }`}
+                            >
+                              <div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-200 group-hover:opacity-100 bg-[radial-gradient(80%_60%_at_85%_0%,rgba(255,255,255,0.07),transparent_60%)]" />
+                              <div className="relative z-10 flex items-start justify-between gap-2">
+                                <div className="flex min-w-0 items-start gap-2.5">
+                                  <span className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${visual.iconWrap}`}>
+                                    <PackIcon className="h-4 w-4" />
+                                  </span>
+                                  <div className="min-w-0">
+                                    <div className="truncate text-sm font-semibold text-zinc-100">{pack.title}</div>
+                                    <div className="mt-1 max-h-9 overflow-hidden text-xs leading-[1.15rem] text-zinc-300">
+                                      {pack.description}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${visual.countChip}`}>
+                                  {pack.caseCount ?? 0} дел
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
 
                   <div className="space-y-2">
                     <div className="text-xs uppercase tracking-[0.12em] text-zinc-500">Недоступные</div>
                     {unavailableCreatePacks.length > 0 ? (
-                      <div className="grid gap-2">
-                        {unavailableCreatePacks.map((pack) => (
-                          <div
-                            key={pack.key}
-                            className="rounded-xl border border-zinc-800 bg-zinc-900/50 px-3 py-3 opacity-80"
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="flex items-center gap-2">
-                                <Lock className="h-4 w-4 text-zinc-500" />
-                                <div className="text-sm font-semibold text-zinc-200">{pack.title}</div>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {unavailableCreatePacks.map((pack) => {
+                          const visual = getCasePackVisual(pack.key, pack.title);
+                          const PackIcon = visual.icon;
+                          return (
+                            <div
+                              key={pack.key}
+                              className={`rounded-2xl border px-3 py-3 opacity-80 ${visual.card}`}
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <span className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border ${visual.iconWrap}`}>
+                                    <PackIcon className="h-3.5 w-3.5" />
+                                  </span>
+                                  <div className="truncate text-sm font-semibold text-zinc-200">{pack.title}</div>
+                                </div>
+                                <div className="inline-flex items-center gap-1 rounded-full border border-zinc-600/70 bg-zinc-800/80 px-2 py-0.5 text-[11px] font-semibold text-zinc-200">
+                                  <Lock className="h-3 w-3" />
+                                  {pack.caseCount ?? 0} дел
+                                </div>
                               </div>
-                              <div className="inline-flex items-center rounded-full border border-zinc-600/70 bg-zinc-800/80 px-2 py-0.5 text-[11px] font-semibold text-zinc-200">
-                                {pack.caseCount ?? 0} дел
+                              <div className="mt-1 max-h-9 overflow-hidden text-xs leading-[1.15rem] text-zinc-300">
+                                {pack.description}
                               </div>
                             </div>
-                            <div className="mt-1 text-xs text-zinc-400">{pack.description}</div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     ) : (
                       <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 px-3 py-2 text-xs text-zinc-500">
@@ -7207,19 +7287,28 @@ export default function App() {
                       <div className="text-xs uppercase tracking-[0.12em] text-zinc-500">
                         Выбранный пак
                       </div>
-                      <div
-                        className={`mt-2 rounded-xl border px-3 py-2 ${getCasePackTheme(room.casePackKey, roomPackTitle)}`}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="text-sm font-semibold text-zinc-100">{roomPackTitle}</div>
-                          <div className="inline-flex items-center rounded-full border border-red-400/55 bg-red-500/20 px-2 py-0.5 text-[11px] font-semibold text-red-100">
-                            {roomPackMeta?.caseCount ?? 0} дел
+                      {(() => {
+                        const visual = getCasePackVisual(room.casePackKey, roomPackTitle);
+                        const PackIcon = visual.icon;
+                        return (
+                          <div className="mt-2 rounded-xl border border-zinc-700/80 bg-zinc-900/55 px-3 py-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex min-w-0 items-center gap-2">
+                                <span className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border ${visual.iconWrap}`}>
+                                  <PackIcon className="h-3.5 w-3.5" />
+                                </span>
+                                <div className="truncate text-sm font-semibold text-zinc-100">{roomPackTitle}</div>
+                              </div>
+                              <div className="inline-flex items-center rounded-full border border-zinc-600/70 bg-zinc-800/80 px-2 py-0.5 text-[11px] font-semibold text-zinc-200">
+                                {roomPackMeta?.caseCount ?? 0} дел
+                              </div>
+                            </div>
+                            <div className="mt-1 text-xs text-zinc-400">
+                              {roomPackMeta?.description ?? "Пак выбран для текущего матча."}
+                            </div>
                           </div>
-                        </div>
-                        <div className="mt-1 text-xs text-zinc-300">
-                          {roomPackMeta?.description ?? "Пак выбран для текущего матча."}
-                        </div>
-                      </div>
+                        );
+                      })()}
                     </div>
                     <div className="text-zinc-400 pt-2">
                       Ведущий запускает игру, сайт случайно выбирает подходящее
