@@ -1032,6 +1032,27 @@ export function removePlayer(code: string, playerId: string): Room | null {
   return room;
 }
 
+export function removeDisconnectedLobbyPlayersBeforeStart(code: string): Room | null {
+  const room = rooms.get(code);
+  if (!room || room.started || room.game) return room ?? null;
+  const beforeCount = room.players.length;
+  room.players = room.players.filter((player) => {
+    if (player.isBot) return true;
+    const socketId = player.socketId?.trim() ?? "";
+    return socketId.length > 0;
+  });
+  if (room.players.length !== beforeCount) {
+    if (!room.players.find((player) => player.id === room.hostId)) {
+      const nextHost = room.players[0];
+      if (nextHost) {
+        room.hostId = nextHost.id;
+      }
+    }
+    rebalanceLobbyRoleAssignments(room);
+  }
+  return room;
+}
+
 export function markPlayerDisconnected(
   code: string,
   playerId: string,
@@ -1342,9 +1363,6 @@ export function validateLobbyRolesBeforeStart(
       return { ok: false, reason: "Одна и та же роль назначена нескольким игрокам." };
     }
     assigned.set(role, player.id);
-  }
-  if (assigned.size !== requiredRoles.length) {
-    return { ok: false, reason: "Не все обязательные роли заняты. Выберите роли перед стартом." };
   }
   return { ok: true };
 }

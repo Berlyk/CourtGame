@@ -2214,6 +2214,7 @@ function PlayerCard({
   isHost,
   showLobbyAssignedRole = false,
   canKick = false,
+  rolePickerButton,
   onKick,
   onOpenProfile,
   nowTs,
@@ -2222,6 +2223,10 @@ function PlayerCard({
   isHost: boolean;
   showLobbyAssignedRole?: boolean;
   canKick?: boolean;
+  rolePickerButton?: {
+    label: string;
+    onClick: () => void;
+  } | null;
   onKick?: () => void;
   onOpenProfile?: (userId?: string) => void;
   nowTs: number;
@@ -2298,6 +2303,17 @@ function PlayerCard({
             </div>
           </button>
           <div className="relative z-10 flex items-center gap-2">
+            {rolePickerButton ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 rounded-full border-zinc-700 bg-zinc-900/80 px-3 text-zinc-100 hover:bg-zinc-800"
+                onClick={rolePickerButton.onClick}
+              >
+                {rolePickerButton.label}
+              </Button>
+            ) : null}
             {(player.warningCount ?? 0) > 0 && (
               <Badge className="bg-red-950/70 text-red-300 border border-red-700/70">
                 Предупреждения: {player.warningCount}/3
@@ -2609,6 +2625,9 @@ export default function App() {
   const [joinPasswordDialogOpen, setJoinPasswordDialogOpen] = useState(false);
   const [observerListDialogOpen, setObserverListDialogOpen] = useState(false);
   const [adminBotCount, setAdminBotCount] = useState(1);
+  const [adminPanelOpen, setAdminPanelOpen] = useState(false);
+  const [adminFabPos, setAdminFabPos] = useState<{ x: number; y: number }>({ x: 20, y: 20 });
+  const [lobbyRoleDialogOpen, setLobbyRoleDialogOpen] = useState(false);
   const [joinPasswordDialogMatch, setJoinPasswordDialogMatch] = useState<PublicMatchInfo | null>(null);
   const [joinPasswordInput, setJoinPasswordInput] = useState("");
   const [joinPasswordDialogError, setJoinPasswordDialogError] = useState("");
@@ -2699,6 +2718,14 @@ export default function App() {
   const imageCropMaxOffsetX = Math.max(0, (imageCropDisplayWidth - imageCropViewport.width) / 2);
   const imageCropMaxOffsetY = Math.max(0, (imageCropDisplayHeight - imageCropViewport.height) / 2);
   const joinPasswordDialogOpenRef = useRef(false);
+  const adminFabDragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    baseX: number;
+    baseY: number;
+    moved: boolean;
+  } | null>(null);
   const influenceViewRef = useRef<
     "main" | "chat" | "notes" | "verdict" | "warnings"
   >("main");
@@ -2747,6 +2774,58 @@ export default function App() {
     (currentDevlogPage - 1) * DEVLOG_PAGE_SIZE,
     currentDevlogPage * DEVLOG_PAGE_SIZE,
   );
+
+  useEffect(() => {
+    const fallbackY = Math.max(24, window.innerHeight - 96);
+    const storedX = Number(localStorage.getItem("court_admin_fab_x"));
+    const storedY = Number(localStorage.getItem("court_admin_fab_y"));
+    const x = Number.isFinite(storedX) ? storedX : 20;
+    const y = Number.isFinite(storedY) ? storedY : fallbackY;
+    setAdminFabPos({ x: Math.max(8, x), y: Math.max(8, y) });
+  }, []);
+
+  const beginAdminFabDrag = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
+    adminFabDragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      baseX: adminFabPos.x,
+      baseY: adminFabPos.y,
+      moved: false,
+    };
+    (event.currentTarget as HTMLButtonElement).setPointerCapture(event.pointerId);
+  }, [adminFabPos.x, adminFabPos.y]);
+
+  const moveAdminFabDrag = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
+    const drag = adminFabDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const nextX = drag.baseX + (event.clientX - drag.startX);
+    const nextY = drag.baseY + (event.clientY - drag.startY);
+    if (Math.abs(event.clientX - drag.startX) > 3 || Math.abs(event.clientY - drag.startY) > 3) {
+      drag.moved = true;
+    }
+    const clampedX = Math.max(8, Math.min(window.innerWidth - 72, nextX));
+    const clampedY = Math.max(8, Math.min(window.innerHeight - 72, nextY));
+    setAdminFabPos({ x: clampedX, y: clampedY });
+  }, []);
+
+  const endAdminFabDrag = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
+    const drag = adminFabDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    adminFabDragRef.current = null;
+    localStorage.setItem("court_admin_fab_x", String(adminFabPos.x));
+    localStorage.setItem("court_admin_fab_y", String(adminFabPos.y));
+    if (!drag.moved) {
+      setAdminPanelOpen((prev) => !prev);
+    }
+  }, [adminFabPos.x, adminFabPos.y]);
+
+  useEffect(() => {
+    if (screen !== "room") {
+      setAdminPanelOpen(false);
+      setLobbyRoleDialogOpen(false);
+    }
+  }, [screen]);
   const notesStorageKey =
     game && game.me ? `court_notes_${game.code}_${game.me.id}` : null;
 
@@ -5204,34 +5283,23 @@ export default function App() {
                       <div className="rounded-xl border border-zinc-800 bg-zinc-900/70 px-3 py-2">
                         <div className="text-sm text-zinc-100">Предпочитаемая роль</div>
                         <div className="text-xs text-zinc-500">
-                          Автовыбор в лобби, если ведущий включит распределение ролей.
+                          Используется в лобби, если ведущий включает выбор ролей.
                         </div>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setPreferredRoleDraft("")}
-                            className={`h-8 rounded-lg border px-2.5 text-xs transition-colors ${
-                              preferredRoleDraft === ""
-                                ? "border-red-500 bg-red-600 text-white"
-                                : "border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
-                            }`}
+                        <div className="mt-2">
+                          <select
+                            value={preferredRoleDraft}
+                            onChange={(e) =>
+                              setPreferredRoleDraft((e.target.value as AssignableRole | "") || "")
+                            }
+                            className="h-10 w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 text-sm text-zinc-100 outline-none transition focus:border-red-500/60"
                           >
-                            Без предпочтения
-                          </button>
-                          {(Object.keys(ASSIGNABLE_ROLE_TITLES) as AssignableRole[]).map((roleKey) => (
-                            <button
-                              key={roleKey}
-                              type="button"
-                              onClick={() => setPreferredRoleDraft(roleKey)}
-                              className={`h-8 rounded-lg border px-2.5 text-xs transition-colors ${
-                                preferredRoleDraft === roleKey
-                                  ? "border-red-500 bg-red-600 text-white"
-                                  : "border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
-                              }`}
-                            >
-                              {ASSIGNABLE_ROLE_TITLES[roleKey]}
-                            </button>
-                          ))}
+                            <option value="">Без предпочтения</option>
+                            {(Object.keys(ASSIGNABLE_ROLE_TITLES) as AssignableRole[]).map((roleKey) => (
+                              <option key={roleKey} value={roleKey}>
+                                {ASSIGNABLE_ROLE_TITLES[roleKey]}
+                              </option>
+                            ))}
+                          </select>
                         </div>
                       </div>
                     </div>
@@ -7295,18 +7363,16 @@ export default function App() {
       activeLobbyPlayersCount,
       roomMaxPlayers,
     );
-    const occupiedLobbyRoles = new Set<AssignableRole>(
-      activeLobbyPlayers
-        .map((player) => player.lobbyAssignedRole)
-        .filter((role): role is AssignableRole => !!role),
-    );
+    const occupiedLobbyRolesByPlayer = new Map<AssignableRole, PlayerInfo>();
+    activeLobbyPlayers.forEach((player) => {
+      if (player.lobbyAssignedRole && !occupiedLobbyRolesByPlayer.has(player.lobbyAssignedRole)) {
+        occupiedLobbyRolesByPlayer.set(player.lobbyAssignedRole, player);
+      }
+    });
     const myLobbyPlayer = room.players.find((player) => player.id === myId) ?? null;
     const canStartRoomNow = isQuickRoomMode
       ? activeLobbyPlayersCount >= 3 && activeLobbyPlayersCount <= roomMaxPlayers
       : activeLobbyPlayersCount === roomMaxPlayers;
-    const allLobbyRolesAssigned = usePreferredRoles
-      ? lobbyAssignableRoles.every((role) => occupiedLobbyRoles.has(role))
-      : true;
     const neededPlayersForStart = isQuickRoomMode
       ? Math.max(0, 3 - activeLobbyPlayersCount)
       : Math.max(0, roomMaxPlayers - activeLobbyPlayersCount);
@@ -7332,6 +7398,121 @@ export default function App() {
               {lobbyObservers.length}
             </Button>
           </div>
+        )}
+        {myId === room.hostId && isCreatorAdmin && (
+          <>
+            <button
+              type="button"
+              onPointerDown={beginAdminFabDrag}
+              onPointerMove={moveAdminFabDrag}
+              onPointerUp={endAdminFabDrag}
+              className="fixed z-[80] flex h-12 w-12 items-center justify-center rounded-full border border-red-500/60 bg-zinc-900/95 text-red-300 shadow-[0_0_24px_rgba(239,68,68,0.32)] transition hover:text-red-200"
+              style={{ left: adminFabPos.x, top: adminFabPos.y }}
+              aria-label="Админ-инструменты"
+            >
+              <Wrench className="h-5 w-5" />
+            </button>
+            {adminPanelOpen && (
+              <div
+                className="fixed z-[79] w-[220px] rounded-2xl border border-zinc-700 bg-zinc-950/96 p-3 shadow-2xl shadow-black/70"
+                style={{
+                  left: Math.max(8, Math.min(window.innerWidth - 228, adminFabPos.x + 56)),
+                  top: Math.max(8, Math.min(window.innerHeight - 180, adminFabPos.y)),
+                }}
+              >
+                <div className="text-xs uppercase tracking-[0.12em] text-zinc-500">Админ</div>
+                <div className="mt-2 flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={1}
+                    max={6}
+                    value={adminBotCount}
+                    onChange={(e) => setAdminBotCount(Math.max(1, Math.min(6, Number(e.target.value) || 1)))}
+                    className="h-9 w-20 rounded-lg border-zinc-700 bg-zinc-900 text-zinc-100"
+                  />
+                  <Button
+                    type="button"
+                    onClick={addAdminBots}
+                    className="h-9 flex-1 rounded-lg bg-red-600 px-3 text-xs text-white hover:bg-red-500"
+                  >
+                    Добавить
+                  </Button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+        {usePreferredRoles &&
+          myLobbyPlayer &&
+          myLobbyPlayer.roleKey !== "witness" &&
+          myLobbyPlayer.roleKey !== "observer" && (
+          <Dialog open={lobbyRoleDialogOpen} onOpenChange={setLobbyRoleDialogOpen}>
+            <DialogContent className="rounded-2xl border-zinc-800 bg-zinc-950 text-zinc-100 sm:max-w-xl">
+              <DialogHeader>
+                <DialogTitle>Выбор роли</DialogTitle>
+                <DialogDescription className="text-zinc-400">
+                  Свободные роли можно выбрать сразу. Занятые роли помечены владельцем.
+                </DialogDescription>
+              </DialogHeader>
+              {myLobbyPlayer.rolePreferenceStatus === "conflict" && (
+                <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                  Предпочитаемая роль занята. Выберите другую.
+                </div>
+              )}
+              {myLobbyPlayer.rolePreferenceStatus === "unavailable" && (
+                <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                  Предпочитаемая роль недоступна в этом режиме.
+                </div>
+              )}
+              <div className="grid gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    chooseLobbyRole(null);
+                    setLobbyRoleDialogOpen(false);
+                  }}
+                  className={`rounded-xl border px-3 py-2 text-left transition ${
+                    !myLobbyPlayer.lobbyAssignedRole
+                      ? "border-red-500 bg-red-600/20 text-white"
+                      : "border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800"
+                  }`}
+                >
+                  <div className="text-sm font-medium">Случайная</div>
+                  <div className="text-xs text-zinc-400">Система выдаст свободную роль при старте.</div>
+                </button>
+                {lobbyAssignableRoles.map((roleKey) => {
+                  const owner = occupiedLobbyRolesByPlayer.get(roleKey);
+                  const occupiedByOther = !!owner && owner.id !== myLobbyPlayer.id;
+                  const isSelected = myLobbyPlayer.lobbyAssignedRole === roleKey;
+                  return (
+                    <button
+                      key={roleKey}
+                      type="button"
+                      disabled={occupiedByOther}
+                      onClick={() => {
+                        chooseLobbyRole(roleKey);
+                        setLobbyRoleDialogOpen(false);
+                      }}
+                      className={`rounded-xl border px-3 py-2 text-left transition ${
+                        isSelected
+                          ? "border-red-500 bg-red-600/20 text-white"
+                          : occupiedByOther
+                            ? "border-zinc-800 bg-zinc-900/60 text-zinc-500"
+                            : "border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-medium">{ASSIGNABLE_ROLE_TITLES[roleKey]}</span>
+                        <span className="text-xs text-zinc-400">
+                          {occupiedByOther ? `Занято: ${owner?.name ?? "игрок"}` : "Свободно"}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </DialogContent>
+          </Dialog>
         )}
         <div className="max-w-6xl mx-auto space-y-6">
           <AnimatePresence>
@@ -7451,6 +7632,19 @@ export default function App() {
                           player={player}
                           isHost={player.id === room.hostId}
                           showLobbyAssignedRole={usePreferredRoles}
+                          rolePickerButton={
+                            usePreferredRoles &&
+                            player.id === myLobbyPlayer?.id &&
+                            player.roleKey !== "witness" &&
+                            player.roleKey !== "observer"
+                              ? {
+                                  label: player.lobbyAssignedRole
+                                    ? ASSIGNABLE_ROLE_TITLES[player.lobbyAssignedRole]
+                                    : "Случайная",
+                                  onClick: () => setLobbyRoleDialogOpen(true),
+                                }
+                              : null
+                          }
                           canKick={myId === room.hostId && player.id !== room.hostId}
                           onKick={() => kickPlayerFromRoom(player.id)}
                           onOpenProfile={openUserProfile}
@@ -7459,66 +7653,6 @@ export default function App() {
                       ))}
                     </AnimatePresence>
                   </div>
-                  {usePreferredRoles &&
-                    myLobbyPlayer &&
-                    myLobbyPlayer.roleKey !== "witness" &&
-                    myLobbyPlayer.roleKey !== "observer" && (
-                      <div className="mt-3 rounded-2xl border border-zinc-800 bg-zinc-900/70 px-3 py-3">
-                        <div className="text-sm font-semibold text-zinc-100">Моя роль в лобби</div>
-                        <div className="mt-1 text-xs text-zinc-400">
-                          {myLobbyPlayer.lobbyAssignedRole
-                            ? `Назначено: ${ASSIGNABLE_ROLE_TITLES[myLobbyPlayer.lobbyAssignedRole]}`
-                            : "Сейчас: Случайная"}
-                        </div>
-                        {myLobbyPlayer.rolePreferenceStatus === "conflict" && (
-                          <div className="mt-1 text-xs text-amber-300">
-                            Предпочитаемая роль занята. Выберите другую из свободных.
-                          </div>
-                        )}
-                        {myLobbyPlayer.rolePreferenceStatus === "unavailable" && (
-                          <div className="mt-1 text-xs text-amber-300">
-                            Предпочитаемая роль недоступна в этом режиме.
-                          </div>
-                        )}
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() => chooseLobbyRole(null)}
-                            className={`h-8 rounded-lg border px-2.5 text-xs transition-colors ${
-                              !myLobbyPlayer.lobbyAssignedRole
-                                ? "border-red-500 bg-red-600 text-white"
-                                : "border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
-                            }`}
-                          >
-                            Случайная
-                          </button>
-                          {lobbyAssignableRoles.map((roleKey) => {
-                            const occupiedByOther = activeLobbyPlayers.some(
-                              (player) =>
-                                player.id !== myLobbyPlayer.id && player.lobbyAssignedRole === roleKey,
-                            );
-                            const isSelected = myLobbyPlayer.lobbyAssignedRole === roleKey;
-                            return (
-                              <button
-                                key={roleKey}
-                                type="button"
-                                disabled={occupiedByOther && !isSelected}
-                                onClick={() => chooseLobbyRole(roleKey)}
-                                className={`h-8 rounded-lg border px-2.5 text-xs transition-colors ${
-                                  isSelected
-                                    ? "border-red-500 bg-red-600 text-white"
-                                    : occupiedByOther
-                                      ? "border-zinc-800 bg-zinc-900 text-zinc-600 cursor-not-allowed"
-                                      : "border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
-                                }`}
-                              >
-                                {ASSIGNABLE_ROLE_TITLES[roleKey]}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
                   {neededPlayersForStart > 0 && (
                     <div className="absolute inset-x-0 bottom-1 text-center text-sm text-zinc-500">
                       Ожидание игроков... (нужно ещё минимум {neededPlayersForStart})
@@ -7588,33 +7722,6 @@ export default function App() {
                         </div>
                       </div>
                     )}
-                    {myId === room.hostId && isCreatorAdmin && (
-                      <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2">
-                        <div className="text-xs uppercase tracking-[0.12em] text-zinc-500">Админ-панель</div>
-                        <div className="mt-1 flex items-center gap-2">
-                          <Input
-                            type="number"
-                            min={1}
-                            max={6}
-                            value={adminBotCount}
-                            onChange={(e) => setAdminBotCount(Math.max(1, Math.min(6, Number(e.target.value) || 1)))}
-                            className="h-8 w-20 rounded-lg border-zinc-700 bg-zinc-900 text-zinc-100"
-                          />
-                          <Button
-                            type="button"
-                            onClick={addAdminBots}
-                            className="h-8 rounded-lg bg-red-600 px-3 text-xs text-white hover:bg-red-500"
-                          >
-                            Добавить ботов
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                    {usePreferredRoles && !allLobbyRolesAssigned && (
-                      <div className="text-xs text-amber-300">
-                        Для старта нужно занять все роли текущего режима.
-                      </div>
-                    )}
                     <div className="text-zinc-400 pt-2">
                       Ведущий запускает игру, сайт случайно выбирает подходящее
                       дело и распределяет роли.
@@ -7623,9 +7730,7 @@ export default function App() {
                       <Button
                         className="mt-3 h-10 rounded-xl gap-2 bg-red-600 hover:bg-red-500 text-white border-0 disabled:bg-zinc-800 disabled:text-zinc-500"
                         onClick={startGame}
-                        disabled={
-                          startGameLoading || !canStartRoomNow || !allLobbyRolesAssigned
-                        }
+                        disabled={startGameLoading || !canStartRoomNow}
                       >
                         <Play className="w-4 h-4" />
                         {startGameLoading ? "Запуск..." : "Запустить матч"}

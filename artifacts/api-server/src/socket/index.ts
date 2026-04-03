@@ -28,6 +28,7 @@ import {
   chooseLobbyRole,
   addAdminBotsToRoom,
   validateLobbyRolesBeforeStart,
+  removeDisconnectedLobbyPlayersBeforeStart,
   updatePlayerAvatar,
   updatePlayerProfile,
   cleanupStaleRooms,
@@ -1174,30 +1175,32 @@ export function setupSocket(httpServer: HttpServer) {
         socket.emit("error", { message: "Только ведущий может начать игру." });
         return;
       }
-      const activePlayers = room.players.filter(
+      const preparedRoom = removeDisconnectedLobbyPlayersBeforeStart(roomCode) ?? room;
+      io.to(roomCode).emit("room_updated", buildRoomUpdatePayload(preparedRoom));
+      const activePlayers = preparedRoom.players.filter(
         (player: any) => player.roleKey !== "witness" && player.roleKey !== "observer",
       );
-      if (room.modeKey === "quick_flex") {
-        if (activePlayers.length < 3 || activePlayers.length > room.maxPlayers) {
+      if (preparedRoom.modeKey === "quick_flex") {
+        if (activePlayers.length < 3 || activePlayers.length > preparedRoom.maxPlayers) {
           socket.emit("error", {
-            message: `Для старта быстрой комнаты нужно от 3 до ${room.maxPlayers} игроков.`,
+            message: `Для старта быстрой комнаты нужно от 3 до ${preparedRoom.maxPlayers} игроков.`,
           });
           return;
         }
-      } else if (activePlayers.length !== room.maxPlayers) {
+      } else if (activePlayers.length !== preparedRoom.maxPlayers) {
         socket.emit("error", {
-          message: `Для старта нужно ровно ${room.maxPlayers} игроков.`,
+          message: `Для старта нужно ровно ${preparedRoom.maxPlayers} игроков.`,
         });
         return;
       }
 
-      const roleValidation = validateLobbyRolesBeforeStart(room);
+      const roleValidation = validateLobbyRolesBeforeStart(preparedRoom);
       if (!roleValidation.ok) {
         socket.emit("error", { message: roleValidation.reason });
         return;
       }
 
-      const selectedCase = await pickCaseForRoom(room.casePackKey, activePlayers.length);
+      const selectedCase = await pickCaseForRoom(preparedRoom.casePackKey, activePlayers.length);
       if (!selectedCase) {
         socket.emit("error", { message: "Для выбранного пака не найдено подходящих дел." });
         return;
