@@ -6629,10 +6629,10 @@ export default function App() {
               }}
             >
               <DialogContent
-                className="w-[calc(100vw-1rem)] sm:w-[calc(100vw-2rem)] max-w-3xl border-zinc-800 bg-zinc-950 text-zinc-100 p-4 sm:p-6 [&>button]:h-12 [&>button]:w-12 [&>button>svg]:h-7 [&>button>svg]:w-7 [&>button]:top-2 [&>button]:right-2"
+                className={`w-[calc(100vw-1rem)] sm:w-[calc(100vw-2rem)] max-w-2xl max-h-[88vh] overflow-y-auto border-zinc-800 bg-zinc-950 text-zinc-100 p-4 sm:p-6 ${HIDE_SCROLLBAR_CLASS} [&>button]:h-12 [&>button]:w-12 [&>button>svg]:h-7 [&>button>svg]:w-7 [&>button]:top-2 [&>button]:right-2`}
               >
                 <DialogHeader className="space-y-1">
-                  <DialogTitle>{createPackCatalogOpen ? "Выбор пака дел" : "Создать матч"}</DialogTitle>
+                  <DialogTitle>Создать матч</DialogTitle>
                   <DialogDescription className="text-zinc-400">
                     {createPackCatalogOpen
                       ? "Выберите пак для комнаты."
@@ -6640,7 +6640,7 @@ export default function App() {
                   </DialogDescription>
                 </DialogHeader>
                 {createPackCatalogOpen ? (
-                  <div className="min-h-[620px] space-y-4">
+                  <div className="space-y-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <Button
                         type="button"
@@ -6661,7 +6661,7 @@ export default function App() {
                         Создать пак
                       </Button>
                     </div>
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                       {casePacks.map((pack) => {
                         const isLocked = PACK_PAYWALL_PREVIEW_ENABLED && pack.key !== baseCreatePackKey;
                         const visual = getCasePackVisual(pack.key, pack.title);
@@ -6671,8 +6671,8 @@ export default function App() {
                           <>
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0">
-                                <div className="truncate text-sm font-semibold text-zinc-100">{displayTitle}</div>
-                                <div className="mt-0.5 truncate text-[11px] leading-4 text-zinc-300">
+                                <div className="text-sm font-semibold text-zinc-100 break-words">{displayTitle}</div>
+                                <div className="mt-0.5 text-[11px] leading-4 text-zinc-300 break-words">
                                   {pack.description}
                                 </div>
                               </div>
@@ -6722,7 +6722,7 @@ export default function App() {
                     </div>
                   </div>
                 ) : (
-                <div className="min-h-[620px] space-y-4">
+                <div className="space-y-4">
                   <div className="rounded-2xl border border-zinc-800 bg-gradient-to-r from-zinc-900 via-zinc-900/80 to-zinc-900 px-4 py-3">
                     <div className="text-xs uppercase tracking-[0.12em] text-zinc-400">
                       Выбранный режим
