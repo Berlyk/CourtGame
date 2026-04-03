@@ -133,74 +133,72 @@ const PACK_PAYWALL_PREVIEW_ENABLED = false;
 
 function getCasePackVisual(packKey: string | undefined, packTitle: string | undefined): {
   card: string;
-  emblemWrap: string;
-  emblem: string;
   countChip: string;
+  vibe: string;
 } {
   const key = (packKey ?? "").toLowerCase();
   const title = (packTitle ?? "").toLowerCase();
   const full = `${key} ${title}`;
   if (full.includes("medieval") || full.includes("средневек")) {
     return {
-      card: "border-amber-700/55 bg-[radial-gradient(120%_90%_at_10%_0%,rgba(180,83,9,0.22),transparent_52%),linear-gradient(135deg,rgba(24,24,27,0.96),rgba(39,39,42,0.9))]",
-      emblemWrap: "border-amber-500/45 bg-amber-700/25 text-amber-100",
-      emblem: "MD",
+      card: "border-amber-600/60 bg-[radial-gradient(140%_90%_at_5%_0%,rgba(180,83,9,0.24),transparent_52%),radial-gradient(90%_70%_at_95%_100%,rgba(120,53,15,0.18),transparent_60%),linear-gradient(140deg,rgba(30,24,18,0.97),rgba(24,24,27,0.92))]",
       countChip: "border-amber-400/40 bg-amber-600/25 text-amber-100",
+      vibe: "Хроники королевства",
     };
   }
   if (full.includes("18+")) {
     return {
       card: "border-fuchsia-700/60 bg-[radial-gradient(120%_90%_at_10%_0%,rgba(162,28,175,0.24),transparent_52%),linear-gradient(135deg,rgba(24,24,27,0.96),rgba(39,39,42,0.9))]",
-      emblemWrap: "border-fuchsia-500/45 bg-fuchsia-700/25 text-fuchsia-100",
-      emblem: "18+",
       countChip: "border-fuchsia-400/40 bg-fuchsia-600/25 text-fuchsia-100",
+      vibe: "Для взрослой аудитории",
     };
   }
   if (full.includes("hard") || full.includes("тяж") || full.includes("жест")) {
     return {
-      card: "border-violet-700/60 bg-[radial-gradient(120%_90%_at_10%_0%,rgba(109,40,217,0.24),transparent_52%),linear-gradient(135deg,rgba(24,24,27,0.96),rgba(39,39,42,0.9))]",
-      emblemWrap: "border-violet-500/45 bg-violet-700/25 text-violet-100",
-      emblem: "HT",
+      card: "border-violet-700/60 bg-[radial-gradient(130%_90%_at_5%_0%,rgba(109,40,217,0.26),transparent_52%),radial-gradient(90%_70%_at_95%_100%,rgba(76,29,149,0.2),transparent_62%),linear-gradient(140deg,rgba(27,23,40,0.97),rgba(24,24,27,0.92))]",
       countChip: "border-violet-400/40 bg-violet-600/25 text-violet-100",
+      vibe: "Максимальные ставки",
     };
   }
   if (full.includes("cyber") || full.includes("кибер")) {
     return {
-      card: "border-cyan-700/60 bg-[radial-gradient(120%_90%_at_10%_0%,rgba(8,145,178,0.24),transparent_52%),linear-gradient(135deg,rgba(24,24,27,0.96),rgba(39,39,42,0.9))]",
-      emblemWrap: "border-cyan-500/45 bg-cyan-700/25 text-cyan-100",
-      emblem: "⌬",
+      card: "border-cyan-700/65 bg-[radial-gradient(140%_90%_at_5%_0%,rgba(8,145,178,0.25),transparent_55%),radial-gradient(95%_70%_at_95%_100%,rgba(14,116,144,0.2),transparent_60%),linear-gradient(140deg,rgba(20,30,38,0.97),rgba(24,24,27,0.92))]",
       countChip: "border-cyan-400/40 bg-cyan-600/25 text-cyan-100",
+      vibe: "Неон и корпорации",
     };
   }
   if (full.includes("запад") || full.includes("west")) {
     return {
-      card: "border-orange-700/55 bg-[radial-gradient(120%_90%_at_10%_0%,rgba(154,52,18,0.24),transparent_52%),linear-gradient(135deg,rgba(24,24,27,0.96),rgba(39,39,42,0.9))]",
-      emblemWrap: "border-orange-500/45 bg-orange-700/25 text-orange-100",
-      emblem: "W",
+      card: "border-orange-700/60 bg-[radial-gradient(140%_90%_at_5%_0%,rgba(194,65,12,0.26),transparent_52%),radial-gradient(95%_70%_at_95%_100%,rgba(154,52,18,0.2),transparent_62%),linear-gradient(140deg,rgba(39,24,17,0.97),rgba(24,24,27,0.92))]",
       countChip: "border-orange-400/40 bg-orange-600/25 text-orange-100",
+      vibe: "Пыль и револьверы",
+    };
+  }
+  if (full.includes("boys")) {
+    return {
+      card: "border-indigo-700/55 bg-[radial-gradient(140%_90%_at_5%_0%,rgba(99,102,241,0.2),transparent_56%),radial-gradient(95%_70%_at_95%_100%,rgba(67,56,202,0.18),transparent_62%),linear-gradient(140deg,rgba(32,34,48,0.97),rgba(24,24,27,0.92))]",
+      countChip: "border-indigo-400/35 bg-indigo-600/25 text-indigo-100",
+      vibe: "Сверхлюди и скандалы",
     };
   }
   if (full.includes("рим") || full.includes("roman")) {
     return {
-      card: "border-yellow-700/60 bg-[radial-gradient(120%_90%_at_10%_0%,rgba(161,98,7,0.2),transparent_52%),linear-gradient(135deg,rgba(24,24,27,0.96),rgba(39,39,42,0.9))]",
-      emblemWrap: "border-yellow-500/45 bg-yellow-700/25 text-yellow-100",
-      emblem: "ROMA",
+      card: "border-yellow-700/60 bg-[radial-gradient(140%_90%_at_5%_0%,rgba(161,98,7,0.24),transparent_56%),radial-gradient(95%_70%_at_95%_100%,rgba(120,53,15,0.2),transparent_62%),linear-gradient(140deg,rgba(38,31,20,0.97),rgba(24,24,27,0.92))]",
       countChip: "border-yellow-400/40 bg-yellow-600/25 text-yellow-100",
+      vibe: "Сенат и право",
     };
   }
   if (full.includes("classic") || full.includes("класс")) {
     return {
-      card: "border-red-700/60 bg-[radial-gradient(120%_90%_at_10%_0%,rgba(127,29,29,0.24),transparent_52%),linear-gradient(135deg,rgba(24,24,27,0.96),rgba(39,39,42,0.9))]",
-      emblemWrap: "border-red-500/45 bg-red-700/25 text-red-100",
-      emblem: "CL",
+      card: "border-red-700/55 bg-[radial-gradient(140%_90%_at_5%_0%,rgba(127,29,29,0.24),transparent_56%),radial-gradient(95%_70%_at_95%_100%,rgba(127,29,29,0.18),transparent_62%),linear-gradient(140deg,rgba(34,21,23,0.97),rgba(24,24,27,0.92))]",
       countChip: "border-red-400/40 bg-red-600/25 text-red-100",
+      vibe: "Классический суд",
     };
   }
   return {
     card: "border-zinc-700 bg-[radial-gradient(120%_90%_at_10%_0%,rgba(63,63,70,0.24),transparent_52%),linear-gradient(135deg,rgba(24,24,27,0.96),rgba(39,39,42,0.9))]",
-    emblemWrap: "border-zinc-600/60 bg-zinc-800/70 text-zinc-200",
-    emblem: "PK",
     countChip: "border-zinc-500/50 bg-zinc-800/80 text-zinc-100",
+    vibe: "Судебные дела",
   };
 }
 
@@ -6642,7 +6640,7 @@ export default function App() {
                   </DialogDescription>
                 </DialogHeader>
                 {createPackCatalogOpen ? (
-                  <div className="space-y-4">
+                  <div className="min-h-[620px] space-y-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <Button
                         type="button"
@@ -6663,29 +6661,27 @@ export default function App() {
                         Создать пак
                       </Button>
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                       {casePacks.map((pack) => {
                         const isLocked = PACK_PAYWALL_PREVIEW_ENABLED && pack.key !== baseCreatePackKey;
                         const visual = getCasePackVisual(pack.key, pack.title);
                         const displayTitle = getCasePackTitleDisplay(pack.title);
-                        const cardClass = `${visual.card} ${createRoomPackKey === pack.key ? "ring-1 ring-red-500/60 shadow-[0_0_18px_rgba(239,68,68,0.2)]" : ""}`;
+                        const cardClass = `${visual.card} ${createRoomPackKey === pack.key ? "ring-1 ring-red-500/60 shadow-[0_0_14px_rgba(239,68,68,0.16)]" : ""}`;
                         const content = (
                           <>
                             <div className="flex items-start justify-between gap-2">
-                              <div className="flex min-w-0 items-center gap-2">
-                                <span className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border text-[10px] font-bold tracking-wide ${visual.emblemWrap}`}>
-                                  {visual.emblem}
-                                </span>
-                                <div className="min-w-0">
-                                  <div className="truncate text-sm font-semibold text-zinc-100">{displayTitle}</div>
-                                  <div className="mt-0.5 line-clamp-2 text-[11px] leading-4 text-zinc-300">
-                                    {pack.description}
-                                  </div>
+                              <div className="min-w-0">
+                                <div className="truncate text-sm font-semibold text-zinc-100">{displayTitle}</div>
+                                <div className="mt-0.5 truncate text-[11px] leading-4 text-zinc-300">
+                                  {pack.description}
                                 </div>
                               </div>
                               <div className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${visual.countChip}`}>
                                 {pack.caseCount ?? 0} дел
                               </div>
+                            </div>
+                            <div className="mt-1 text-[10px] uppercase tracking-[0.16em] text-zinc-400/90">
+                              {visual.vibe}
                             </div>
                             {isLocked && (
                               <div className="pointer-events-none absolute inset-0 rounded-2xl bg-zinc-950/70">
@@ -6717,7 +6713,7 @@ export default function App() {
                               setCreateRoomPackKey(pack.key);
                               setCreatePackCatalogOpen(false);
                             }}
-                            className={`relative overflow-hidden rounded-2xl border px-3 py-2.5 text-left transition-all hover:brightness-110 ${cardClass}`}
+                            className={`relative overflow-hidden rounded-2xl border px-3 py-2.5 text-left transition-all hover:brightness-105 ${cardClass}`}
                           >
                             {content}
                           </button>
@@ -6726,7 +6722,7 @@ export default function App() {
                     </div>
                   </div>
                 ) : (
-                <div className="space-y-4">
+                <div className="min-h-[620px] space-y-4">
                   <div className="rounded-2xl border border-zinc-800 bg-gradient-to-r from-zinc-900 via-zinc-900/80 to-zinc-900 px-4 py-3">
                     <div className="text-xs uppercase tracking-[0.12em] text-zinc-400">
                       Выбранный режим
@@ -7265,19 +7261,13 @@ export default function App() {
                         Выбранный пак
                       </div>
                       {(() => {
-                        const visual = getCasePackVisual(room.casePackKey, roomPackTitle);
                         const displayPackTitle = getCasePackTitleDisplay(roomPackTitle);
                         return (
-                          <div className="mt-1.5 flex items-center justify-between gap-2 rounded-lg border border-zinc-700/60 bg-zinc-900/40 px-2.5 py-2">
-                            <div className="flex min-w-0 items-center gap-2">
-                                <span className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border text-[9px] font-bold tracking-wide ${visual.emblemWrap}`}>
-                                  {visual.emblem}
-                                </span>
-                                <div className="truncate text-sm font-medium text-zinc-100">{displayPackTitle}</div>
-                              </div>
-                              <div className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${visual.countChip}`}>
-                                {roomPackMeta?.caseCount ?? 0} дел
-                              </div>
+                          <div className="mt-1.5 rounded-lg border border-zinc-700/55 bg-zinc-900/35 px-3 py-2">
+                            <div className="truncate text-sm font-medium text-zinc-100">{displayPackTitle}</div>
+                            <div className="mt-0.5 truncate text-xs text-zinc-400">
+                              {roomPackMeta?.description ?? "Пак выбран для текущего матча."}
+                            </div>
                           </div>
                         );
                       })()}
