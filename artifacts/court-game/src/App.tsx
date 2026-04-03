@@ -7207,8 +7207,18 @@ export default function App() {
                       <div className="text-xs uppercase tracking-[0.12em] text-zinc-500">
                         Выбранный пак
                       </div>
-                      <div className="mt-1 inline-flex items-center rounded-full border border-red-400/55 bg-red-500/20 px-2 py-0.5 text-xs font-semibold text-red-100 shadow-[0_0_14px_rgba(239,68,68,0.35)]">
-                        {roomPackTitle}
+                      <div
+                        className={`mt-2 rounded-xl border px-3 py-2 ${getCasePackTheme(room.casePackKey, roomPackTitle)}`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="text-sm font-semibold text-zinc-100">{roomPackTitle}</div>
+                          <div className="inline-flex items-center rounded-full border border-red-400/55 bg-red-500/20 px-2 py-0.5 text-[11px] font-semibold text-red-100">
+                            {roomPackMeta?.caseCount ?? 0} дел
+                          </div>
+                        </div>
+                        <div className="mt-1 text-xs text-zinc-300">
+                          {roomPackMeta?.description ?? "Пак выбран для текущего матча."}
+                        </div>
                       </div>
                     </div>
                     <div className="text-zinc-400 pt-2">

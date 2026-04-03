@@ -226,41 +226,45 @@ function toStoredCaseData(source: CompactCase, modePlayerCount: number): StoredC
 }
 
 export async function listCasePacks(): Promise<CasePackInfo[]> {
-  await ensureCasePacksStorage();
+  try {
+    await ensureCasePacksStorage();
 
-  const dbResult = await pool.query<{
-    key: string;
-    title: string;
-    description: string;
-    is_adult: boolean;
-    sort_order: number;
-    case_count: string;
-  }>(`
-    SELECT
-      p.key,
-      p.title,
-      p.description,
-      p.is_adult,
-      p.sort_order,
-      COUNT(c.id)::text AS case_count
-    FROM case_packs p
-    LEFT JOIN case_pack_cases c
-      ON c.pack_key = p.key
-      AND c.active = TRUE
-    WHERE p.active = TRUE
-    GROUP BY p.key, p.title, p.description, p.is_adult, p.sort_order
-    ORDER BY p.sort_order ASC, p.title ASC
-  `);
+    const dbResult = await pool.query<{
+      key: string;
+      title: string;
+      description: string;
+      is_adult: boolean;
+      sort_order: number;
+      case_count: string;
+    }>(`
+      SELECT
+        p.key,
+        p.title,
+        p.description,
+        p.is_adult,
+        p.sort_order,
+        COUNT(c.id)::text AS case_count
+      FROM case_packs p
+      LEFT JOIN case_pack_cases c
+        ON c.pack_key = p.key
+        AND c.active = TRUE
+      WHERE p.active = TRUE
+      GROUP BY p.key, p.title, p.description, p.is_adult, p.sort_order
+      ORDER BY p.sort_order ASC, p.title ASC
+    `);
 
-  if (dbResult.rows.length > 0) {
-    return dbResult.rows.map((row) => ({
-      key: row.key,
-      title: row.title,
-      description: row.description,
-      isAdult: !!row.is_adult,
-      sortOrder: Number.isFinite(row.sort_order) ? row.sort_order : 100,
-      caseCount: Math.max(0, Number(row.case_count ?? "0") || 0),
-    }));
+    if (dbResult.rows.length > 0) {
+      return dbResult.rows.map((row) => ({
+        key: row.key,
+        title: row.title,
+        description: row.description,
+        isAdult: !!row.is_adult,
+        sortOrder: Number.isFinite(row.sort_order) ? row.sort_order : 100,
+        caseCount: Math.max(0, Number(row.case_count ?? "0") || 0),
+      }));
+    }
+  } catch {
+    // fallback ниже
   }
 
   return [...BACKEND_CASE_PACKS]
