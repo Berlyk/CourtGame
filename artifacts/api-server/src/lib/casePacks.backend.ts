@@ -13144,7 +13144,7 @@ const TEMPLATE_PACK_A: CompactCasePack = {
 
 const TEMPLATE_PACK_B: CompactCasePack = {
   key: "template_pack_b",
-  title: "ОСОБО ТЯЖКИЕ ПРЕСТУПЛЕНИЯ",
+  title: "ОСОБО ТЯЖКИЕ",
   description: "Жесткие дела с серьезными последствиями",
   isAdult: false,
   sortOrder: 210,

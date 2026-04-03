@@ -133,8 +133,8 @@ const PACK_PAYWALL_PREVIEW_ENABLED = false;
 
 function getCasePackVisual(packKey: string | undefined, packTitle: string | undefined): {
   card: string;
-  iconWrap: string;
-  icon: LucideIcon;
+  emblemWrap: string;
+  emblem: string;
   countChip: string;
 } {
   const key = (packKey ?? "").toLowerCase();
@@ -142,58 +142,74 @@ function getCasePackVisual(packKey: string | undefined, packTitle: string | unde
   const full = `${key} ${title}`;
   if (full.includes("medieval") || full.includes("средневек")) {
     return {
-      card: "border-amber-700/60 bg-[radial-gradient(120%_90%_at_10%_0%,rgba(180,83,9,0.22),transparent_52%),linear-gradient(135deg,rgba(24,24,27,0.96),rgba(39,39,42,0.9))]",
-      iconWrap: "border-amber-500/45 bg-amber-700/25 text-amber-100",
+      card: "border-amber-700/55 bg-[radial-gradient(120%_90%_at_10%_0%,rgba(180,83,9,0.22),transparent_52%),linear-gradient(135deg,rgba(24,24,27,0.96),rgba(39,39,42,0.9))]",
+      emblemWrap: "border-amber-500/45 bg-amber-700/25 text-amber-100",
+      emblem: "MD",
       countChip: "border-amber-400/40 bg-amber-600/25 text-amber-100",
-      icon: ScrollText,
     };
   }
-  if (full.includes("hard") || full.includes("тяж") || full.includes("18+") || full.includes("жест")) {
+  if (full.includes("18+")) {
     return {
-      card: "border-red-700/60 bg-[radial-gradient(120%_90%_at_10%_0%,rgba(185,28,28,0.26),transparent_52%),linear-gradient(135deg,rgba(24,24,27,0.96),rgba(39,39,42,0.9))]",
-      iconWrap: "border-red-500/45 bg-red-700/25 text-red-100",
-      countChip: "border-red-400/40 bg-red-600/25 text-red-100",
-      icon: Shield,
+      card: "border-fuchsia-700/60 bg-[radial-gradient(120%_90%_at_10%_0%,rgba(162,28,175,0.24),transparent_52%),linear-gradient(135deg,rgba(24,24,27,0.96),rgba(39,39,42,0.9))]",
+      emblemWrap: "border-fuchsia-500/45 bg-fuchsia-700/25 text-fuchsia-100",
+      emblem: "18+",
+      countChip: "border-fuchsia-400/40 bg-fuchsia-600/25 text-fuchsia-100",
+    };
+  }
+  if (full.includes("hard") || full.includes("тяж") || full.includes("жест")) {
+    return {
+      card: "border-violet-700/60 bg-[radial-gradient(120%_90%_at_10%_0%,rgba(109,40,217,0.24),transparent_52%),linear-gradient(135deg,rgba(24,24,27,0.96),rgba(39,39,42,0.9))]",
+      emblemWrap: "border-violet-500/45 bg-violet-700/25 text-violet-100",
+      emblem: "HT",
+      countChip: "border-violet-400/40 bg-violet-600/25 text-violet-100",
     };
   }
   if (full.includes("cyber") || full.includes("кибер")) {
     return {
       card: "border-cyan-700/60 bg-[radial-gradient(120%_90%_at_10%_0%,rgba(8,145,178,0.24),transparent_52%),linear-gradient(135deg,rgba(24,24,27,0.96),rgba(39,39,42,0.9))]",
-      iconWrap: "border-cyan-500/45 bg-cyan-700/25 text-cyan-100",
+      emblemWrap: "border-cyan-500/45 bg-cyan-700/25 text-cyan-100",
+      emblem: "⌬",
       countChip: "border-cyan-400/40 bg-cyan-600/25 text-cyan-100",
-      icon: BrainCircuit,
     };
   }
   if (full.includes("запад") || full.includes("west")) {
     return {
-      card: "border-orange-700/60 bg-[radial-gradient(120%_90%_at_10%_0%,rgba(154,52,18,0.24),transparent_52%),linear-gradient(135deg,rgba(24,24,27,0.96),rgba(39,39,42,0.9))]",
-      iconWrap: "border-orange-500/45 bg-orange-700/25 text-orange-100",
+      card: "border-orange-700/55 bg-[radial-gradient(120%_90%_at_10%_0%,rgba(154,52,18,0.24),transparent_52%),linear-gradient(135deg,rgba(24,24,27,0.96),rgba(39,39,42,0.9))]",
+      emblemWrap: "border-orange-500/45 bg-orange-700/25 text-orange-100",
+      emblem: "W",
       countChip: "border-orange-400/40 bg-orange-600/25 text-orange-100",
-      icon: Swords,
     };
   }
   if (full.includes("рим") || full.includes("roman")) {
     return {
       card: "border-yellow-700/60 bg-[radial-gradient(120%_90%_at_10%_0%,rgba(161,98,7,0.2),transparent_52%),linear-gradient(135deg,rgba(24,24,27,0.96),rgba(39,39,42,0.9))]",
-      iconWrap: "border-yellow-500/45 bg-yellow-700/25 text-yellow-100",
+      emblemWrap: "border-yellow-500/45 bg-yellow-700/25 text-yellow-100",
+      emblem: "ROMA",
       countChip: "border-yellow-400/40 bg-yellow-600/25 text-yellow-100",
-      icon: Crown,
     };
   }
   if (full.includes("classic") || full.includes("класс")) {
     return {
       card: "border-red-700/60 bg-[radial-gradient(120%_90%_at_10%_0%,rgba(127,29,29,0.24),transparent_52%),linear-gradient(135deg,rgba(24,24,27,0.96),rgba(39,39,42,0.9))]",
-      iconWrap: "border-red-500/45 bg-red-700/25 text-red-100",
+      emblemWrap: "border-red-500/45 bg-red-700/25 text-red-100",
+      emblem: "CL",
       countChip: "border-red-400/40 bg-red-600/25 text-red-100",
-      icon: Gavel,
     };
   }
   return {
     card: "border-zinc-700 bg-[radial-gradient(120%_90%_at_10%_0%,rgba(63,63,70,0.24),transparent_52%),linear-gradient(135deg,rgba(24,24,27,0.96),rgba(39,39,42,0.9))]",
-    iconWrap: "border-zinc-600/60 bg-zinc-800/70 text-zinc-200",
+    emblemWrap: "border-zinc-600/60 bg-zinc-800/70 text-zinc-200",
+    emblem: "PK",
     countChip: "border-zinc-500/50 bg-zinc-800/80 text-zinc-100",
-    icon: Gem,
   };
+}
+
+function getCasePackTitleDisplay(title: string | undefined): string {
+  const normalized = (title ?? "").trim();
+  if (normalized.toUpperCase() === "ОСОБО ТЯЖКИЕ ПРЕСТУПЛЕНИЯ") {
+    return "ОСОБО ТЯЖКИЕ";
+  }
+  return normalized || "ПАК";
 }
 
 const BADGE_ICONS: Record<string, LucideIcon> = {
@@ -2603,24 +2619,11 @@ export default function App() {
   const freeCreatePack = casePacks.find((pack) => pack.key === baseCreatePackKey) ?? casePacks[0] ?? null;
   const selectedCreatePack =
     casePacks.find((pack) => pack.key === createRoomPackKey) ?? freeCreatePack;
-  const lockedCreatePacks = PACK_PAYWALL_PREVIEW_ENABLED
-    ? casePacks.filter((pack) => pack.key !== baseCreatePackKey)
-    : [];
-  const availableCreatePacks = casePacks.filter(
-    (pack) => !PACK_PAYWALL_PREVIEW_ENABLED || pack.key === baseCreatePackKey,
-  );
-  const unavailableCreatePacks = casePacks.filter(
-    (pack) => PACK_PAYWALL_PREVIEW_ENABLED && pack.key !== baseCreatePackKey,
-  );
   const availableCreateCaseCount = Math.max(
     0,
     PACK_PAYWALL_PREVIEW_ENABLED
       ? freeCreatePack?.caseCount ?? 0
       : selectedCreatePack?.caseCount ?? 0,
-  );
-  const lockedCreateCaseCount = lockedCreatePacks.reduce(
-    (sum, pack) => sum + Math.max(0, pack.caseCount ?? 0),
-    0,
   );
   const reconnectSecondsLeft =
     reconnectExpiresAt !== null
@@ -6628,15 +6631,102 @@ export default function App() {
               }}
             >
               <DialogContent
-                className={`w-[calc(100vw-1rem)] sm:w-[calc(100vw-2rem)] max-w-2xl max-h-[88vh] overflow-y-auto border-zinc-800 bg-zinc-950 text-zinc-100 p-4 sm:p-6 ${HIDE_SCROLLBAR_CLASS} [&>button]:h-12 [&>button]:w-12 [&>button>svg]:h-7 [&>button>svg]:w-7 [&>button]:top-2 [&>button]:right-2`}
+                className="w-[calc(100vw-1rem)] sm:w-[calc(100vw-2rem)] max-w-3xl border-zinc-800 bg-zinc-950 text-zinc-100 p-4 sm:p-6 [&>button]:h-12 [&>button]:w-12 [&>button>svg]:h-7 [&>button>svg]:w-7 [&>button]:top-2 [&>button]:right-2"
               >
                 <DialogHeader className="space-y-1">
-                  <DialogTitle>Создать матч</DialogTitle>
+                  <DialogTitle>{createPackCatalogOpen ? "Выбор пака дел" : "Создать матч"}</DialogTitle>
                   <DialogDescription className="text-zinc-400">
-                    Настройте комнату для раздела «Подбор игроков».
+                    {createPackCatalogOpen
+                      ? "Выберите пак для комнаты."
+                      : "Настройте комнату для раздела «Подбор игроков»."}
                   </DialogDescription>
                 </DialogHeader>
-                <div className="space-y-5">
+                {createPackCatalogOpen ? (
+                  <div className="space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setCreatePackCatalogOpen(false)}
+                        className="h-9 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                      >
+                        Назад
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          setError("Создание своего пака скоро появится.");
+                          setTimeout(() => setError(""), 2500);
+                        }}
+                        className="h-9 rounded-xl bg-red-600 hover:bg-red-500 text-white border-0"
+                      >
+                        Создать пак
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {casePacks.map((pack) => {
+                        const isLocked = PACK_PAYWALL_PREVIEW_ENABLED && pack.key !== baseCreatePackKey;
+                        const visual = getCasePackVisual(pack.key, pack.title);
+                        const displayTitle = getCasePackTitleDisplay(pack.title);
+                        const cardClass = `${visual.card} ${createRoomPackKey === pack.key ? "ring-1 ring-red-500/60 shadow-[0_0_18px_rgba(239,68,68,0.2)]" : ""}`;
+                        const content = (
+                          <>
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex min-w-0 items-center gap-2">
+                                <span className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border text-[10px] font-bold tracking-wide ${visual.emblemWrap}`}>
+                                  {visual.emblem}
+                                </span>
+                                <div className="min-w-0">
+                                  <div className="truncate text-sm font-semibold text-zinc-100">{displayTitle}</div>
+                                  <div className="mt-0.5 line-clamp-2 text-[11px] leading-4 text-zinc-300">
+                                    {pack.description}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${visual.countChip}`}>
+                                {pack.caseCount ?? 0} дел
+                              </div>
+                            </div>
+                            {isLocked && (
+                              <div className="pointer-events-none absolute inset-0 rounded-2xl bg-zinc-950/70">
+                                <span className="absolute left-3 top-2 text-zinc-400/80">⛓</span>
+                                <span className="absolute right-3 top-2 text-zinc-400/80">⛓</span>
+                                <span className="absolute left-3 bottom-2 text-zinc-400/80">⛓</span>
+                                <span className="absolute right-3 bottom-2 text-zinc-400/80">⛓</span>
+                                <span className="absolute inset-0 flex items-center justify-center">
+                                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-zinc-500/70 bg-zinc-900/90 text-zinc-200 shadow-[0_0_18px_rgba(0,0,0,0.45)]">
+                                    <Lock className="h-5 w-5" />
+                                  </span>
+                                </span>
+                              </div>
+                            )}
+                          </>
+                        );
+                        if (isLocked) {
+                          return (
+                            <div key={pack.key} className={`relative overflow-hidden rounded-2xl border px-3 py-2.5 ${cardClass}`}>
+                              {content}
+                            </div>
+                          );
+                        }
+                        return (
+                          <button
+                            key={pack.key}
+                            type="button"
+                            onClick={() => {
+                              setCreateRoomPackKey(pack.key);
+                              setCreatePackCatalogOpen(false);
+                            }}
+                            className={`relative overflow-hidden rounded-2xl border px-3 py-2.5 text-left transition-all hover:brightness-110 ${cardClass}`}
+                          >
+                            {content}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                <div className="space-y-4">
                   <div className="rounded-2xl border border-zinc-800 bg-gradient-to-r from-zinc-900 via-zinc-900/80 to-zinc-900 px-4 py-3">
                     <div className="text-xs uppercase tracking-[0.12em] text-zinc-400">
                       Выбранный режим
@@ -6702,7 +6792,7 @@ export default function App() {
                             <div className="rounded-xl border border-zinc-700 bg-zinc-950/80 px-3 py-3">
                               <div className="flex flex-wrap items-center justify-between gap-2">
                                 <div className="text-sm font-semibold text-zinc-100">
-                                  {selectedCreatePack?.title ?? "Пак не выбран"}
+                                  {getCasePackTitleDisplay(selectedCreatePack?.title) ?? "Пак не выбран"}
                                 </div>
                                 <div className="inline-flex items-center rounded-full border border-red-400/50 bg-red-500/20 px-2 py-0.5 text-[11px] font-semibold text-red-100">
                                   {availableCreateCaseCount} дел
@@ -6808,120 +6898,7 @@ export default function App() {
                     Создать комнату
                   </Button>
                 </div>
-              </DialogContent>
-            </Dialog>
-
-            <Dialog open={createPackCatalogOpen} onOpenChange={setCreatePackCatalogOpen}>
-              <DialogContent
-                className={`w-[calc(100vw-1rem)] sm:w-[calc(100vw-2rem)] max-w-3xl max-h-[88vh] overflow-y-auto border-zinc-800 bg-zinc-950 text-zinc-100 p-4 sm:p-6 ${HIDE_SCROLLBAR_CLASS}`}
-              >
-                <DialogHeader className="space-y-1">
-                  <DialogTitle>Каталог паков</DialogTitle>
-                  <DialogDescription className="text-zinc-400">
-                    Выберите пак для комнаты. В будущем здесь будет VIP-доступ и создание своих паков.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-5">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setCreatePackCatalogOpen(false)}
-                      className="h-9 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
-                    >
-                      Назад
-                    </Button>
-                    <Button
-                      type="button"
-                      onClick={() => {
-                        setError("Создание своего пака скоро появится.");
-                        setTimeout(() => setError(""), 2500);
-                      }}
-                      className="h-9 rounded-xl bg-red-600 hover:bg-red-500 text-white border-0"
-                    >
-                      Создать пак
-                    </Button>
-                  </div>
-
-                    <div className="space-y-2">
-                      <div className="text-xs uppercase tracking-[0.12em] text-zinc-500">Доступные</div>
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        {availableCreatePacks.map((pack) => {
-                          const visual = getCasePackVisual(pack.key, pack.title);
-                          const PackIcon = visual.icon;
-                          return (
-                            <button
-                              key={pack.key}
-                              type="button"
-                              onClick={() => {
-                                setCreateRoomPackKey(pack.key);
-                                setCreatePackCatalogOpen(false);
-                              }}
-                              className={`group relative overflow-hidden rounded-2xl border px-3 py-3 text-left transition-all hover:-translate-y-[1px] hover:brightness-110 ${visual.card} ${
-                                createRoomPackKey === pack.key ? "ring-1 ring-red-500/55 shadow-[0_0_20px_rgba(239,68,68,0.2)]" : ""
-                              }`}
-                            >
-                              <div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-200 group-hover:opacity-100 bg-[radial-gradient(80%_60%_at_85%_0%,rgba(255,255,255,0.07),transparent_60%)]" />
-                              <div className="relative z-10 flex items-start justify-between gap-2">
-                                <div className="flex min-w-0 items-start gap-2.5">
-                                  <span className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${visual.iconWrap}`}>
-                                    <PackIcon className="h-4 w-4" />
-                                  </span>
-                                  <div className="min-w-0">
-                                    <div className="truncate text-sm font-semibold text-zinc-100">{pack.title}</div>
-                                    <div className="mt-1 max-h-9 overflow-hidden text-xs leading-[1.15rem] text-zinc-300">
-                                      {pack.description}
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${visual.countChip}`}>
-                                  {pack.caseCount ?? 0} дел
-                                </div>
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                  <div className="space-y-2">
-                    <div className="text-xs uppercase tracking-[0.12em] text-zinc-500">Недоступные</div>
-                    {unavailableCreatePacks.length > 0 ? (
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        {unavailableCreatePacks.map((pack) => {
-                          const visual = getCasePackVisual(pack.key, pack.title);
-                          const PackIcon = visual.icon;
-                          return (
-                            <div
-                              key={pack.key}
-                              className={`rounded-2xl border px-3 py-3 opacity-80 ${visual.card}`}
-                            >
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="flex min-w-0 items-center gap-2">
-                                  <span className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border ${visual.iconWrap}`}>
-                                    <PackIcon className="h-3.5 w-3.5" />
-                                  </span>
-                                  <div className="truncate text-sm font-semibold text-zinc-200">{pack.title}</div>
-                                </div>
-                                <div className="inline-flex items-center gap-1 rounded-full border border-zinc-600/70 bg-zinc-800/80 px-2 py-0.5 text-[11px] font-semibold text-zinc-200">
-                                  <Lock className="h-3 w-3" />
-                                  {pack.caseCount ?? 0} дел
-                                </div>
-                              </div>
-                              <div className="mt-1 max-h-9 overflow-hidden text-xs leading-[1.15rem] text-zinc-300">
-                                {pack.description}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 px-3 py-2 text-xs text-zinc-500">
-                        Сейчас недоступных паков нет.
-                      </div>
-                    )}
-                  </div>
-                </div>
+                )}
               </DialogContent>
             </Dialog>
 
@@ -7289,23 +7266,18 @@ export default function App() {
                       </div>
                       {(() => {
                         const visual = getCasePackVisual(room.casePackKey, roomPackTitle);
-                        const PackIcon = visual.icon;
+                        const displayPackTitle = getCasePackTitleDisplay(roomPackTitle);
                         return (
-                          <div className="mt-2 rounded-xl border border-zinc-700/80 bg-zinc-900/55 px-3 py-2">
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="flex min-w-0 items-center gap-2">
-                                <span className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border ${visual.iconWrap}`}>
-                                  <PackIcon className="h-3.5 w-3.5" />
+                          <div className="mt-1.5 flex items-center justify-between gap-2 rounded-lg border border-zinc-700/60 bg-zinc-900/40 px-2.5 py-2">
+                            <div className="flex min-w-0 items-center gap-2">
+                                <span className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border text-[9px] font-bold tracking-wide ${visual.emblemWrap}`}>
+                                  {visual.emblem}
                                 </span>
-                                <div className="truncate text-sm font-semibold text-zinc-100">{roomPackTitle}</div>
+                                <div className="truncate text-sm font-medium text-zinc-100">{displayPackTitle}</div>
                               </div>
-                              <div className="inline-flex items-center rounded-full border border-zinc-600/70 bg-zinc-800/80 px-2 py-0.5 text-[11px] font-semibold text-zinc-200">
+                              <div className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${visual.countChip}`}>
                                 {roomPackMeta?.caseCount ?? 0} дел
                               </div>
-                            </div>
-                            <div className="mt-1 text-xs text-zinc-400">
-                              {roomPackMeta?.description ?? "Пак выбран для текущего матча."}
-                            </div>
                           </div>
                         );
                       })()}
