@@ -47,16 +47,11 @@ const ROLE_GOALS: Record<RoleKey, string> = {
 };
 
 let ensurePromise: Promise<void> | null = null;
+let schemaColumnsPromise: Promise<{ packsKey: "key" | "pack_key"; casesPackKey: "pack_key" | "case_pack_key" }> | null =
+  null;
 
 const STATIC_PACKS_FALLBACK: CasePackInfo[] = [
-  {
-    key: "classic",
-    title: "КЛАССИКА",
-    description: "Базовый пак дел.",
-    isAdult: false,
-    sortOrder: 10,
-    caseCount: 240,
-  },
+  { key: "classic", title: "КЛАССИКА", description: "Базовый пак дел.", isAdult: false, sortOrder: 10, caseCount: 240 },
   {
     key: "medieval",
     title: "СРЕДНЕВЕКОВЬЕ",
@@ -120,6 +115,37 @@ export function normalizeCasePackKey(input?: string | null): string {
   if (!raw) return "classic";
   const safe = raw.replace(/[^a-z0-9_-]/g, "");
   return safe || "classic";
+}
+
+async function detectSchemaColumns(): Promise<{
+  packsKey: "key" | "pack_key";
+  casesPackKey: "pack_key" | "case_pack_key";
+}> {
+  if (schemaColumnsPromise) return schemaColumnsPromise;
+
+  schemaColumnsPromise = (async () => {
+    const columns = await pool.query<{ table_name: string; column_name: string }>(`
+      SELECT table_name, column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name IN ('case_packs', 'case_pack_cases')
+    `);
+
+    const has = (table: string, column: string) =>
+      columns.rows.some((row) => row.table_name === table && row.column_name === column);
+
+    const packsKey: "key" | "pack_key" = has("case_packs", "key") ? "key" : "pack_key";
+    const casesPackKey: "pack_key" | "case_pack_key" = has("case_pack_cases", "pack_key")
+      ? "pack_key"
+      : "case_pack_key";
+
+    return { packsKey, casesPackKey };
+  })().catch((error) => {
+    schemaColumnsPromise = null;
+    throw error;
+  });
+
+  return schemaColumnsPromise;
 }
 
 async function ensureTablesInternal(): Promise<void> {
@@ -194,6 +220,9 @@ async function ensureTablesInternal(): Promise<void> {
     CREATE INDEX IF NOT EXISTS case_pack_cases_pack_mode_idx
     ON case_pack_cases(pack_key, mode_player_count, active);
   `);
+
+  schemaColumnsPromise = null;
+  await detectSchemaColumns();
 }
 
 function titleFromPackKey(packKey: string): string {
@@ -207,8 +236,9 @@ function titleFromPackKey(packKey: string): string {
 }
 
 async function ensurePackRowsFromCases(): Promise<void> {
+  const columns = await detectSchemaColumns();
   const keysResult = await pool.query<{ pack_key: string }>(`
-    SELECT DISTINCT pack_key
+    SELECT DISTINCT ${columns.casesPackKey} AS pack_key
     FROM case_pack_cases
     WHERE active = TRUE
   `);
@@ -217,9 +247,9 @@ async function ensurePackRowsFromCases(): Promise<void> {
     const key = normalizeCasePackKey(row.pack_key);
     await pool.query(
       `
-        INSERT INTO case_packs (id, key, title, description, is_adult, sort_order, active, updated_at)
+        INSERT INTO case_packs (id, ${columns.packsKey}, title, description, is_adult, sort_order, active, updated_at)
         VALUES ($1, $2, $3, $4, FALSE, 100, TRUE, NOW())
-        ON CONFLICT (key)
+        ON CONFLICT (${columns.packsKey})
         DO UPDATE SET active = TRUE, updated_at = NOW()
       `,
       [crypto.randomUUID(), key, titleFromPackKey(key), "Пак дел из базы данных."],
@@ -277,6 +307,7 @@ export async function listCasePacks(): Promise<CasePackInfo[]> {
       // ignore
     }
 
+    const columns = await detectSchemaColumns();
     const dbResult = await pool.query<{
       key: string;
       title: string;
@@ -286,7 +317,7 @@ export async function listCasePacks(): Promise<CasePackInfo[]> {
       case_count: string;
     }>(`
       SELECT
-        p.key,
+        p.${columns.packsKey} AS key,
         p.title,
         p.description,
         p.is_adult,
@@ -294,15 +325,15 @@ export async function listCasePacks(): Promise<CasePackInfo[]> {
         COUNT(c.id)::text AS case_count
       FROM case_packs p
       LEFT JOIN case_pack_cases c
-        ON c.pack_key = p.key
+        ON c.${columns.casesPackKey} = p.${columns.packsKey}
         AND c.active = TRUE
       WHERE p.active = TRUE
-      GROUP BY p.key, p.title, p.description, p.is_adult, p.sort_order
+      GROUP BY p.${columns.packsKey}, p.title, p.description, p.is_adult, p.sort_order
       ORDER BY p.sort_order ASC, p.title ASC
     `);
 
     const mapped = dbResult.rows.map((row) => ({
-      key: row.key,
+      key: normalizeCasePackKey(row.key),
       title: row.title,
       description: row.description,
       isAdult: !!row.is_adult,
@@ -320,7 +351,9 @@ export async function listCasePacks(): Promise<CasePackInfo[]> {
 
 async function pickCaseFromPackDb(packKey: string, modePlayerCount: number): Promise<StoredCaseData | null> {
   await ensureCasePacksStorage();
+  const columns = await detectSchemaColumns();
   const safeCount = modePlayerCount as 3 | 4 | 5 | 6;
+
   const result = await pool.query<{
     case_key: string;
     title: string;
@@ -333,7 +366,7 @@ async function pickCaseFromPackDb(packKey: string, modePlayerCount: number): Pro
       SELECT case_key, title, description, truth, evidence_json, facts_json
       FROM case_pack_cases
       WHERE active = TRUE
-        AND pack_key = $1
+        AND ${columns.casesPackKey} = $1
         AND mode_player_count = $2
       ORDER BY RANDOM()
       LIMIT 1
