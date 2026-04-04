@@ -62,6 +62,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const DEFAULT_GAME_STAGES = [
   "Подготовка",
@@ -7722,65 +7729,73 @@ export default function App() {
         )}
         {myId === room.hostId && (
           <Dialog open={roomManageOpen} onOpenChange={setRoomManageOpen}>
-            <DialogContent className="rounded-2xl border-zinc-800 bg-zinc-950 text-zinc-100 sm:max-w-2xl">
+            <DialogContent
+              className={`rounded-3xl border-zinc-800 bg-[radial-gradient(130%_120%_at_0%_0%,rgba(220,38,38,0.13),transparent_45%),linear-gradient(145deg,rgba(13,13,17,0.98),rgba(10,10,12,0.96))] text-zinc-100 sm:max-w-3xl max-h-[88vh] overflow-y-auto ${HIDE_SCROLLBAR_CLASS}`}
+            >
               <DialogHeader>
                 <DialogTitle>Управление комнатой</DialogTitle>
                 <DialogDescription className="text-zinc-400">
                   Настройки ведущего для текущего лобби.
                 </DialogDescription>
               </DialogHeader>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2">
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="rounded-2xl border border-zinc-800/90 bg-zinc-900/55 px-4 py-3">
                   <div className="flex items-center justify-between gap-3">
                     <div className="text-sm font-medium text-zinc-100">Я - Судья</div>
                     <Switch checked={isHostJudge} onCheckedChange={toggleHostJudge} />
                   </div>
                 </div>
-                <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2">
+                <div className="rounded-2xl border border-zinc-800/90 bg-zinc-900/55 px-4 py-3">
                   <div className="flex items-center justify-between gap-3">
                     <div className="text-sm font-medium text-zinc-100">Выбор ролей</div>
                     <Switch checked={usePreferredRoles} onCheckedChange={togglePreferredRoles} />
                   </div>
                 </div>
-                <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2">
-                  <div className="text-xs text-zinc-500">Режим</div>
-                  <div className="mt-2 grid grid-cols-2 gap-2">
+                <div className="rounded-2xl border border-zinc-800/90 bg-zinc-900/55 p-3 md:col-span-2">
+                  <div className="text-xs font-semibold tracking-[0.2em] uppercase text-zinc-500">Режим</div>
+                  <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-4">
                     {ROOM_MODE_OPTIONS.map((mode) => (
                       <button
                         key={`manage-mode-${mode.key}`}
                         type="button"
                         onClick={() => updateRoomManagementSettings({ modeKey: mode.key })}
-                        className={`rounded-lg border px-2 py-1.5 text-left text-xs transition ${
+                        className={`rounded-xl border px-3 py-2 text-left text-xs transition ${
                           room.modeKey === mode.key
-                            ? "border-red-500 bg-red-600/20 text-zinc-100"
-                            : "border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
+                            ? "border-red-500/80 bg-red-600/20 text-zinc-100 shadow-[0_0_0_1px_rgba(248,113,113,0.25),0_0_16px_rgba(239,68,68,0.2)]"
+                            : "border-zinc-700/90 bg-zinc-950/80 text-zinc-300 hover:border-zinc-600 hover:bg-zinc-900"
                         }`}
                       >
-                        {mode.title}
+                        <div className="font-semibold leading-tight">{mode.title}</div>
+                        <div className="mt-1 text-[11px] text-zinc-500">На {mode.maxPlayers} игроков</div>
                       </button>
                     ))}
                   </div>
                 </div>
-                <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2">
-                  <div className="text-xs text-zinc-500">Пак дел</div>
-                  <div className="mt-2 max-h-36 overflow-y-auto space-y-1 pr-1">
+                <div className="rounded-2xl border border-zinc-800/90 bg-zinc-900/55 p-3 md:col-span-2">
+                  <div className="text-xs font-semibold tracking-[0.2em] uppercase text-zinc-500">Пак дел</div>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
                     {casePacks.map((pack) => (
                       <button
                         key={`manage-pack-${pack.key}`}
                         type="button"
                         onClick={() => updateRoomManagementSettings({ casePackKey: pack.key })}
-                        className={`w-full rounded-lg border px-2 py-1.5 text-left text-xs transition ${
+                        className={`rounded-xl border px-3 py-2 text-left text-xs transition ${
                           (room.casePackKey ?? "classic") === pack.key
-                            ? "border-red-500 bg-red-600/20 text-zinc-100"
-                            : "border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
+                            ? "border-red-500/80 bg-red-600/20 text-zinc-100 shadow-[0_0_0_1px_rgba(248,113,113,0.25),0_0_16px_rgba(239,68,68,0.18)]"
+                            : "border-zinc-700/90 bg-zinc-950/80 text-zinc-300 hover:border-zinc-600 hover:bg-zinc-900"
                         }`}
                       >
-                        {getCasePackTitleDisplay(pack.title)}
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-semibold">{getCasePackTitleDisplay(pack.title)}</span>
+                          <span className="rounded-full border border-zinc-600/80 bg-zinc-900/80 px-2 py-0.5 text-[10px] font-semibold text-zinc-300">
+                            {Math.max(0, Number(pack.caseCount ?? 0) || 0)} дел
+                          </span>
+                        </div>
                       </button>
                     ))}
                   </div>
                 </div>
-                <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2">
+                <div className="rounded-2xl border border-zinc-800/90 bg-zinc-900/55 px-4 py-3">
                   <div className="flex items-center justify-between gap-3">
                     <div className="text-sm font-medium text-zinc-100">Свидетели</div>
                     <Switch
@@ -7792,23 +7807,29 @@ export default function App() {
                     />
                   </div>
                 </div>
-                <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2">
-                  <div className="text-xs text-zinc-500">Наблюдатели: {manageMaxObservers}</div>
-                  <input
-                    type="range"
-                    min={0}
-                    max={6}
-                    step={1}
-                    value={manageMaxObservers}
-                    onChange={(e) => {
-                      const next = Math.max(0, Math.min(6, Number(e.target.value) || 0));
-                      setManageMaxObservers(next);
-                      updateRoomManagementSettings({ maxObservers: next });
-                    }}
-                    className="mt-2 h-2 w-full accent-red-500"
-                  />
+                <div className="rounded-2xl border border-zinc-800/90 bg-zinc-900/55 px-4 py-3">
+                  <div className="text-xs text-zinc-500">Наблюдатели</div>
+                  <div className="mt-2 grid grid-cols-4 gap-1.5">
+                    {[0, 1, 2, 3, 4, 5, 6].map((value) => (
+                      <button
+                        key={`obs-limit-${value}`}
+                        type="button"
+                        onClick={() => {
+                          setManageMaxObservers(value);
+                          updateRoomManagementSettings({ maxObservers: value });
+                        }}
+                        className={`rounded-lg border px-2 py-1.5 text-xs font-semibold transition ${
+                          manageMaxObservers === value
+                            ? "border-red-500/80 bg-red-600/20 text-zinc-100"
+                            : "border-zinc-700/90 bg-zinc-950/80 text-zinc-300 hover:border-zinc-600 hover:bg-zinc-900"
+                        }`}
+                      >
+                        {value}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2">
+                <div className="rounded-2xl border border-zinc-800/90 bg-zinc-900/55 px-4 py-3">
                   <div className="flex items-center justify-between gap-3">
                     <div className="text-sm font-medium text-zinc-100">Таймер вступления</div>
                     <Switch
@@ -7824,23 +7845,29 @@ export default function App() {
                   {manageOpeningTimerEnabled && (
                     <div className="mt-2">
                       <div className="text-xs text-zinc-500">{manageOpeningTimerSec} сек.</div>
-                      <input
-                        type="range"
-                        min={15}
-                        max={180}
-                        step={5}
-                        value={manageOpeningTimerSec}
-                        onChange={(e) => {
-                          const next = Math.max(15, Math.min(180, Number(e.target.value) || 60));
-                          setManageOpeningTimerSec(next);
-                          updateRoomManagementSettings({ openingSpeechTimerSec: next });
-                        }}
-                        className="mt-1 h-2 w-full accent-red-500"
-                      />
+                      <div className="mt-2 grid grid-cols-3 gap-1.5">
+                        {[15, 30, 45, 60, 90, 120, 150, 180].map((value) => (
+                          <button
+                            key={`open-timer-${value}`}
+                            type="button"
+                            onClick={() => {
+                              setManageOpeningTimerSec(value);
+                              updateRoomManagementSettings({ openingSpeechTimerSec: value });
+                            }}
+                            className={`rounded-lg border px-2 py-1.5 text-xs font-semibold transition ${
+                              manageOpeningTimerSec === value
+                                ? "border-red-500/80 bg-red-600/20 text-zinc-100"
+                                : "border-zinc-700/90 bg-zinc-950/80 text-zinc-300 hover:border-zinc-600 hover:bg-zinc-900"
+                            }`}
+                          >
+                            {value}с
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
-                <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2">
+                <div className="rounded-2xl border border-zinc-800/90 bg-zinc-900/55 px-4 py-3">
                   <div className="flex items-center justify-between gap-3">
                     <div className="text-sm font-medium text-zinc-100">Таймер заключения</div>
                     <Switch
@@ -7856,23 +7883,29 @@ export default function App() {
                   {manageClosingTimerEnabled && (
                     <div className="mt-2">
                       <div className="text-xs text-zinc-500">{manageClosingTimerSec} сек.</div>
-                      <input
-                        type="range"
-                        min={15}
-                        max={180}
-                        step={5}
-                        value={manageClosingTimerSec}
-                        onChange={(e) => {
-                          const next = Math.max(15, Math.min(180, Number(e.target.value) || 60));
-                          setManageClosingTimerSec(next);
-                          updateRoomManagementSettings({ closingSpeechTimerSec: next });
-                        }}
-                        className="mt-1 h-2 w-full accent-red-500"
-                      />
+                      <div className="mt-2 grid grid-cols-3 gap-1.5">
+                        {[15, 30, 45, 60, 90, 120, 150, 180].map((value) => (
+                          <button
+                            key={`close-timer-${value}`}
+                            type="button"
+                            onClick={() => {
+                              setManageClosingTimerSec(value);
+                              updateRoomManagementSettings({ closingSpeechTimerSec: value });
+                            }}
+                            className={`rounded-lg border px-2 py-1.5 text-xs font-semibold transition ${
+                              manageClosingTimerSec === value
+                                ? "border-red-500/80 bg-red-600/20 text-zinc-100"
+                                : "border-zinc-700/90 bg-zinc-950/80 text-zinc-300 hover:border-zinc-600 hover:bg-zinc-900"
+                            }`}
+                          >
+                            {value}с
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
-                <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2">
+                <div className="rounded-2xl border border-zinc-800/90 bg-zinc-900/55 px-4 py-3">
                   <div className="flex items-center justify-between gap-3">
                     <div className="text-sm font-medium text-zinc-100">Лимит протестов</div>
                     <Switch
@@ -7889,26 +7922,32 @@ export default function App() {
                   {manageProtestLimitEnabled && (
                     <div className="mt-2">
                       <div className="text-xs text-zinc-500">{manageProtestLimit} на игрока</div>
-                      <input
-                        type="range"
-                        min={1}
-                        max={10}
-                        step={1}
-                        value={manageProtestLimit}
-                        onChange={(e) => {
-                          const next = Math.max(1, Math.min(10, Number(e.target.value) || 1));
-                          setManageProtestLimit(next);
-                          updateRoomManagementSettings({
-                            protestLimitEnabled: true,
-                            maxProtestsPerPlayer: next,
-                          });
-                        }}
-                        className="mt-1 h-2 w-full accent-red-500"
-                      />
+                      <div className="mt-2 grid grid-cols-5 gap-1.5">
+                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((value) => (
+                          <button
+                            key={`protest-limit-${value}`}
+                            type="button"
+                            onClick={() => {
+                              setManageProtestLimit(value);
+                              updateRoomManagementSettings({
+                                protestLimitEnabled: true,
+                                maxProtestsPerPlayer: value,
+                              });
+                            }}
+                            className={`rounded-lg border px-2 py-1.5 text-xs font-semibold transition ${
+                              manageProtestLimit === value
+                                ? "border-red-500/80 bg-red-600/20 text-zinc-100"
+                                : "border-zinc-700/90 bg-zinc-950/80 text-zinc-300 hover:border-zinc-600 hover:bg-zinc-900"
+                            }`}
+                          >
+                            {value}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
-                <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2">
+                <div className="rounded-2xl border border-zinc-800/90 bg-zinc-900/55 px-4 py-3">
                   <div className="flex items-center justify-between gap-2">
                     <div className="text-sm font-medium text-zinc-100">Приватная</div>
                     <Switch
@@ -7919,11 +7958,11 @@ export default function App() {
                     />
                   </div>
                   {room.visibility === "private" && (
-                    <div className="mt-2 flex gap-2">
+                    <div className="mt-2">
                       <Input
                         placeholder="Пароль"
                         type="password"
-                        className="h-9 rounded-lg border-zinc-700 bg-zinc-900 text-zinc-100"
+                        className="h-10 rounded-xl border-zinc-700 bg-zinc-950 text-zinc-100"
                         onBlur={(e) =>
                           updateRoomManagementSettings({
                             password: e.target.value.trim() ? e.target.value.trim() : null,
@@ -7933,26 +7972,31 @@ export default function App() {
                     </div>
                   )}
                 </div>
-                <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2">
+                <div className="rounded-2xl border border-zinc-800/90 bg-zinc-900/55 px-4 py-3 md:col-span-2">
                   <div className="text-xs text-zinc-500">Передать хоста</div>
-                  <div className="mt-2 flex gap-2">
-                    <select
-                      value={manageTransferHostId}
-                      onChange={(e) => setManageTransferHostId(e.target.value)}
-                      className="h-9 flex-1 rounded-lg border border-zinc-700 bg-zinc-900 px-2 text-sm text-zinc-100"
-                    >
-                      <option value="">Выбрать игрока</option>
-                      {hostTransferCandidates.map((player) => (
-                        <option key={`host-candidate-${player.id}`} value={player.id}>
-                          {player.name}
-                        </option>
-                      ))}
-                    </select>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
+                    <Select value={manageTransferHostId} onValueChange={setManageTransferHostId}>
+                      <SelectTrigger className="h-10 rounded-xl border-zinc-700 bg-zinc-950 text-zinc-100 focus:ring-red-500/40">
+                        <SelectValue placeholder="Выбрать игрока" />
+                      </SelectTrigger>
+                      <SelectContent className="border-zinc-800 bg-zinc-950 text-zinc-100">
+                        {hostTransferCandidates.length === 0 && (
+                          <SelectItem value="__none__" disabled>
+                            Нет кандидатов
+                          </SelectItem>
+                        )}
+                        {hostTransferCandidates.map((player) => (
+                          <SelectItem key={`host-candidate-${player.id}`} value={player.id}>
+                            {player.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <Button
                       type="button"
-                      className="h-9 rounded-lg bg-red-600 px-3 text-xs text-white hover:bg-red-500"
+                      className="h-10 rounded-xl bg-red-600 px-4 text-sm font-semibold text-white hover:bg-red-500"
                       onClick={() => transferRoomHostTo(manageTransferHostId)}
-                      disabled={!manageTransferHostId}
+                      disabled={!manageTransferHostId || manageTransferHostId === "__none__"}
                     >
                       Передать
                     </Button>
