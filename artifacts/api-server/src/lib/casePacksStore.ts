@@ -192,6 +192,13 @@ const CASE_PACK_KEY_FROM_ROW_SQL = `
     END
   )
 `;
+const CASE_ACTIVE_FROM_ROW_SQL = `
+  COALESCE(
+    NULLIF(to_jsonb(c)->>'active', ''),
+    NULLIF(to_jsonb(c)->>'is_active', ''),
+    'true'
+  )
+`;
 
 function isUndefinedColumnError(error: unknown): boolean {
   const message =
@@ -489,7 +496,7 @@ function buildRolesFromFacts(
 
 export async function listCasePacks(attempt = 0): Promise<CasePackInfo[]> {
   const merged = new Map<string, CasePackInfo>(
-    STATIC_PACKS_FALLBACK.map((pack) => [pack.key, { ...pack }]),
+    STATIC_PACKS_FALLBACK.map((pack) => [pack.key, { ...pack, caseCount: 0 }]),
   );
 
   try {
@@ -503,7 +510,7 @@ export async function listCasePacks(attempt = 0): Promise<CasePackInfo[]> {
       FROM case_pack_cases c
       LEFT JOIN case_packs cp
         ON NULLIF(to_jsonb(c)->>'case_pack_id', '') = to_jsonb(cp)->>'id'
-      WHERE COALESCE(NULLIF(to_jsonb(c)->>'active', ''), 'true') <> 'false'
+      WHERE ${CASE_ACTIVE_FROM_ROW_SQL} <> 'false'
       GROUP BY 1
     `);
 
@@ -515,11 +522,7 @@ export async function listCasePacks(attempt = 0): Promise<CasePackInfo[]> {
       const dbCount = Math.max(0, Number(row.case_count ?? "0") || 0);
       const fallbackPack = STATIC_PACKS_BY_KEY.get(key);
       const existing = merged.get(key);
-      const resolvedCount = Math.max(
-        dbCount,
-        fallbackPack?.caseCount ?? 0,
-        existing?.caseCount ?? 0,
-      );
+      const resolvedCount = Math.max(dbCount, existing?.caseCount ?? 0);
 
       if (existing) {
         merged.set(key, {
@@ -562,6 +565,7 @@ async function pickCaseFromPackDb(
       pack_id: string | null;
       pack_key: string | null;
       pack_title: string | null;
+      pack_active: string | null;
     }>(`
       SELECT
         COALESCE(
@@ -575,10 +579,16 @@ async function pickCaseFromPackDb(
         COALESCE(
           NULLIF(to_jsonb(cp)->>'title', ''),
           NULLIF(to_jsonb(cp)->>'pack_title', '')
-        ) AS pack_title
+        ) AS pack_title,
+        COALESCE(
+          NULLIF(to_jsonb(cp)->>'active', ''),
+          NULLIF(to_jsonb(cp)->>'is_active', ''),
+          'true'
+        ) AS pack_active
       FROM case_packs cp
     `);
     const packKeyById = new Map<string, string>();
+    const packActiveById = new Map<string, boolean>();
     for (const row of packRows.rows) {
       const id = (row.pack_id ?? "").trim();
       const key =
@@ -586,8 +596,10 @@ async function pickCaseFromPackDb(
         resolveKnownPackKey(row.pack_title) ||
         sanitizeCasePackKey(row.pack_key) ||
         sanitizeCasePackKey(row.pack_title);
+      const isActive = (row.pack_active ?? "true").toLowerCase() !== "false";
       if (id && key) {
         packKeyById.set(id, key);
+        packActiveById.set(id, isActive);
       }
     }
 
@@ -633,14 +645,17 @@ async function pickCaseFromPackDb(
           NULLIF(to_jsonb(c)->>'pack_id', '') AS pack_id_raw
         FROM case_pack_cases c
         WHERE COALESCE(NULLIF(to_jsonb(c)->>'mode_player_count', ''), '0')::int = $1
-          AND COALESCE(NULLIF(to_jsonb(c)->>'active', ''), 'true') <> 'false'
+          AND ${CASE_ACTIVE_FROM_ROW_SQL} <> 'false'
       `,
       [safeCount],
     );
 
     if (!result.rowCount) return null;
 
-    const matchedRows = result.rows.filter((row) => {
+    const linkedRows: typeof result.rows = [];
+    const looseRows: typeof result.rows = [];
+
+    result.rows.forEach((row) => {
       const keys = new Set<string>();
 
       const addKey = (value: string | null | undefined) => {
@@ -663,9 +678,23 @@ async function pickCaseFromPackDb(
       const byPackId = packKeyById.get((row.pack_id_raw ?? "").trim());
       if (byPackId) keys.add(byPackId);
 
-      return keys.has(packKey);
+      const casePackId = (row.case_pack_id_raw ?? "").trim();
+      const packId = (row.pack_id_raw ?? "").trim();
+      const linkedPackId = casePackId || packId;
+      const linkedPackKey = linkedPackId ? packKeyById.get(linkedPackId) : null;
+      const linkedPackActive = linkedPackId ? packActiveById.get(linkedPackId) !== false : false;
+
+      if (linkedPackId && linkedPackKey === packKey && linkedPackActive) {
+        linkedRows.push(row);
+        return;
+      }
+
+      if (keys.has(packKey)) {
+        looseRows.push(row);
+      }
     });
 
+    const matchedRows = linkedRows.length > 0 ? linkedRows : looseRows;
     if (matchedRows.length === 0) return null;
     const row = matchedRows[Math.floor(Math.random() * matchedRows.length)];
     const facts =
@@ -727,6 +756,7 @@ async function pickAnyCaseByModeFallback(
         ) AS facts_json
       FROM case_pack_cases c
       WHERE COALESCE(NULLIF(to_jsonb(c)->>'mode_player_count', ''), '0')::int = $1
+        AND ${CASE_ACTIVE_FROM_ROW_SQL} <> 'false'
       ORDER BY RANDOM()
       LIMIT 1
     `,

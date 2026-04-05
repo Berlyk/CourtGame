@@ -9778,7 +9778,7 @@ export default function App() {
             </InfoBlock>
           </div>
           {matchExpiresAt !== null && !game.finished && (
-            <div className="fixed right-5 bottom-[0.45rem] sm:bottom-[0.6rem] left-auto z-30 rounded-xl border border-zinc-700/80 bg-zinc-950/85 px-2.5 sm:px-3 py-1.5 sm:py-2 text-[11px] sm:text-xs font-semibold text-zinc-200 shadow-[0_8px_22px_rgba(0,0,0,0.45)] backdrop-blur-sm">
+            <div className="fixed right-5 bottom-[0.2rem] sm:bottom-[0.25rem] left-auto z-30 rounded-xl border border-zinc-700/80 bg-zinc-950/85 px-2.5 sm:px-3 py-1.5 sm:py-2 text-[11px] sm:text-xs font-semibold text-zinc-200 shadow-[0_8px_22px_rgba(0,0,0,0.45)] backdrop-blur-sm">
               <span className="sm:hidden inline-flex items-center gap-2">
                 <Clock3 className="h-3.5 w-3.5 text-zinc-300" />
                 <span className="text-red-300">
@@ -9803,7 +9803,7 @@ export default function App() {
             onOpenChange={setContextHelpOpen}
             query={contextHelpQuery}
             onQueryChange={setContextHelpQuery}
-            floatingOffsetClass="bottom-[4.1rem] sm:bottom-[4.25rem]"
+            floatingOffsetClass="bottom-[4.55rem] sm:bottom-[4.8rem]"
           />
         </div>
         {renderPublicProfileDialog()}
