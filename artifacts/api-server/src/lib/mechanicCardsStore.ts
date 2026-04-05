@@ -27,7 +27,7 @@ async function columnExists(tableName: string, columnName: string): Promise<bool
       SELECT EXISTS (
         SELECT 1
         FROM information_schema.columns
-        WHERE table_schema = ANY(current_schemas(true))
+        WHERE table_schema = current_schema()
           AND table_name = $1
           AND column_name = $2
       ) AS exists
@@ -66,12 +66,12 @@ async function ensureTablesInternal(): Promise<void> {
     BEGIN
       IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_schema = ANY(current_schemas(true)) AND table_name = 'mechanic_cards' AND column_name = 'active'
+        WHERE table_schema = current_schema() AND table_name = 'mechanic_cards' AND column_name = 'active'
       ) THEN
         EXECUTE 'ALTER TABLE mechanic_cards ADD COLUMN active BOOLEAN NOT NULL DEFAULT TRUE';
         IF EXISTS (
           SELECT 1 FROM information_schema.columns
-          WHERE table_schema = ANY(current_schemas(true)) AND table_name = 'mechanic_cards' AND column_name = 'is_active'
+          WHERE table_schema = current_schema() AND table_name = 'mechanic_cards' AND column_name = 'is_active'
         ) THEN
           EXECUTE 'UPDATE mechanic_cards SET active = COALESCE(is_active, TRUE)';
         END IF;

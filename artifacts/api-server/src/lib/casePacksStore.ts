@@ -143,7 +143,7 @@ async function columnExists(tableName: string, columnName: string): Promise<bool
       SELECT EXISTS (
         SELECT 1
         FROM information_schema.columns
-        WHERE table_schema = ANY(current_schemas(true))
+        WHERE table_schema = current_schema()
           AND table_name = $1
           AND column_name = $2
       ) AS exists
@@ -233,11 +233,11 @@ async function ensureTablesInternal(): Promise<void> {
     BEGIN
       IF EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_schema = ANY(current_schemas(true)) AND table_name = 'case_packs' AND column_name = 'pack_key'
+        WHERE table_schema = current_schema() AND table_name = 'case_packs' AND column_name = 'pack_key'
       )
       AND NOT EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_schema = ANY(current_schemas(true)) AND table_name = 'case_packs' AND column_name = 'key'
+        WHERE table_schema = current_schema() AND table_name = 'case_packs' AND column_name = 'key'
       ) THEN
         EXECUTE 'ALTER TABLE case_packs ADD COLUMN key TEXT';
         EXECUTE 'UPDATE case_packs SET key = pack_key WHERE key IS NULL';
@@ -245,11 +245,11 @@ async function ensureTablesInternal(): Promise<void> {
 
       IF EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_schema = ANY(current_schemas(true)) AND table_name = 'case_pack_cases' AND column_name = 'case_pack_key'
+        WHERE table_schema = current_schema() AND table_name = 'case_pack_cases' AND column_name = 'case_pack_key'
       )
       AND NOT EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_schema = ANY(current_schemas(true)) AND table_name = 'case_pack_cases' AND column_name = 'pack_key'
+        WHERE table_schema = current_schema() AND table_name = 'case_pack_cases' AND column_name = 'pack_key'
       ) THEN
         EXECUTE 'ALTER TABLE case_pack_cases ADD COLUMN pack_key TEXT';
         EXECUTE 'UPDATE case_pack_cases SET pack_key = case_pack_key WHERE pack_key IS NULL';
@@ -257,12 +257,12 @@ async function ensureTablesInternal(): Promise<void> {
 
       IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_schema = ANY(current_schemas(true)) AND table_name = 'case_pack_cases' AND column_name = 'evidence_json'
+        WHERE table_schema = current_schema() AND table_name = 'case_pack_cases' AND column_name = 'evidence_json'
       ) THEN
         EXECUTE 'ALTER TABLE case_pack_cases ADD COLUMN evidence_json JSONB NOT NULL DEFAULT ''[]''::jsonb';
         IF EXISTS (
           SELECT 1 FROM information_schema.columns
-          WHERE table_schema = ANY(current_schemas(true)) AND table_name = 'case_pack_cases' AND column_name = 'evidence'
+          WHERE table_schema = current_schema() AND table_name = 'case_pack_cases' AND column_name = 'evidence'
         ) THEN
           EXECUTE 'UPDATE case_pack_cases SET evidence_json = COALESCE(to_jsonb(evidence), ''[]''::jsonb)';
         END IF;
@@ -270,12 +270,12 @@ async function ensureTablesInternal(): Promise<void> {
 
       IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_schema = ANY(current_schemas(true)) AND table_name = 'case_pack_cases' AND column_name = 'facts_json'
+        WHERE table_schema = current_schema() AND table_name = 'case_pack_cases' AND column_name = 'facts_json'
       ) THEN
         EXECUTE 'ALTER TABLE case_pack_cases ADD COLUMN facts_json JSONB NOT NULL DEFAULT ''{}''::jsonb';
         IF EXISTS (
           SELECT 1 FROM information_schema.columns
-          WHERE table_schema = ANY(current_schemas(true)) AND table_name = 'case_pack_cases' AND column_name = 'facts'
+          WHERE table_schema = current_schema() AND table_name = 'case_pack_cases' AND column_name = 'facts'
         ) THEN
           EXECUTE 'UPDATE case_pack_cases SET facts_json = COALESCE(to_jsonb(facts), ''{}''::jsonb)';
         END IF;
@@ -283,12 +283,12 @@ async function ensureTablesInternal(): Promise<void> {
 
       IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_schema = ANY(current_schemas(true)) AND table_name = 'case_packs' AND column_name = 'active'
+        WHERE table_schema = current_schema() AND table_name = 'case_packs' AND column_name = 'active'
       ) THEN
         EXECUTE 'ALTER TABLE case_packs ADD COLUMN active BOOLEAN NOT NULL DEFAULT TRUE';
         IF EXISTS (
           SELECT 1 FROM information_schema.columns
-          WHERE table_schema = ANY(current_schemas(true)) AND table_name = 'case_packs' AND column_name = 'is_active'
+          WHERE table_schema = current_schema() AND table_name = 'case_packs' AND column_name = 'is_active'
         ) THEN
           EXECUTE 'UPDATE case_packs SET active = COALESCE(is_active, TRUE)';
         END IF;
@@ -296,12 +296,12 @@ async function ensureTablesInternal(): Promise<void> {
 
       IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_schema = ANY(current_schemas(true)) AND table_name = 'case_pack_cases' AND column_name = 'active'
+        WHERE table_schema = current_schema() AND table_name = 'case_pack_cases' AND column_name = 'active'
       ) THEN
         EXECUTE 'ALTER TABLE case_pack_cases ADD COLUMN active BOOLEAN NOT NULL DEFAULT TRUE';
         IF EXISTS (
           SELECT 1 FROM information_schema.columns
-          WHERE table_schema = ANY(current_schemas(true)) AND table_name = 'case_pack_cases' AND column_name = 'is_active'
+          WHERE table_schema = current_schema() AND table_name = 'case_pack_cases' AND column_name = 'is_active'
         ) THEN
           EXECUTE 'UPDATE case_pack_cases SET active = COALESCE(is_active, TRUE)';
         END IF;
@@ -314,24 +314,19 @@ async function ensureTablesInternal(): Promise<void> {
     BEGIN
       IF EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_schema = ANY(current_schemas(true)) AND table_name = 'case_packs' AND column_name = 'key'
+        WHERE table_schema = current_schema() AND table_name = 'case_packs' AND column_name = 'key'
       ) THEN
         EXECUTE 'CREATE UNIQUE INDEX IF NOT EXISTS case_packs_key_uidx ON case_packs(key)';
-      ELSIF EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = ANY(current_schemas(true)) AND table_name = 'case_packs' AND column_name = 'pack_key'
-      ) THEN
-        EXECUTE 'CREATE UNIQUE INDEX IF NOT EXISTS case_packs_pack_key_uidx ON case_packs(pack_key)';
       END IF;
 
       IF EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_schema = ANY(current_schemas(true)) AND table_name = 'case_pack_cases' AND column_name = 'pack_key'
+        WHERE table_schema = current_schema() AND table_name = 'case_pack_cases' AND column_name = 'pack_key'
       ) THEN
         EXECUTE 'CREATE INDEX IF NOT EXISTS case_pack_cases_pack_mode_idx ON case_pack_cases(pack_key, mode_player_count)';
       ELSIF EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_schema = ANY(current_schemas(true)) AND table_name = 'case_pack_cases' AND column_name = 'case_pack_key'
+        WHERE table_schema = current_schema() AND table_name = 'case_pack_cases' AND column_name = 'case_pack_key'
       ) THEN
         EXECUTE 'CREATE INDEX IF NOT EXISTS case_pack_cases_case_pack_mode_idx ON case_pack_cases(case_pack_key, mode_player_count)';
       END IF;
