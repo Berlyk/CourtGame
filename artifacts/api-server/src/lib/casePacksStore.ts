@@ -127,6 +127,20 @@ export function normalizeCasePackKey(input?: string | null): string {
   return safe || "classic";
 }
 
+const CASE_PACK_KEY_FROM_ROW_SQL = `
+  COALESCE(
+    NULLIF(to_jsonb(c)->>'pack_key', ''),
+    NULLIF(to_jsonb(c)->>'case_pack_key', ''),
+    CASE
+      WHEN NULLIF(to_jsonb(c)->>'case_pack_id', '') IS NOT NULL THEN COALESCE(
+        NULLIF(to_jsonb(cp)->>'key', ''),
+        NULLIF(to_jsonb(cp)->>'pack_key', '')
+      )
+      ELSE NULL
+    END
+  )
+`;
+
 function isUndefinedColumnError(error: unknown): boolean {
   const message =
     typeof error === "object" && error !== null && "message" in error
@@ -351,15 +365,11 @@ async function ensurePackRowsFromCases(attempt = 0): Promise<void> {
   try {
     const keysResult = await pool.query<{ pack_key: string | null }>(`
       SELECT DISTINCT
-        COALESCE(
-          NULLIF(to_jsonb(c)->>'pack_key', ''),
-          NULLIF(to_jsonb(c)->>'case_pack_key', '')
-        ) AS pack_key
+        ${CASE_PACK_KEY_FROM_ROW_SQL} AS pack_key
       FROM case_pack_cases c
-      WHERE COALESCE(
-        NULLIF(to_jsonb(c)->>'pack_key', ''),
-        NULLIF(to_jsonb(c)->>'case_pack_key', '')
-      ) IS NOT NULL
+      LEFT JOIN case_packs cp
+        ON NULLIF(to_jsonb(c)->>'case_pack_id', '') = to_jsonb(cp)->>'id'
+      WHERE ${CASE_PACK_KEY_FROM_ROW_SQL} IS NOT NULL
     `);
 
     for (const row of keysResult.rows) {
@@ -436,13 +446,11 @@ export async function listCasePacks(attempt = 0): Promise<CasePackInfo[]> {
       case_count: string;
     }>(`
       SELECT
-        COALESCE(
-          NULLIF(to_jsonb(c)->>'pack_key', ''),
-          NULLIF(to_jsonb(c)->>'case_pack_key', ''),
-          'classic'
-        ) AS pack_key,
+        COALESCE(${CASE_PACK_KEY_FROM_ROW_SQL}, 'classic') AS pack_key,
         COUNT(c.*)::text AS case_count
       FROM case_pack_cases c
+      LEFT JOIN case_packs cp
+        ON NULLIF(to_jsonb(c)->>'case_pack_id', '') = to_jsonb(cp)->>'id'
       WHERE COALESCE(NULLIF(to_jsonb(c)->>'active', ''), 'true') <> 'false'
       GROUP BY 1
     `);
@@ -524,10 +532,9 @@ async function pickCaseFromPackDb(
             '{}'::jsonb
           ) AS facts_json
         FROM case_pack_cases c
-        WHERE COALESCE(
-          NULLIF(to_jsonb(c)->>'pack_key', ''),
-          NULLIF(to_jsonb(c)->>'case_pack_key', '')
-        ) = $1
+        LEFT JOIN case_packs cp
+          ON NULLIF(to_jsonb(c)->>'case_pack_id', '') = to_jsonb(cp)->>'id'
+        WHERE regexp_replace(lower(COALESCE(${CASE_PACK_KEY_FROM_ROW_SQL}, '')), '[^a-z0-9_-]', '', 'g') = $1
           AND COALESCE(NULLIF(to_jsonb(c)->>'mode_player_count', ''), '0')::int = $2
           AND COALESCE(NULLIF(to_jsonb(c)->>'active', ''), 'true') <> 'false'
         ORDER BY RANDOM()

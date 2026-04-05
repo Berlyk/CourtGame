@@ -109,13 +109,13 @@ const ROOM_MODE_OPTIONS: Array<{
   },
   {
     key: "criminal_4",
-    title: "Уголовное дело (4)",
+    title: "Уголовное дело (Среднее)",
     subtitle: "Режим с адвокатом ответчика.",
     maxPlayers: 4,
   },
   {
     key: "criminal_5",
-    title: "Уголовное дело (5)",
+    title: "Уголовное дело (Тяжкое)",
     subtitle: "Режим с прокурором.",
     maxPlayers: 5,
   },
@@ -2862,7 +2862,7 @@ export default function App() {
   }, [adminFabPos.x, adminFabPos.y]);
 
   useEffect(() => {
-    if (screen !== "room") {
+    if (screen !== "room" && screen !== "game") {
       setAdminPanelOpen(false);
       setLobbyRoleDialogOpen(false);
     }
@@ -4635,6 +4635,14 @@ export default function App() {
     game && adminHostId === game.hostId
       ? adminHostSessionToken ?? mySessionToken
       : mySessionToken;
+  const adminTargetRoomCode = room?.code ?? game?.code ?? null;
+  const adminTargetHostId = room?.hostId ?? game?.hostId ?? null;
+  const adminControlActorId =
+    room && roomControlPlayerId
+      ? roomControlPlayerId
+      : game && gameControlPlayerId
+        ? gameControlPlayerId
+        : myId;
 
   const startGame = useCallback(() => {
     if (!room || !roomControlSessionToken) return;
@@ -4702,14 +4710,15 @@ export default function App() {
   }, [socket, room, authToken, isCreatorAdmin, roomControlPlayerId, adminBotCount]);
 
   const controlAdminPlayer = useCallback((targetPlayerId: string) => {
-    if (!room || !authToken || !isCreatorAdmin || roomControlPlayerId !== room.hostId) return;
+    if (!adminTargetRoomCode || !adminTargetHostId || !authToken || !isCreatorAdmin) return;
+    if (adminControlActorId !== adminTargetHostId) return;
     if (!targetPlayerId) return;
     socket.emit("admin_control_player", {
-      code: room.code,
+      code: adminTargetRoomCode,
       targetPlayerId,
       authToken,
     });
-  }, [socket, room, authToken, isCreatorAdmin, roomControlPlayerId]);
+  }, [socket, adminTargetRoomCode, adminTargetHostId, authToken, isCreatorAdmin, adminControlActorId]);
 
   const kickPlayerFromRoom = useCallback(
     (targetPlayerId: string) => {
@@ -7134,38 +7143,10 @@ export default function App() {
                               {visual.vibe}
                             </div>
                             {isLocked && (
-                              <div className="pointer-events-none absolute inset-0 rounded-2xl bg-zinc-950/74">
-                                <span
-                                  className="absolute left-[1%] top-[19%] h-[3px] w-[52%] origin-left rotate-[24deg] rounded-full"
-                                  style={{
-                                    background:
-                                      "repeating-radial-gradient(circle at 3px 50%, rgba(228,228,231,0.72) 0 2px, rgba(24,24,27,0.95) 2px 4px)",
-                                  }}
-                                />
-                                <span
-                                  className="absolute right-[1%] top-[19%] h-[3px] w-[52%] origin-right -rotate-[24deg] rounded-full"
-                                  style={{
-                                    background:
-                                      "repeating-radial-gradient(circle at 3px 50%, rgba(228,228,231,0.72) 0 2px, rgba(24,24,27,0.95) 2px 4px)",
-                                  }}
-                                />
-                                <span
-                                  className="absolute left-[1%] bottom-[19%] h-[3px] w-[52%] origin-left -rotate-[24deg] rounded-full"
-                                  style={{
-                                    background:
-                                      "repeating-radial-gradient(circle at 3px 50%, rgba(228,228,231,0.72) 0 2px, rgba(24,24,27,0.95) 2px 4px)",
-                                  }}
-                                />
-                                <span
-                                  className="absolute right-[1%] bottom-[19%] h-[3px] w-[52%] origin-right rotate-[24deg] rounded-full"
-                                  style={{
-                                    background:
-                                      "repeating-radial-gradient(circle at 3px 50%, rgba(228,228,231,0.72) 0 2px, rgba(24,24,27,0.95) 2px 4px)",
-                                  }}
-                                />
+                              <div className="pointer-events-none absolute inset-0 rounded-2xl bg-zinc-950/78">
                                 <span className="absolute inset-0 flex items-center justify-center">
-                                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-zinc-500/70 bg-zinc-900/90 text-zinc-200 shadow-[0_0_18px_rgba(0,0,0,0.45)]">
-                                    <Lock className="h-5 w-5" />
+                                  <span className="inline-flex h-14 w-14 items-center justify-center rounded-full border border-zinc-400/70 bg-zinc-900/92 text-zinc-100 shadow-[0_0_22px_rgba(0,0,0,0.6)]">
+                                    <Lock className="h-7 w-7" />
                                   </span>
                                 </span>
                               </div>
@@ -7853,25 +7834,30 @@ export default function App() {
                   </div>
                 </div>
                 <div className="rounded-2xl border border-zinc-800/90 bg-zinc-900/55 px-4 py-3">
-                  <div className="text-xs text-zinc-500">Наблюдатели</div>
-                  <div className="mt-2 grid grid-cols-4 gap-1.5">
-                    {[0, 1, 2, 3, 4, 5, 6].map((value) => (
-                      <button
-                        key={`obs-limit-${value}`}
-                        type="button"
-                        onClick={() => {
-                          setManageMaxObservers(value);
-                          updateRoomManagementSettings({ maxObservers: value });
-                        }}
-                        className={`rounded-lg border px-2 py-1.5 text-xs font-semibold transition ${
-                          manageMaxObservers === value
-                            ? "border-red-500/80 bg-red-600/20 text-zinc-100"
-                            : "border-zinc-700/90 bg-zinc-950/80 text-zinc-300 hover:border-zinc-600 hover:bg-zinc-900"
-                        }`}
-                      >
-                        {value}
-                      </button>
-                    ))}
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-medium text-zinc-100">Наблюдатели</div>
+                      <div className="text-xs text-zinc-500">Максимум в комнате</div>
+                    </div>
+                    <Select
+                      value={String(manageMaxObservers)}
+                      onValueChange={(value) => {
+                        const parsed = Math.max(0, Math.min(6, Number(value) || 0));
+                        setManageMaxObservers(parsed);
+                        updateRoomManagementSettings({ maxObservers: parsed });
+                      }}
+                    >
+                      <SelectTrigger className="h-10 w-24 rounded-xl border-zinc-700 bg-zinc-950 text-zinc-100 focus:ring-red-500/40">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="border-zinc-800 bg-zinc-950 text-zinc-100">
+                        {[0, 1, 2, 3, 4, 5, 6].map((value) => (
+                          <SelectItem key={`obs-limit-${value}`} value={String(value)}>
+                            {value}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
                 <div className="rounded-2xl border border-zinc-800/90 bg-zinc-900/55 px-4 py-3">
@@ -7888,27 +7874,27 @@ export default function App() {
                     />
                   </div>
                   {manageOpeningTimerEnabled && (
-                    <div className="mt-2">
-                      <div className="text-xs text-zinc-500">{manageOpeningTimerSec} сек.</div>
-                      <div className="mt-2 grid grid-cols-3 gap-1.5">
-                        {[15, 30, 45, 60, 90, 120, 150, 180].map((value) => (
-                          <button
-                            key={`open-timer-${value}`}
-                            type="button"
-                            onClick={() => {
-                              setManageOpeningTimerSec(value);
-                              updateRoomManagementSettings({ openingSpeechTimerSec: value });
-                            }}
-                            className={`rounded-lg border px-2 py-1.5 text-xs font-semibold transition ${
-                              manageOpeningTimerSec === value
-                                ? "border-red-500/80 bg-red-600/20 text-zinc-100"
-                                : "border-zinc-700/90 bg-zinc-950/80 text-zinc-300 hover:border-zinc-600 hover:bg-zinc-900"
-                            }`}
-                          >
-                            {value}с
-                          </button>
-                        ))}
-                      </div>
+                    <div className="mt-2 flex items-center justify-between gap-3">
+                      <div className="text-xs text-zinc-500">Длительность</div>
+                      <Select
+                        value={String(manageOpeningTimerSec)}
+                        onValueChange={(value) => {
+                          const parsed = Math.max(15, Math.min(180, Number(value) || 60));
+                          setManageOpeningTimerSec(parsed);
+                          updateRoomManagementSettings({ openingSpeechTimerSec: parsed });
+                        }}
+                      >
+                        <SelectTrigger className="h-10 w-28 rounded-xl border-zinc-700 bg-zinc-950 text-zinc-100 focus:ring-red-500/40">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="border-zinc-800 bg-zinc-950 text-zinc-100">
+                          {[15, 30, 45, 60, 90, 120, 150, 180].map((value) => (
+                            <SelectItem key={`open-timer-${value}`} value={String(value)}>
+                              {value} сек.
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   )}
                 </div>
@@ -7926,27 +7912,27 @@ export default function App() {
                     />
                   </div>
                   {manageClosingTimerEnabled && (
-                    <div className="mt-2">
-                      <div className="text-xs text-zinc-500">{manageClosingTimerSec} сек.</div>
-                      <div className="mt-2 grid grid-cols-3 gap-1.5">
-                        {[15, 30, 45, 60, 90, 120, 150, 180].map((value) => (
-                          <button
-                            key={`close-timer-${value}`}
-                            type="button"
-                            onClick={() => {
-                              setManageClosingTimerSec(value);
-                              updateRoomManagementSettings({ closingSpeechTimerSec: value });
-                            }}
-                            className={`rounded-lg border px-2 py-1.5 text-xs font-semibold transition ${
-                              manageClosingTimerSec === value
-                                ? "border-red-500/80 bg-red-600/20 text-zinc-100"
-                                : "border-zinc-700/90 bg-zinc-950/80 text-zinc-300 hover:border-zinc-600 hover:bg-zinc-900"
-                            }`}
-                          >
-                            {value}с
-                          </button>
-                        ))}
-                      </div>
+                    <div className="mt-2 flex items-center justify-between gap-3">
+                      <div className="text-xs text-zinc-500">Длительность</div>
+                      <Select
+                        value={String(manageClosingTimerSec)}
+                        onValueChange={(value) => {
+                          const parsed = Math.max(15, Math.min(180, Number(value) || 60));
+                          setManageClosingTimerSec(parsed);
+                          updateRoomManagementSettings({ closingSpeechTimerSec: parsed });
+                        }}
+                      >
+                        <SelectTrigger className="h-10 w-28 rounded-xl border-zinc-700 bg-zinc-950 text-zinc-100 focus:ring-red-500/40">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="border-zinc-800 bg-zinc-950 text-zinc-100">
+                          {[15, 30, 45, 60, 90, 120, 150, 180].map((value) => (
+                            <SelectItem key={`close-timer-${value}`} value={String(value)}>
+                              {value} сек.
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   )}
                 </div>
@@ -7965,30 +7951,30 @@ export default function App() {
                     />
                   </div>
                   {manageProtestLimitEnabled && (
-                    <div className="mt-2">
-                      <div className="text-xs text-zinc-500">{manageProtestLimit} на игрока</div>
-                      <div className="mt-2 grid grid-cols-5 gap-1.5">
-                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((value) => (
-                          <button
-                            key={`protest-limit-${value}`}
-                            type="button"
-                            onClick={() => {
-                              setManageProtestLimit(value);
-                              updateRoomManagementSettings({
-                                protestLimitEnabled: true,
-                                maxProtestsPerPlayer: value,
-                              });
-                            }}
-                            className={`rounded-lg border px-2 py-1.5 text-xs font-semibold transition ${
-                              manageProtestLimit === value
-                                ? "border-red-500/80 bg-red-600/20 text-zinc-100"
-                                : "border-zinc-700/90 bg-zinc-950/80 text-zinc-300 hover:border-zinc-600 hover:bg-zinc-900"
-                            }`}
-                          >
-                            {value}
-                          </button>
-                        ))}
-                      </div>
+                    <div className="mt-2 flex items-center justify-between gap-3">
+                      <div className="text-xs text-zinc-500">На игрока</div>
+                      <Select
+                        value={String(manageProtestLimit)}
+                        onValueChange={(value) => {
+                          const parsed = Math.max(1, Math.min(10, Number(value) || 1));
+                          setManageProtestLimit(parsed);
+                          updateRoomManagementSettings({
+                            protestLimitEnabled: true,
+                            maxProtestsPerPlayer: parsed,
+                          });
+                        }}
+                      >
+                        <SelectTrigger className="h-10 w-24 rounded-xl border-zinc-700 bg-zinc-950 text-zinc-100 focus:ring-red-500/40">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="border-zinc-800 bg-zinc-950 text-zinc-100">
+                          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((value) => (
+                            <SelectItem key={`protest-limit-${value}`} value={String(value)}>
+                              {value}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   )}
                 </div>
@@ -8462,6 +8448,62 @@ export default function App() {
             </Button>
           </div>
         )}
+        {hasGameAdminAccess && isCreatorAdmin && (
+          <>
+            <button
+              type="button"
+              onPointerDown={beginAdminFabDrag}
+              onPointerMove={moveAdminFabDrag}
+              onPointerUp={endAdminFabDrag}
+              className="fixed z-[80] flex h-12 w-12 items-center justify-center rounded-full border border-red-500/60 bg-zinc-900/95 text-red-300 shadow-[0_0_24px_rgba(239,68,68,0.32)] transition hover:text-red-200"
+              style={{ left: adminFabPos.x, top: adminFabPos.y }}
+              aria-label="Админ-инструменты"
+            >
+              <Wrench className="h-5 w-5" />
+            </button>
+            {adminPanelOpen && (
+              <div
+                className="fixed z-[79] w-[280px] rounded-2xl border border-zinc-700 bg-zinc-950/96 p-3 shadow-2xl shadow-black/70"
+                style={{
+                  left: Math.max(8, Math.min(window.innerWidth - 288, adminFabPos.x + 56)),
+                  top: Math.max(8, Math.min(window.innerHeight - 340, adminFabPos.y)),
+                }}
+              >
+                <div className="text-xs uppercase tracking-[0.12em] text-zinc-500">Админ</div>
+                <div className="mt-2 rounded-xl border border-zinc-800 bg-zinc-900/70 p-2">
+                  <div className="text-[11px] text-zinc-500">Боты в матче</div>
+                  {game.players.filter((player) => player.isBot || /^бот-\d+$/i.test((player.name ?? "").trim())).length === 0 ? (
+                    <div className="mt-1 text-xs text-zinc-400">Ботов пока нет.</div>
+                  ) : (
+                    <div className={`mt-1 max-h-28 space-y-1 overflow-y-auto pr-1 ${HIDE_SCROLLBAR_CLASS}`}>
+                      {game.players
+                        .filter((player) => player.isBot || /^бот-\d+$/i.test((player.name ?? "").trim()))
+                        .map((bot) => (
+                          <button
+                            key={`admin-game-bot-control-${bot.id}`}
+                            type="button"
+                            onClick={() => controlAdminPlayer(bot.id)}
+                            className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-1.5 text-left text-xs font-semibold text-zinc-100 transition hover:border-red-500/70 hover:bg-zinc-800"
+                          >
+                            Зайти за {bot.name}
+                          </button>
+                        ))}
+                    </div>
+                  )}
+                  {myId !== game.hostId && (
+                    <button
+                      type="button"
+                      onClick={() => controlAdminPlayer(game.hostId)}
+                      className="mt-2 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-1.5 text-xs font-semibold text-zinc-200 transition hover:border-red-500/70 hover:bg-zinc-800"
+                    >
+                      Вернуться к ведущему
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </>
+        )}
         {game.venueUrl && (
           <div className="absolute right-4 top-4 z-20 sm:right-6 sm:top-6">
             <Button
@@ -8477,13 +8519,10 @@ export default function App() {
         )}
         {speechSecondsLeft !== null && speechTimerLabel && (
           <div className="fixed inset-0 z-[72] pointer-events-none flex items-center justify-center px-4">
-            <div className="w-full max-w-sm rounded-2xl border border-zinc-700 bg-zinc-950/95 px-5 py-4 text-center shadow-[0_22px_66px_rgba(0,0,0,0.72)]">
+            <div className="w-full max-w-[320px] rounded-2xl border border-zinc-700 bg-zinc-950/95 px-5 py-6 text-center shadow-[0_22px_66px_rgba(0,0,0,0.72)]">
               <div className="text-xs uppercase tracking-[0.14em] text-zinc-400">{speechTimerLabel}</div>
-              <div className={`mt-2 text-5xl font-black tabular-nums ${speechSecondsLeft === 0 ? "text-red-400" : "text-zinc-100"}`}>
+              <div className={`mt-2 text-6xl font-black tabular-nums ${speechSecondsLeft === 0 ? "text-zinc-500" : "text-zinc-100"}`}>
                 {speechSecondsLeft}
-              </div>
-              <div className="mt-1 text-xs text-zinc-500">
-                Окно исчезнет при смене этапа.
               </div>
             </div>
           </div>
