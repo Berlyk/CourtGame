@@ -1,4 +1,3 @@
-import crypto from "node:crypto";
 import { pool } from "@workspace/db";
 
 export interface CasePackInfo {
@@ -28,11 +27,6 @@ type RoleKey =
   | "defenseLawyer"
   | "plaintiffLawyer";
 
-type ColumnNames = {
-  casesEvidenceExpr: string;
-  casesFactsExpr: string;
-};
-
 const ROLE_TITLES: Record<RoleKey, string> = {
   judge: "Судья",
   plaintiff: "Истец",
@@ -54,71 +48,8 @@ const ROLE_GOALS: Record<RoleKey, string> = {
 };
 
 let ensurePromise: Promise<void> | null = null;
-let columnsPromise: Promise<ColumnNames> | null = null;
 
-const STATIC_PACKS_FALLBACK: CasePackInfo[] = [
-  { key: "classic", title: "КЛАССИКА", description: "Базовый пак дел.", isAdult: false, sortOrder: 10, caseCount: 240 },
-  {
-    key: "medieval",
-    title: "СРЕДНЕВЕКОВЬЕ",
-    description: "Религия и традиции важнее доказательств.",
-    isAdult: false,
-    sortOrder: 20,
-    caseCount: 120,
-  },
-  {
-    key: "hard",
-    title: "ОСОБО ТЯЖКИЕ",
-    description: "Жесткие дела с серьезными последствиями.",
-    isAdult: false,
-    sortOrder: 30,
-    caseCount: 102,
-  },
-  {
-    key: "cyberpunk_2077",
-    title: "CYBERPUNK 2077",
-    description: "Технологии, импланты и корпорации.",
-    isAdult: false,
-    sortOrder: 40,
-    caseCount: 102,
-  },
-  {
-    key: "wild_west",
-    title: "ДИКИЙ ЗАПАД",
-    description: "Слабый контроль закона, где многое решается силой.",
-    isAdult: false,
-    sortOrder: 50,
-    caseCount: 78,
-  },
-  {
-    key: "the_boys",
-    title: "The Boys",
-    description: "Супергерои и последствия их действий.",
-    isAdult: false,
-    sortOrder: 60,
-    caseCount: 84,
-  },
-  {
-    key: "adult_18_plus",
-    title: "18+",
-    description: "Дела с чувствительными и спорными темами.",
-    isAdult: true,
-    sortOrder: 70,
-    caseCount: 84,
-  },
-  {
-    key: "ancient_rome",
-    title: "ДРЕВНИЙ РИМ",
-    description: "Статус и власть влияют на закон и решения суда.",
-    isAdult: false,
-    sortOrder: 80,
-    caseCount: 84,
-  },
-];
-
-const STATIC_PACKS_BY_KEY = new Map<string, CasePackInfo>(
-  STATIC_PACKS_FALLBACK.map((pack) => [pack.key, pack]),
-);
+const KNOWN_PACK_ALIAS_MAP = new Map<string, string>();
 
 function normalizePackAliasLabel(value: string | undefined | null): string {
   return (value ?? "")
@@ -138,67 +69,104 @@ function sanitizeCasePackKey(value: string | undefined | null): string {
     .replace(/_{2,}/g, "_");
 }
 
-const KNOWN_PACK_ALIAS_MAP = new Map<string, string>();
-
 function registerPackAlias(alias: string, targetKey: string): void {
-  const normalized = normalizePackAliasLabel(alias);
-  if (!normalized) return;
-  KNOWN_PACK_ALIAS_MAP.set(normalized, targetKey);
-}
-
-for (const pack of STATIC_PACKS_FALLBACK) {
-  registerPackAlias(pack.key, pack.key);
-  registerPackAlias(pack.title, pack.key);
-  registerPackAlias(pack.key.replace(/[_-]+/g, " "), pack.key);
+  KNOWN_PACK_ALIAS_MAP.set(normalizePackAliasLabel(alias), targetKey);
 }
 
 registerPackAlias("классика", "classic");
+registerPackAlias("classic", "classic");
 registerPackAlias("средневековье", "medieval");
+registerPackAlias("medieval", "medieval");
 registerPackAlias("особо тяжкие", "hard");
 registerPackAlias("особо тяжкие преступления", "hard");
+registerPackAlias("hard", "hard");
 registerPackAlias("cyberpunk 2077", "cyberpunk_2077");
+registerPackAlias("cyberpunk_2077", "cyberpunk_2077");
 registerPackAlias("дикий запад", "wild_west");
+registerPackAlias("wild west", "wild_west");
+registerPackAlias("wild_west", "wild_west");
 registerPackAlias("the boys", "the_boys");
+registerPackAlias("the_boys", "the_boys");
 registerPackAlias("18+", "adult_18_plus");
 registerPackAlias("18 plus", "adult_18_plus");
-registerPackAlias("adult 18 plus", "adult_18_plus");
+registerPackAlias("adult_18_plus", "adult_18_plus");
 registerPackAlias("древний рим", "ancient_rome");
+registerPackAlias("ancient rome", "ancient_rome");
+registerPackAlias("ancient_rome", "ancient_rome");
 
 function resolveKnownPackKey(value: string | undefined | null): string | null {
-  const direct = KNOWN_PACK_ALIAS_MAP.get(normalizePackAliasLabel(value));
-  if (direct) return direct;
+  const byLabel = KNOWN_PACK_ALIAS_MAP.get(normalizePackAliasLabel(value));
+  if (byLabel) return byLabel;
   const safe = sanitizeCasePackKey(value);
   if (!safe) return null;
-  return KNOWN_PACK_ALIAS_MAP.get(normalizePackAliasLabel(safe)) ?? null;
+  return KNOWN_PACK_ALIAS_MAP.get(normalizePackAliasLabel(safe)) ?? safe;
 }
 
 export function normalizeCasePackKey(input?: string | null): string {
   const known = resolveKnownPackKey(input);
-  if (known) return known;
-  const safe = sanitizeCasePackKey(input);
-  return safe || "classic";
+  return known || "classic";
 }
 
-const CASE_PACK_KEY_FROM_ROW_SQL = `
-  COALESCE(
-    NULLIF(to_jsonb(c)->>'pack_key', ''),
-    NULLIF(to_jsonb(c)->>'case_pack_key', ''),
-    CASE
-      WHEN NULLIF(to_jsonb(c)->>'case_pack_id', '') IS NOT NULL THEN COALESCE(
-        NULLIF(to_jsonb(cp)->>'key', ''),
-        NULLIF(to_jsonb(cp)->>'pack_key', '')
-      )
-      ELSE NULL
-    END
-  )
-`;
-const CASE_ACTIVE_FROM_ROW_SQL = `
-  COALESCE(
-    NULLIF(to_jsonb(c)->>'active', ''),
-    NULLIF(to_jsonb(c)->>'is_active', ''),
-    'true'
-  )
-`;
+function parseBoolean(raw: string | undefined | null, fallback = false): boolean {
+  const value = String(raw ?? "").trim().toLowerCase();
+  if (!value) return fallback;
+  if (["1", "true", "t", "yes", "y", "on"].includes(value)) return true;
+  if (["0", "false", "f", "no", "n", "off"].includes(value)) return false;
+  return fallback;
+}
+
+function parseNumber(raw: string | undefined | null, fallback = 0): number {
+  const value = Number(raw ?? "");
+  return Number.isFinite(value) ? value : fallback;
+}
+
+function buildPackTitleFromKey(key: string): string {
+  const raw = key.replace(/[_-]+/g, " ").trim();
+  if (!raw) return "КЛАССИКА";
+  return raw
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part.toUpperCase())
+    .join(" ");
+}
+
+function resolveOfficialModeTitle(playerCount: 3 | 4 | 5 | 6): string {
+  if (playerCount === 3) return "Гражданский спор / Трудовой спор";
+  if (playerCount === 4) return "Уголовное дело";
+  if (playerCount === 5) return "Уголовное дело";
+  return "Суд на компанию";
+}
+
+function parseStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string");
+}
+
+function parseFactsMap(value: unknown): Partial<Record<RoleKey, string[]>> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const result: Partial<Record<RoleKey, string[]>> = {};
+  const roleKeys = Object.keys(ROLE_TITLES) as RoleKey[];
+  for (const roleKey of roleKeys) {
+    const roleFacts = (value as Record<string, unknown>)[roleKey];
+    result[roleKey] = parseStringArray(roleFacts);
+  }
+  return result;
+}
+
+function buildRolesFromFacts(
+  facts: Partial<Record<RoleKey, string[]>>,
+): Record<string, { title: string; goal: string; facts: string[] }> {
+  const result: Record<string, { title: string; goal: string; facts: string[] }> = {};
+  const roleKeys = Object.keys(ROLE_TITLES) as RoleKey[];
+  for (const roleKey of roleKeys) {
+    result[roleKey] = {
+      title: ROLE_TITLES[roleKey],
+      goal: ROLE_GOALS[roleKey],
+      facts: roleKey === "judge" ? [] : facts[roleKey] ?? [],
+    };
+  }
+  return result;
+}
 
 function isUndefinedColumnError(error: unknown): boolean {
   const message =
@@ -210,54 +178,6 @@ function isUndefinedColumnError(error: unknown): boolean {
       ? String((error as { code?: unknown }).code ?? "")
       : "";
   return code === "42703" || /column\s+"?.+"?\s+does\s+not\s+exist/i.test(message);
-}
-
-async function columnExists(tableName: string, columnName: string): Promise<boolean> {
-  const res = await pool.query<{ exists: boolean }>(
-    `
-      SELECT EXISTS (
-        SELECT 1
-        FROM information_schema.columns
-        WHERE table_schema = current_schema()
-          AND table_name = $1
-          AND column_name = $2
-      ) AS exists
-    `,
-    [tableName, columnName],
-  );
-  return !!res.rows[0]?.exists;
-}
-
-async function resolveColumns(): Promise<ColumnNames> {
-  if (columnsPromise) return columnsPromise;
-
-  columnsPromise = (async () => {
-    const hasEvidenceJsonInCases = await columnExists("case_pack_cases", "evidence_json");
-    const hasEvidenceInCases = await columnExists("case_pack_cases", "evidence");
-    const hasFactsJsonInCases = await columnExists("case_pack_cases", "facts_json");
-    const hasFactsInCases = await columnExists("case_pack_cases", "facts");
-
-    const casesEvidenceExpr = hasEvidenceJsonInCases
-      ? "evidence_json"
-      : hasEvidenceInCases
-        ? "to_jsonb(evidence)"
-        : "'[]'::jsonb";
-    const casesFactsExpr = hasFactsJsonInCases
-      ? "facts_json"
-      : hasFactsInCases
-        ? "to_jsonb(facts)"
-        : "'{}'::jsonb";
-
-    return {
-      casesEvidenceExpr,
-      casesFactsExpr,
-    };
-  })().catch((error) => {
-    columnsPromise = null;
-    throw error;
-  });
-
-  return columnsPromise;
 }
 
 async function ensureTablesInternal(): Promise<void> {
@@ -278,7 +198,7 @@ async function ensureTablesInternal(): Promise<void> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS case_pack_cases (
       id UUID PRIMARY KEY,
-      pack_key TEXT NOT NULL REFERENCES case_packs(key) ON DELETE CASCADE,
+      case_pack_id UUID NOT NULL REFERENCES case_packs(id) ON DELETE CASCADE,
       case_key TEXT NOT NULL,
       mode_player_count INTEGER NOT NULL CHECK (mode_player_count IN (3,4,5,6)),
       title TEXT NOT NULL,
@@ -290,7 +210,7 @@ async function ensureTablesInternal(): Promise<void> {
       active BOOLEAN NOT NULL DEFAULT TRUE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      UNIQUE (pack_key, case_key)
+      UNIQUE (case_pack_id, case_key)
     );
   `);
 
@@ -304,45 +224,32 @@ async function ensureTablesInternal(): Promise<void> {
         EXECUTE 'ALTER TABLE case_packs ADD COLUMN key TEXT';
       END IF;
 
-      EXECUTE 'UPDATE case_packs cp SET key = COALESCE(cp.key, NULLIF(to_jsonb(cp)->>''pack_key'', '''')) WHERE cp.key IS NULL';
-      EXECUTE 'UPDATE case_packs cp SET key = ''pack-'' || SUBSTRING(cp.id::text, 1, 8) WHERE cp.key IS NULL';
-
-      IF EXISTS (
+      IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_schema = current_schema() AND table_name = 'case_pack_cases' AND column_name = 'case_pack_key'
-      )
-      AND NOT EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = current_schema() AND table_name = 'case_pack_cases' AND column_name = 'pack_key'
+        WHERE table_schema = current_schema() AND table_name = 'case_packs' AND column_name = 'title'
       ) THEN
-        EXECUTE 'ALTER TABLE case_pack_cases ADD COLUMN pack_key TEXT';
-        EXECUTE 'UPDATE case_pack_cases SET pack_key = case_pack_key WHERE pack_key IS NULL';
+        EXECUTE 'ALTER TABLE case_packs ADD COLUMN title TEXT';
       END IF;
 
       IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_schema = current_schema() AND table_name = 'case_pack_cases' AND column_name = 'evidence_json'
+        WHERE table_schema = current_schema() AND table_name = 'case_packs' AND column_name = 'description'
       ) THEN
-        EXECUTE 'ALTER TABLE case_pack_cases ADD COLUMN evidence_json JSONB NOT NULL DEFAULT ''[]''::jsonb';
-        IF EXISTS (
-          SELECT 1 FROM information_schema.columns
-          WHERE table_schema = current_schema() AND table_name = 'case_pack_cases' AND column_name = 'evidence'
-        ) THEN
-          EXECUTE 'UPDATE case_pack_cases SET evidence_json = COALESCE(to_jsonb(evidence), ''[]''::jsonb)';
-        END IF;
+        EXECUTE 'ALTER TABLE case_packs ADD COLUMN description TEXT';
       END IF;
 
       IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_schema = current_schema() AND table_name = 'case_pack_cases' AND column_name = 'facts_json'
+        WHERE table_schema = current_schema() AND table_name = 'case_packs' AND column_name = 'is_adult'
       ) THEN
-        EXECUTE 'ALTER TABLE case_pack_cases ADD COLUMN facts_json JSONB NOT NULL DEFAULT ''{}''::jsonb';
-        IF EXISTS (
-          SELECT 1 FROM information_schema.columns
-          WHERE table_schema = current_schema() AND table_name = 'case_pack_cases' AND column_name = 'facts'
-        ) THEN
-          EXECUTE 'UPDATE case_pack_cases SET facts_json = COALESCE(to_jsonb(facts), ''{}''::jsonb)';
-        END IF;
+        EXECUTE 'ALTER TABLE case_packs ADD COLUMN is_adult BOOLEAN NOT NULL DEFAULT FALSE';
+      END IF;
+
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = current_schema() AND table_name = 'case_packs' AND column_name = 'sort_order'
+      ) THEN
+        EXECUTE 'ALTER TABLE case_packs ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 100';
       END IF;
 
       IF NOT EXISTS (
@@ -358,6 +265,89 @@ async function ensureTablesInternal(): Promise<void> {
         END IF;
       END IF;
 
+      EXECUTE 'UPDATE case_packs cp
+               SET key = COALESCE(
+                 NULLIF(cp.key, ''''),
+                 NULLIF(to_jsonb(cp)->>''pack_key'', ''''),
+                 NULLIF(regexp_replace(lower(to_jsonb(cp)->>''pack_title''), ''[^a-z0-9]+'', ''_'', ''g''), '''')
+               )
+               WHERE cp.key IS NULL OR cp.key = ''''';
+
+      EXECUTE 'UPDATE case_packs cp
+               SET key = ''pack-'' || SUBSTRING(cp.id::text, 1, 8)
+               WHERE cp.key IS NULL OR cp.key = ''''';
+
+      EXECUTE 'UPDATE case_packs cp
+               SET title = COALESCE(
+                 NULLIF(cp.title, ''''),
+                 NULLIF(to_jsonb(cp)->>''pack_title'', ''''),
+                 upper(replace(cp.key, ''_'', '' ''))
+               )
+               WHERE cp.title IS NULL OR cp.title = ''''';
+
+      EXECUTE 'UPDATE case_packs cp
+               SET description = COALESCE(
+                 NULLIF(cp.description, ''''),
+                 NULLIF(to_jsonb(cp)->>''pack_description'', ''''),
+                 ''Пак дел.''
+               )
+               WHERE cp.description IS NULL OR cp.description = ''''';
+
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = current_schema() AND table_name = 'case_pack_cases' AND column_name = 'case_pack_id'
+      ) THEN
+        EXECUTE 'ALTER TABLE case_pack_cases ADD COLUMN case_pack_id UUID';
+      END IF;
+
+      EXECUTE '
+        UPDATE case_pack_cases c
+        SET case_pack_id = cp.id
+        FROM case_packs cp
+        WHERE c.case_pack_id IS NULL
+          AND (
+            NULLIF(to_jsonb(c)->>''case_pack_id'', '''') = cp.id::text
+            OR NULLIF(to_jsonb(c)->>''pack_id'', '''') = cp.id::text
+          )';
+
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = current_schema() AND table_name = 'case_pack_cases' AND column_name = 'mode_player_count'
+      ) THEN
+        EXECUTE 'ALTER TABLE case_pack_cases ADD COLUMN mode_player_count INTEGER';
+      END IF;
+
+      EXECUTE '
+        UPDATE case_pack_cases c
+        SET mode_player_count = CASE
+          WHEN NULLIF(to_jsonb(c)->>''mode_player_count'', '''') ~ ''^[0-9]+$'' THEN (to_jsonb(c)->>''mode_player_count'')::int
+          WHEN NULLIF(to_jsonb(c)->>''player_count'', '''') ~ ''^[0-9]+$'' THEN (to_jsonb(c)->>''player_count'')::int
+          ELSE mode_player_count
+        END
+        WHERE mode_player_count IS NULL';
+
+      EXECUTE 'UPDATE case_pack_cases SET mode_player_count = 3 WHERE mode_player_count IS NULL';
+
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = current_schema() AND table_name = 'case_pack_cases' AND column_name = 'evidence_json'
+      ) THEN
+        EXECUTE 'ALTER TABLE case_pack_cases ADD COLUMN evidence_json JSONB NOT NULL DEFAULT ''[]''::jsonb';
+      END IF;
+
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = current_schema() AND table_name = 'case_pack_cases' AND column_name = 'facts_json'
+      ) THEN
+        EXECUTE 'ALTER TABLE case_pack_cases ADD COLUMN facts_json JSONB NOT NULL DEFAULT ''{}''::jsonb';
+      END IF;
+
+      EXECUTE 'UPDATE case_pack_cases c
+               SET evidence_json = COALESCE(to_jsonb(c)->''evidence_json'', to_jsonb(c)->''evidence'', ''[]''::jsonb)';
+
+      EXECUTE 'UPDATE case_pack_cases c
+               SET facts_json = COALESCE(to_jsonb(c)->''facts_json'', to_jsonb(c)->''facts'', ''{}''::jsonb)';
+
       IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns
         WHERE table_schema = current_schema() AND table_name = 'case_pack_cases' AND column_name = 'active'
@@ -370,87 +360,30 @@ async function ensureTablesInternal(): Promise<void> {
           EXECUTE 'UPDATE case_pack_cases SET active = COALESCE(is_active, TRUE)';
         END IF;
       END IF;
+
+      EXECUTE '
+        UPDATE case_pack_cases c
+        SET active = FALSE
+        WHERE NULLIF(to_jsonb(c)->>''pack_id'', '''') IS NULL
+          AND (
+            NULLIF(to_jsonb(c)->>''pack_key'', '''') IS NOT NULL
+            OR NULLIF(to_jsonb(c)->>''case_pack_key'', '''') IS NOT NULL
+          )';
+
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = current_schema() AND table_name = 'case_pack_cases' AND column_name = 'sort_order'
+      ) THEN
+        EXECUTE 'ALTER TABLE case_pack_cases ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 100';
+      END IF;
     END $$;
   `);
 
   await pool.query(`
-    DO $$
-    BEGIN
-      IF EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = current_schema() AND table_name = 'case_packs' AND column_name = 'key'
-      ) THEN
-        EXECUTE 'CREATE UNIQUE INDEX IF NOT EXISTS case_packs_key_uidx ON case_packs(key)';
-      END IF;
-
-      IF EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = current_schema() AND table_name = 'case_pack_cases' AND column_name = 'pack_key'
-      ) THEN
-        EXECUTE 'CREATE INDEX IF NOT EXISTS case_pack_cases_pack_mode_idx ON case_pack_cases(pack_key, mode_player_count)';
-      ELSIF EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = current_schema() AND table_name = 'case_pack_cases' AND column_name = 'case_pack_key'
-      ) THEN
-        EXECUTE 'CREATE INDEX IF NOT EXISTS case_pack_cases_case_pack_mode_idx ON case_pack_cases(case_pack_key, mode_player_count)';
-      END IF;
-    END $$;
+    CREATE UNIQUE INDEX IF NOT EXISTS case_packs_key_uidx ON case_packs(key);
+    CREATE INDEX IF NOT EXISTS case_pack_cases_mode_idx ON case_pack_cases(mode_player_count);
+    CREATE INDEX IF NOT EXISTS case_pack_cases_case_pack_id_mode_idx ON case_pack_cases(case_pack_id, mode_player_count);
   `);
-
-  columnsPromise = null;
-  await resolveColumns();
-}
-
-function titleFromPackKey(packKey: string): string {
-  const normalized = (packKey || "classic").replace(/[_-]+/g, " ").trim();
-  if (!normalized) return "CLASSIC";
-  return normalized
-    .split(" ")
-    .filter(Boolean)
-    .map((part) => part.toUpperCase())
-    .join(" ");
-}
-
-function resolveOfficialModeTitle(playerCount: 3 | 4 | 5 | 6): string {
-  if (playerCount === 3) return "Гражданский спор / Трудовой спор";
-  if (playerCount === 4) return "Уголовное дело";
-  if (playerCount === 5) return "Уголовное дело";
-  return "Суд на компанию";
-}
-
-async function ensurePackRowsFromCases(attempt = 0): Promise<void> {
-  await resolveColumns();
-
-  try {
-    const keysResult = await pool.query<{ pack_key: string | null }>(`
-      SELECT DISTINCT
-        ${CASE_PACK_KEY_FROM_ROW_SQL} AS pack_key
-      FROM case_pack_cases c
-      LEFT JOIN case_packs cp
-        ON NULLIF(to_jsonb(c)->>'case_pack_id', '') = to_jsonb(cp)->>'id'
-      WHERE ${CASE_PACK_KEY_FROM_ROW_SQL} IS NOT NULL
-    `);
-
-    for (const row of keysResult.rows) {
-      if (!row.pack_key) continue;
-      const key = normalizeCasePackKey(row.pack_key);
-      await pool.query(
-        `
-          INSERT INTO case_packs (id, key, title, description, is_adult, sort_order, updated_at)
-          VALUES ($1, $2, $3, $4, FALSE, 100, NOW())
-          ON CONFLICT (key)
-          DO UPDATE SET updated_at = NOW()
-        `,
-        [crypto.randomUUID(), key, titleFromPackKey(key), "Пак дел из базы данных."],
-      );
-    }
-  } catch (error) {
-    if (attempt === 0 && isUndefinedColumnError(error)) {
-      columnsPromise = null;
-      return ensurePackRowsFromCases(1);
-    }
-    throw error;
-  }
 }
 
 export async function ensureCasePacksStorage(): Promise<void> {
@@ -463,94 +396,118 @@ export async function ensureCasePacksStorage(): Promise<void> {
   return ensurePromise;
 }
 
-export async function ensureDefaultCasePackSeeded(): Promise<void> {
-  await ensureCasePacksStorage();
-  try {
-    await ensurePackRowsFromCases();
-  } catch {
-    // Не блокируем сервер на неидеальной схеме БД.
-  }
-}
+type PackRow = {
+  pack_id: string | null;
+  pack_key: string | null;
+  pack_title: string | null;
+  pack_description: string | null;
+  pack_is_adult: string | null;
+  pack_sort_order: string | null;
+  pack_active: string | null;
+};
 
-function buildRolesFromFacts(
-  facts: Partial<Record<RoleKey, string[]>>,
-): Record<string, { title: string; goal: string; facts: string[] }> {
-  const result: Record<string, { title: string; goal: string; facts: string[] }> = {};
-  const roleKeys = Object.keys(ROLE_TITLES) as RoleKey[];
+type CaseCountRow = {
+  case_pack_id: string | null;
+  case_count: number;
+};
 
-  for (const roleKey of roleKeys) {
-    const rawFacts = facts[roleKey] ?? [];
-    const safeFacts = Array.isArray(rawFacts)
-      ? rawFacts.filter((item): item is string => typeof item === "string")
-      : [];
+async function fetchActivePacks(): Promise<PackRow[]> {
+  const result = await pool.query<PackRow>(`
+    SELECT
+      NULLIF(to_jsonb(cp)->>'id', '') AS pack_id,
+      COALESCE(
+        NULLIF(to_jsonb(cp)->>'key', ''),
+        NULLIF(to_jsonb(cp)->>'pack_key', '')
+      ) AS pack_key,
+      COALESCE(
+        NULLIF(to_jsonb(cp)->>'title', ''),
+        NULLIF(to_jsonb(cp)->>'pack_title', '')
+      ) AS pack_title,
+      COALESCE(
+        NULLIF(to_jsonb(cp)->>'description', ''),
+        NULLIF(to_jsonb(cp)->>'pack_description', '')
+      ) AS pack_description,
+      COALESCE(NULLIF(to_jsonb(cp)->>'is_adult', ''), 'false') AS pack_is_adult,
+      COALESCE(NULLIF(to_jsonb(cp)->>'sort_order', ''), '100') AS pack_sort_order,
+      COALESCE(NULLIF(to_jsonb(cp)->>'active', ''), NULLIF(to_jsonb(cp)->>'is_active', ''), 'true') AS pack_active
+    FROM case_packs cp
+  `);
 
-    result[roleKey] = {
-      title: ROLE_TITLES[roleKey],
-      goal: ROLE_GOALS[roleKey],
-      facts: roleKey === "judge" ? [] : safeFacts,
-    };
-  }
-
-  return result;
+  return result.rows.filter((row) => parseBoolean(row.pack_active, true));
 }
 
 export async function listCasePacks(attempt = 0): Promise<CasePackInfo[]> {
-  const merged = new Map<string, CasePackInfo>(
-    STATIC_PACKS_FALLBACK.map((pack) => [pack.key, { ...pack, caseCount: 0 }]),
-  );
-
   try {
-    const dbResult = await pool.query<{
-      pack_key: string;
-      case_count: string;
-    }>(`
+    await ensureCasePacksStorage();
+    const rows = await fetchActivePacks();
+    if (rows.length === 0) return [];
+
+    const packs = new Map<string, CasePackInfo>();
+    const packIdToKey = new Map<string, string>();
+
+    for (const row of rows) {
+      const key = normalizeCasePackKey(row.pack_key ?? row.pack_title ?? "classic");
+      const title = (row.pack_title ?? "").trim() || buildPackTitleFromKey(key);
+      const description = (row.pack_description ?? "").trim() || "Пак дел.";
+      const sortOrder = parseNumber(row.pack_sort_order, 100);
+      const isAdult = parseBoolean(row.pack_is_adult, false);
+
+      packs.set(key, {
+        key,
+        title,
+        description,
+        isAdult,
+        sortOrder,
+        caseCount: 0,
+      });
+
+      const packId = (row.pack_id ?? "").trim();
+      if (packId) {
+        packIdToKey.set(packId, key);
+      }
+    }
+
+    const counts = await pool.query<CaseCountRow>(`
       SELECT
-        COALESCE(${CASE_PACK_KEY_FROM_ROW_SQL}, 'classic') AS pack_key,
-        COUNT(c.*)::text AS case_count
+        NULLIF(to_jsonb(c)->>'case_pack_id', '') AS case_pack_id,
+        COUNT(*)::int AS case_count
       FROM case_pack_cases c
-      LEFT JOIN case_packs cp
-        ON NULLIF(to_jsonb(c)->>'case_pack_id', '') = to_jsonb(cp)->>'id'
-      WHERE ${CASE_ACTIVE_FROM_ROW_SQL} <> 'false'
+      WHERE COALESCE(NULLIF(to_jsonb(c)->>'active', ''), NULLIF(to_jsonb(c)->>'is_active', ''), 'true') <> 'false'
+        AND NULLIF(to_jsonb(c)->>'case_pack_id', '') IS NOT NULL
       GROUP BY 1
     `);
 
-    dbResult.rows.forEach((row) => {
-      const key =
-        resolveKnownPackKey(row.pack_key) ||
-        sanitizeCasePackKey(row.pack_key) ||
-        "classic";
-      const dbCount = Math.max(0, Number(row.case_count ?? "0") || 0);
-      const fallbackPack = STATIC_PACKS_BY_KEY.get(key);
-      const existing = merged.get(key);
-      const resolvedCount = Math.max(dbCount, existing?.caseCount ?? 0);
+    for (const row of counts.rows) {
+      const packId = (row.case_pack_id ?? "").trim();
+      if (!packId) continue;
+      const packKey = packIdToKey.get(packId);
+      if (!packKey) continue;
+      const pack = packs.get(packKey);
+      if (!pack) continue;
+      pack.caseCount = Number.isFinite(row.case_count) ? row.case_count : 0;
+    }
 
-      if (existing) {
-        merged.set(key, {
-          ...existing,
-          caseCount: resolvedCount,
-        });
-        return;
-      }
-
-      merged.set(key, {
-        key,
-        title: fallbackPack?.title ?? titleFromPackKey(key),
-        description: fallbackPack?.description ?? "Пак дел из базы данных.",
-        isAdult: fallbackPack?.isAdult ?? false,
-        sortOrder: fallbackPack?.sortOrder ?? 200,
-        caseCount: resolvedCount,
-      });
-    });
+    return [...packs.values()].sort(
+      (a, b) => a.sortOrder - b.sortOrder || a.title.localeCompare(b.title, "ru"),
+    );
   } catch (error) {
     if (attempt === 0 && isUndefinedColumnError(error)) {
-      columnsPromise = null;
+      ensurePromise = null;
       return listCasePacks(1);
     }
+    return [];
   }
+}
 
-  return [...merged.values()].sort(
-    (a, b) => a.sortOrder - b.sortOrder || a.title.localeCompare(b.title, "ru"),
-  );
+async function resolvePackIdByKey(packKey: string): Promise<string | null> {
+  const rows = await fetchActivePacks();
+  for (const row of rows) {
+    const key = normalizeCasePackKey(row.pack_key ?? row.pack_title ?? "classic");
+    if (key === packKey) {
+      return (row.pack_id ?? "").trim() || null;
+    }
+  }
+  return null;
 }
 
 async function pickCaseFromPackDb(
@@ -561,47 +518,9 @@ async function pickCaseFromPackDb(
   const safeCount = modePlayerCount as 3 | 4 | 5 | 6;
 
   try {
-    const packRows = await pool.query<{
-      pack_id: string | null;
-      pack_key: string | null;
-      pack_title: string | null;
-      pack_active: string | null;
-    }>(`
-      SELECT
-        COALESCE(
-          NULLIF(to_jsonb(cp)->>'id', ''),
-          NULLIF(to_jsonb(cp)->>'pack_id', '')
-        ) AS pack_id,
-        COALESCE(
-          NULLIF(to_jsonb(cp)->>'key', ''),
-          NULLIF(to_jsonb(cp)->>'pack_key', '')
-        ) AS pack_key,
-        COALESCE(
-          NULLIF(to_jsonb(cp)->>'title', ''),
-          NULLIF(to_jsonb(cp)->>'pack_title', '')
-        ) AS pack_title,
-        COALESCE(
-          NULLIF(to_jsonb(cp)->>'active', ''),
-          NULLIF(to_jsonb(cp)->>'is_active', ''),
-          'true'
-        ) AS pack_active
-      FROM case_packs cp
-    `);
-    const packKeyById = new Map<string, string>();
-    const packActiveById = new Map<string, boolean>();
-    for (const row of packRows.rows) {
-      const id = (row.pack_id ?? "").trim();
-      const key =
-        resolveKnownPackKey(row.pack_key) ||
-        resolveKnownPackKey(row.pack_title) ||
-        sanitizeCasePackKey(row.pack_key) ||
-        sanitizeCasePackKey(row.pack_title);
-      const isActive = (row.pack_active ?? "true").toLowerCase() !== "false";
-      if (id && key) {
-        packKeyById.set(id, key);
-        packActiveById.set(id, isActive);
-      }
-    }
+    await ensureCasePacksStorage();
+    const packId = await resolvePackIdByKey(packKey);
+    if (!packId) return null;
 
     const result = await pool.query<{
       case_key: string;
@@ -610,97 +529,28 @@ async function pickCaseFromPackDb(
       truth: string;
       evidence_json: unknown;
       facts_json: unknown;
-      pack_key_raw: string | null;
-      case_pack_key_raw: string | null;
-      pack_slug_raw: string | null;
-      pack_name_raw: string | null;
-      case_pack_id_raw: string | null;
-      pack_id_raw: string | null;
     }>(
       `
         SELECT
-          COALESCE(
-            NULLIF(to_jsonb(c)->>'case_key', ''),
-            NULLIF(to_jsonb(c)->>'id', ''),
-            'fallback-case'
-          ) AS case_key,
+          COALESCE(NULLIF(to_jsonb(c)->>'case_key', ''), NULLIF(to_jsonb(c)->>'id', ''), 'fallback-case') AS case_key,
           COALESCE(NULLIF(to_jsonb(c)->>'title', ''), 'Дело') AS title,
           COALESCE(NULLIF(to_jsonb(c)->>'description', ''), 'Описание недоступно.') AS description,
           COALESCE(NULLIF(to_jsonb(c)->>'truth', ''), 'Истина недоступна.') AS truth,
-          COALESCE(
-            to_jsonb(c)->'evidence_json',
-            to_jsonb(c)->'evidence',
-            '[]'::jsonb
-          ) AS evidence_json,
-          COALESCE(
-            to_jsonb(c)->'facts_json',
-            to_jsonb(c)->'facts',
-            '{}'::jsonb
-          ) AS facts_json,
-          NULLIF(to_jsonb(c)->>'pack_key', '') AS pack_key_raw,
-          NULLIF(to_jsonb(c)->>'case_pack_key', '') AS case_pack_key_raw,
-          NULLIF(to_jsonb(c)->>'pack_slug', '') AS pack_slug_raw,
-          NULLIF(to_jsonb(c)->>'pack_name', '') AS pack_name_raw,
-          NULLIF(to_jsonb(c)->>'case_pack_id', '') AS case_pack_id_raw,
-          NULLIF(to_jsonb(c)->>'pack_id', '') AS pack_id_raw
+          COALESCE(to_jsonb(c)->'evidence_json', to_jsonb(c)->'evidence', '[]'::jsonb) AS evidence_json,
+          COALESCE(to_jsonb(c)->'facts_json', to_jsonb(c)->'facts', '{}'::jsonb) AS facts_json
         FROM case_pack_cases c
-        WHERE COALESCE(NULLIF(to_jsonb(c)->>'mode_player_count', ''), '0')::int = $1
-          AND ${CASE_ACTIVE_FROM_ROW_SQL} <> 'false'
+        WHERE NULLIF(to_jsonb(c)->>'case_pack_id', '') = $1
+          AND COALESCE(NULLIF(to_jsonb(c)->>'mode_player_count', ''), '0')::int = $2
+          AND COALESCE(NULLIF(to_jsonb(c)->>'active', ''), NULLIF(to_jsonb(c)->>'is_active', ''), 'true') <> 'false'
+        ORDER BY RANDOM()
+        LIMIT 1
       `,
-      [safeCount],
+      [packId, safeCount],
     );
 
     if (!result.rowCount) return null;
-
-    const linkedRows: typeof result.rows = [];
-    const looseRows: typeof result.rows = [];
-
-    result.rows.forEach((row) => {
-      const keys = new Set<string>();
-
-      const addKey = (value: string | null | undefined) => {
-        const known = resolveKnownPackKey(value);
-        if (known) {
-          keys.add(known);
-          return;
-        }
-        const safe = sanitizeCasePackKey(value);
-        if (safe) keys.add(safe);
-      };
-
-      addKey(row.pack_key_raw);
-      addKey(row.case_pack_key_raw);
-      addKey(row.pack_slug_raw);
-      addKey(row.pack_name_raw);
-
-      const byCasePackId = packKeyById.get((row.case_pack_id_raw ?? "").trim());
-      if (byCasePackId) keys.add(byCasePackId);
-      const byPackId = packKeyById.get((row.pack_id_raw ?? "").trim());
-      if (byPackId) keys.add(byPackId);
-
-      const casePackId = (row.case_pack_id_raw ?? "").trim();
-      const packId = (row.pack_id_raw ?? "").trim();
-      const linkedPackId = casePackId || packId;
-      const linkedPackKey = linkedPackId ? packKeyById.get(linkedPackId) : null;
-      const linkedPackActive = linkedPackId ? packActiveById.get(linkedPackId) !== false : false;
-
-      if (linkedPackId && linkedPackKey === packKey && linkedPackActive) {
-        linkedRows.push(row);
-        return;
-      }
-
-      if (keys.has(packKey)) {
-        looseRows.push(row);
-      }
-    });
-
-    const matchedRows = linkedRows.length > 0 ? linkedRows : looseRows;
-    if (matchedRows.length === 0) return null;
-    const row = matchedRows[Math.floor(Math.random() * matchedRows.length)];
-    const facts =
-      row.facts_json && typeof row.facts_json === "object"
-        ? (row.facts_json as Partial<Record<RoleKey, string[]>>)
-        : {};
+    const row = result.rows[0];
+    const facts = parseFactsMap(row.facts_json);
 
     return {
       id: row.case_key,
@@ -708,120 +558,23 @@ async function pickCaseFromPackDb(
       title: row.title,
       description: row.description,
       truth: row.truth,
-      evidence: Array.isArray(row.evidence_json)
-        ? row.evidence_json.filter((item): item is string => typeof item === "string")
-        : [],
+      evidence: parseStringArray(row.evidence_json),
       roles: buildRolesFromFacts(facts),
     };
   } catch (error) {
     if (attempt === 0 && isUndefinedColumnError(error)) {
-      columnsPromise = null;
+      ensurePromise = null;
       return pickCaseFromPackDb(packKey, modePlayerCount, 1);
     }
     return null;
   }
 }
 
-async function pickAnyCaseByModeFallback(
-  modePlayerCount: number,
-): Promise<StoredCaseData | null> {
-  const safeCount = modePlayerCount as 3 | 4 | 5 | 6;
-  const result = await pool.query<{
-    case_key: string;
-    title: string;
-    description: string;
-    truth: string;
-    evidence_json: unknown;
-    facts_json: unknown;
-  }>(
-    `
-      SELECT
-        COALESCE(
-          NULLIF(to_jsonb(c)->>'case_key', ''),
-          NULLIF(to_jsonb(c)->>'id', ''),
-          'fallback-case'
-        ) AS case_key,
-        COALESCE(NULLIF(to_jsonb(c)->>'title', ''), 'Дело') AS title,
-        COALESCE(NULLIF(to_jsonb(c)->>'description', ''), 'Описание недоступно.') AS description,
-        COALESCE(NULLIF(to_jsonb(c)->>'truth', ''), 'Истина недоступна.') AS truth,
-        COALESCE(
-          to_jsonb(c)->'evidence_json',
-          to_jsonb(c)->'evidence',
-          '[]'::jsonb
-        ) AS evidence_json,
-        COALESCE(
-          to_jsonb(c)->'facts_json',
-          to_jsonb(c)->'facts',
-          '{}'::jsonb
-        ) AS facts_json
-      FROM case_pack_cases c
-      WHERE COALESCE(NULLIF(to_jsonb(c)->>'mode_player_count', ''), '0')::int = $1
-        AND ${CASE_ACTIVE_FROM_ROW_SQL} <> 'false'
-      ORDER BY RANDOM()
-      LIMIT 1
-    `,
-    [safeCount],
-  );
-
-  if (!result.rowCount) return null;
-  const row = result.rows[0];
-  const facts =
-    row.facts_json && typeof row.facts_json === "object"
-      ? (row.facts_json as Partial<Record<RoleKey, string[]>>)
-      : {};
-
-  return {
-    id: row.case_key,
-    mode: resolveOfficialModeTitle(safeCount),
-    title: row.title,
-    description: row.description,
-    truth: row.truth,
-    evidence: Array.isArray(row.evidence_json)
-      ? row.evidence_json.filter((item): item is string => typeof item === "string")
-      : [],
-    roles: buildRolesFromFacts(facts),
-  };
-}
-
 export async function pickCaseForRoom(
   packKeyInput: string | undefined,
   modePlayerCount: number,
 ): Promise<StoredCaseData | null> {
-  const hasExplicitPackSelection = !!(packKeyInput ?? "").trim();
-
-  try {
-    const packKey = normalizeCasePackKey(packKeyInput);
-    const strictPackMatchRequired = hasExplicitPackSelection && packKey !== "classic";
-
-    let selected = await pickCaseFromPackDb(packKey, modePlayerCount);
-    if (selected) return selected;
-
-    if (strictPackMatchRequired) {
-      return null;
-    }
-
-    selected = await pickCaseFromPackDb("classic", modePlayerCount);
-    if (selected) return selected;
-
-    selected = await pickCaseFromPackDb("classic", 3);
-    if (selected) return selected;
-  } catch {
-    if (hasExplicitPackSelection) {
-      return null;
-    }
-    // Переходим к безопасному fallback, чтобы матч не блокировался из-за legacy-схемы.
-  }
-
-  if (hasExplicitPackSelection) {
-    return null;
-  }
-
-  try {
-    const fallbackByMode = await pickAnyCaseByModeFallback(modePlayerCount);
-    if (fallbackByMode) return fallbackByMode;
-    return await pickAnyCaseByModeFallback(3);
-  } catch {
-    return null;
-  }
+  await ensureCasePacksStorage();
+  const packKey = normalizeCasePackKey(packKeyInput);
+  return pickCaseFromPackDb(packKey, modePlayerCount);
 }
-

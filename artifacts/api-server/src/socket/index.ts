@@ -42,7 +42,6 @@ import {
 import { getUserByToken, recordMatchOutcome } from "../lib/authStore.js";
 import {
   ensureCasePacksStorage,
-  ensureDefaultCasePackSeeded,
   listCasePacks,
   pickCaseForRoom,
 } from "../lib/casePacksStore.js";
@@ -555,7 +554,6 @@ export function setupSocket(httpServer: HttpServer) {
   void (async () => {
     try {
       await ensureCasePacksStorage();
-      await ensureDefaultCasePackSeeded();
       await ensureMechanicCardsStorage();
       await ensureDefaultMechanicCardsSeeded();
     } catch (error) {

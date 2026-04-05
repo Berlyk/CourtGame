@@ -7301,14 +7301,11 @@ export default function App() {
                           </div>
                         ) : (
                           <div className="rounded-xl border border-zinc-700 bg-zinc-950/80 px-3 py-3">
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="text-sm font-semibold text-zinc-100">КЛАССИКА</div>
-                              <div className="inline-flex items-center rounded-full border border-zinc-600/70 bg-zinc-800/80 px-2 py-0.5 text-[11px] font-semibold text-zinc-200">
-                                fallback
-                              </div>
+                            <div className="text-sm font-semibold text-zinc-100">
+                              Паки дел не загружены
                             </div>
                             <div className="mt-1 text-xs text-zinc-400">
-                              Список паков временно недоступен. Для создания комнаты будет использован базовый пак.
+                              Проверьте подключение к серверу и загрузку данных из базы.
                             </div>
                           </div>
                         )}
@@ -9778,7 +9775,7 @@ export default function App() {
             </InfoBlock>
           </div>
           {matchExpiresAt !== null && !game.finished && (
-            <div className="fixed right-5 bottom-[0.2rem] sm:bottom-[0.25rem] left-auto z-30 rounded-xl border border-zinc-700/80 bg-zinc-950/85 px-2.5 sm:px-3 py-1.5 sm:py-2 text-[11px] sm:text-xs font-semibold text-zinc-200 shadow-[0_8px_22px_rgba(0,0,0,0.45)] backdrop-blur-sm">
+            <div className="fixed right-5 bottom-0 sm:bottom-0 left-auto z-30 rounded-xl border border-zinc-700/80 bg-zinc-950/85 px-2.5 sm:px-3 py-1.5 sm:py-2 text-[11px] sm:text-xs font-semibold text-zinc-200 shadow-[0_8px_22px_rgba(0,0,0,0.45)] backdrop-blur-sm">
               <span className="sm:hidden inline-flex items-center gap-2">
                 <Clock3 className="h-3.5 w-3.5 text-zinc-300" />
                 <span className="text-red-300">
@@ -9803,7 +9800,7 @@ export default function App() {
             onOpenChange={setContextHelpOpen}
             query={contextHelpQuery}
             onQueryChange={setContextHelpQuery}
-            floatingOffsetClass="bottom-[4.55rem] sm:bottom-[4.8rem]"
+            floatingOffsetClass="bottom-[4.9rem] sm:bottom-[5.15rem]"
           />
         </div>
         {renderPublicProfileDialog()}
