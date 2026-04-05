@@ -730,13 +730,27 @@ export function updateRoomManagement(
   if (patch.modeKey !== undefined) {
     const nextMode = normalizeModeKey(patch.modeKey);
     const nextMaxPlayers = ROOM_MODE_MAX_PLAYERS[nextMode];
-    const activeMainPlayers = getActiveLobbyPlayers(room).length;
-    if (activeMainPlayers > nextMaxPlayers) {
-      return {
-        room,
-        ok: false,
-        reason: `Слишком много игроков для режима (${activeMainPlayers}/${nextMaxPlayers}).`,
-      };
+    const activeMainPlayers = getActiveLobbyPlayers(room);
+    if (activeMainPlayers.length > nextMaxPlayers) {
+      const overflowCount = activeMainPlayers.length - nextMaxPlayers;
+      const nonHostPool = activeMainPlayers.filter((player) => player.id !== room.hostId);
+      const hostPool = activeMainPlayers.filter((player) => player.id === room.hostId);
+      const overflowPlayers = [...shuffle(nonHostPool), ...hostPool].slice(0, overflowCount);
+      room.allowWitnesses = true;
+
+      for (const player of overflowPlayers) {
+        const currentWitnessCount = room.players.filter((entry) => entry.roleKey === "witness").length;
+        const supportRole = currentWitnessCount < MAX_WITNESS_PLAYERS ? "witness" : "observer";
+        player.roleKey = supportRole;
+        player.roleTitle = supportRole === "witness" ? getWitnessRoleTitle(room) : "Наблюдатель";
+        player.goal =
+          supportRole === "witness"
+            ? "Наблюдать за процессом суда и, по требованию судьи, давать показания."
+            : "Наблюдать за процессом суда без участия в механиках и действиях сторон.";
+        player.facts = [];
+        player.cards = [];
+        clearLobbyRoleState(player);
+      }
     }
     room.modeKey = nextMode;
     room.maxPlayers = nextMaxPlayers;

@@ -2289,18 +2289,15 @@ function PlayerCard({
   const doorColor = `rgb(${red}, ${green}, ${blue})`;
   return (
     <motion.div variants={cardVariants} initial="initial" animate="animate">
-      <Card
-        className={`rounded-2xl shadow-sm bg-zinc-900/90 text-zinc-100 ${
-          isHost
-            ? "border-red-500/25 shadow-[0_0_12px_rgba(239,68,68,0.1)]"
-            : "border-zinc-800"
-        }`}
-      >
+      <Card className="rounded-2xl shadow-sm bg-zinc-900/90 text-zinc-100 border-zinc-800">
         <CardContent className="relative overflow-hidden p-4 pt-5 flex items-center justify-between gap-3">
           <div
             className="pointer-events-none absolute inset-[6px] rounded-[16px] opacity-85"
             style={getBannerStyle(player.banner, player.avatar, player.name)}
           />
+          {isHost && (
+            <div className="pointer-events-none absolute inset-x-[24px] bottom-[10px] h-12 rounded-full bg-red-500/22 blur-2xl" />
+          )}
           <div className="pointer-events-none absolute inset-[6px] rounded-[16px] bg-black/35" />
           <button
             type="button"
@@ -7145,8 +7142,8 @@ export default function App() {
                             {isLocked && (
                               <div className="pointer-events-none absolute inset-0 rounded-2xl bg-zinc-950/78">
                                 <span className="absolute inset-0 flex items-center justify-center">
-                                  <span className="inline-flex h-14 w-14 items-center justify-center rounded-full border border-zinc-400/70 bg-zinc-900/92 text-zinc-100 shadow-[0_0_22px_rgba(0,0,0,0.6)]">
-                                    <Lock className="h-7 w-7" />
+                                  <span className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-zinc-400/70 bg-zinc-900/92 text-zinc-100 shadow-[0_0_20px_rgba(0,0,0,0.55)]">
+                                    <Lock className="h-5 w-5" />
                                   </span>
                                 </span>
                               </div>
@@ -7578,6 +7575,7 @@ export default function App() {
     const neededPlayersForStart = isQuickRoomMode
       ? Math.max(0, 3 - activeLobbyPlayersCount)
       : Math.max(0, roomMaxPlayers - activeLobbyPlayersCount);
+    const protestLimitFillPercent = ((manageProtestLimit - 1) / 9) * 100;
     return (
       <motion.div
         key="room"
@@ -7821,43 +7819,43 @@ export default function App() {
                     ))}
                   </div>
                 </div>
-                <div className="rounded-2xl border border-zinc-800/90 bg-zinc-900/55 px-4 py-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-sm font-medium text-zinc-100">Свидетели</div>
-                    <Switch
-                      checked={manageAllowWitnesses}
-                      onCheckedChange={(checked) => {
-                        setManageAllowWitnesses(checked);
-                        updateRoomManagementSettings({ allowWitnesses: checked });
-                      }}
-                    />
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-zinc-800/90 bg-zinc-900/55 px-4 py-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-medium text-zinc-100">Наблюдатели</div>
-                      <div className="text-xs text-zinc-500">Максимум в комнате</div>
+                <div className="rounded-2xl border border-zinc-800/90 bg-zinc-900/55 px-4 py-3 md:col-span-2">
+                  <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-sm font-medium text-zinc-100">Свидетели</div>
+                      <Switch
+                        checked={manageAllowWitnesses}
+                        onCheckedChange={(checked) => {
+                          setManageAllowWitnesses(checked);
+                          updateRoomManagementSettings({ allowWitnesses: checked });
+                        }}
+                      />
                     </div>
-                    <Select
-                      value={String(manageMaxObservers)}
-                      onValueChange={(value) => {
-                        const parsed = Math.max(0, Math.min(6, Number(value) || 0));
-                        setManageMaxObservers(parsed);
-                        updateRoomManagementSettings({ maxObservers: parsed });
-                      }}
-                    >
-                      <SelectTrigger className="h-10 w-24 rounded-xl border-zinc-700 bg-zinc-950 text-zinc-100 focus:ring-red-500/40">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="border-zinc-800 bg-zinc-950 text-zinc-100">
-                        {[0, 1, 2, 3, 4, 5, 6].map((value) => (
-                          <SelectItem key={`obs-limit-${value}`} value={String(value)}>
-                            {value}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="flex items-center justify-between gap-3 sm:justify-end">
+                      <div>
+                        <div className="text-sm font-medium text-zinc-100">Наблюдатели</div>
+                        <div className="text-xs text-zinc-500">Максимум в комнате</div>
+                      </div>
+                      <Select
+                        value={String(manageMaxObservers)}
+                        onValueChange={(value) => {
+                          const parsed = Math.max(0, Math.min(6, Number(value) || 0));
+                          setManageMaxObservers(parsed);
+                          updateRoomManagementSettings({ maxObservers: parsed });
+                        }}
+                      >
+                        <SelectTrigger className="h-10 w-24 rounded-xl border-zinc-700 bg-zinc-950 text-zinc-100 focus:ring-red-500/40">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="border-zinc-800 bg-zinc-950 text-zinc-100">
+                          {[0, 1, 2, 3, 4, 5, 6].map((value) => (
+                            <SelectItem key={`obs-limit-${value}`} value={String(value)}>
+                              {value}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 </div>
                 <div className="rounded-2xl border border-zinc-800/90 bg-zinc-900/55 px-4 py-3">
@@ -7951,30 +7949,36 @@ export default function App() {
                     />
                   </div>
                   {manageProtestLimitEnabled && (
-                    <div className="mt-2 flex items-center justify-between gap-3">
-                      <div className="text-xs text-zinc-500">На игрока</div>
-                      <Select
-                        value={String(manageProtestLimit)}
-                        onValueChange={(value) => {
-                          const parsed = Math.max(1, Math.min(10, Number(value) || 1));
+                    <div className="mt-2 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-xs text-zinc-500">На игрока</div>
+                        <div className="rounded-full border border-red-500/40 bg-red-600/15 px-2 py-0.5 text-xs font-semibold text-zinc-100">
+                          {manageProtestLimit}
+                        </div>
+                      </div>
+                      <input
+                        type="range"
+                        min={1}
+                        max={10}
+                        step={1}
+                        value={manageProtestLimit}
+                        onChange={(e) => {
+                          const parsed = Math.max(1, Math.min(10, Number(e.target.value) || 1));
                           setManageProtestLimit(parsed);
                           updateRoomManagementSettings({
                             protestLimitEnabled: true,
                             maxProtestsPerPlayer: parsed,
                           });
                         }}
-                      >
-                        <SelectTrigger className="h-10 w-24 rounded-xl border-zinc-700 bg-zinc-950 text-zinc-100 focus:ring-red-500/40">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="border-zinc-800 bg-zinc-950 text-zinc-100">
-                          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((value) => (
-                            <SelectItem key={`protest-limit-${value}`} value={String(value)}>
-                              {value}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        className="h-2 w-full cursor-pointer appearance-none rounded-full accent-red-500"
+                        style={{
+                          background: `linear-gradient(90deg, rgba(239,68,68,0.95) 0%, rgba(239,68,68,0.95) ${protestLimitFillPercent}%, rgba(63,63,70,0.9) ${protestLimitFillPercent}%, rgba(63,63,70,0.9) 100%)`,
+                        }}
+                      />
+                      <div className="flex items-center justify-between text-[10px] text-zinc-500">
+                        <span>1</span>
+                        <span>10</span>
+                      </div>
                     </div>
                   )}
                 </div>
