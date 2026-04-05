@@ -127,7 +127,7 @@ async function detectSchemaColumns(): Promise<{
     const columns = await pool.query<{ table_name: string; column_name: string }>(`
       SELECT table_name, column_name
       FROM information_schema.columns
-      WHERE table_schema = 'public'
+      WHERE table_schema = ANY (current_schemas(true))
         AND table_name IN ('case_packs', 'case_pack_cases')
     `);
 
@@ -187,11 +187,11 @@ async function ensureTablesInternal(): Promise<void> {
     BEGIN
       IF EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'case_packs' AND column_name = 'pack_key'
+        WHERE table_schema = ANY (current_schemas(true)) AND table_name = 'case_packs' AND column_name = 'pack_key'
       )
       AND NOT EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'case_packs' AND column_name = 'key'
+        WHERE table_schema = ANY (current_schemas(true)) AND table_name = 'case_packs' AND column_name = 'key'
       ) THEN
         EXECUTE 'ALTER TABLE case_packs ADD COLUMN key TEXT';
         EXECUTE 'UPDATE case_packs SET key = pack_key WHERE key IS NULL';
@@ -199,11 +199,11 @@ async function ensureTablesInternal(): Promise<void> {
 
       IF EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'case_pack_cases' AND column_name = 'case_pack_key'
+        WHERE table_schema = ANY (current_schemas(true)) AND table_name = 'case_pack_cases' AND column_name = 'case_pack_key'
       )
       AND NOT EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'case_pack_cases' AND column_name = 'pack_key'
+        WHERE table_schema = ANY (current_schemas(true)) AND table_name = 'case_pack_cases' AND column_name = 'pack_key'
       ) THEN
         EXECUTE 'ALTER TABLE case_pack_cases ADD COLUMN pack_key TEXT';
         EXECUTE 'UPDATE case_pack_cases SET pack_key = case_pack_key WHERE pack_key IS NULL';
