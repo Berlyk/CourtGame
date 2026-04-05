@@ -28,6 +28,11 @@ type RoleKey =
   | "defenseLawyer"
   | "plaintiffLawyer";
 
+type ColumnNames = {
+  packsKey: "key" | "pack_key";
+  casesPackKey: "pack_key" | "case_pack_key";
+};
+
 const ROLE_TITLES: Record<RoleKey, string> = {
   judge: "Судья",
   plaintiff: "Истец",
@@ -47,8 +52,7 @@ const ROLE_GOALS: Record<RoleKey, string> = {
 };
 
 let ensurePromise: Promise<void> | null = null;
-let schemaColumnsPromise: Promise<{ packsKey: "key" | "pack_key"; casesPackKey: "pack_key" | "case_pack_key" }> | null =
-  null;
+let columnsPromise: Promise<ColumnNames> | null = null;
 
 const STATIC_PACKS_FALLBACK: CasePackInfo[] = [
   { key: "classic", title: "КЛАССИКА", description: "Базовый пак дел.", isAdult: false, sortOrder: 10, caseCount: 240 },
@@ -117,35 +121,54 @@ export function normalizeCasePackKey(input?: string | null): string {
   return safe || "classic";
 }
 
-async function detectSchemaColumns(): Promise<{
-  packsKey: "key" | "pack_key";
-  casesPackKey: "pack_key" | "case_pack_key";
-}> {
-  if (schemaColumnsPromise) return schemaColumnsPromise;
+function isUndefinedColumnError(error: unknown): boolean {
+  const message =
+    typeof error === "object" && error !== null && "message" in error
+      ? String((error as { message?: unknown }).message ?? "")
+      : "";
+  const code =
+    typeof error === "object" && error !== null && "code" in error
+      ? String((error as { code?: unknown }).code ?? "")
+      : "";
+  return code === "42703" || /column\s+"?.+"?\s+does\s+not\s+exist/i.test(message);
+}
 
-  schemaColumnsPromise = (async () => {
-    const columns = await pool.query<{ table_name: string; column_name: string }>(`
-      SELECT table_name, column_name
-      FROM information_schema.columns
-      WHERE table_schema = ANY (current_schemas(true))
-        AND table_name IN ('case_packs', 'case_pack_cases')
-    `);
+async function columnExists(tableName: string, columnName: string): Promise<boolean> {
+  const res = await pool.query<{ exists: boolean }>(
+    `
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = ANY(current_schemas(true))
+          AND table_name = $1
+          AND column_name = $2
+      ) AS exists
+    `,
+    [tableName, columnName],
+  );
+  return !!res.rows[0]?.exists;
+}
 
-    const has = (table: string, column: string) =>
-      columns.rows.some((row) => row.table_name === table && row.column_name === column);
+async function resolveColumns(): Promise<ColumnNames> {
+  if (columnsPromise) return columnsPromise;
 
-    const packsKey: "key" | "pack_key" = has("case_packs", "key") ? "key" : "pack_key";
-    const casesPackKey: "pack_key" | "case_pack_key" = has("case_pack_cases", "pack_key")
-      ? "pack_key"
-      : "case_pack_key";
+  columnsPromise = (async () => {
+    const hasPackKeyInPacks = await columnExists("case_packs", "pack_key");
+    const hasKeyInPacks = await columnExists("case_packs", "key");
+    const hasPackKeyInCases = await columnExists("case_pack_cases", "pack_key");
+    const hasCasePackKeyInCases = await columnExists("case_pack_cases", "case_pack_key");
+
+    const packsKey: "key" | "pack_key" = hasKeyInPacks || !hasPackKeyInPacks ? "key" : "pack_key";
+    const casesPackKey: "pack_key" | "case_pack_key" =
+      hasPackKeyInCases || !hasCasePackKeyInCases ? "pack_key" : "case_pack_key";
 
     return { packsKey, casesPackKey };
   })().catch((error) => {
-    schemaColumnsPromise = null;
+    columnsPromise = null;
     throw error;
   });
 
-  return schemaColumnsPromise;
+  return columnsPromise;
 }
 
 async function ensureTablesInternal(): Promise<void> {
@@ -187,11 +210,11 @@ async function ensureTablesInternal(): Promise<void> {
     BEGIN
       IF EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_schema = ANY (current_schemas(true)) AND table_name = 'case_packs' AND column_name = 'pack_key'
+        WHERE table_schema = ANY(current_schemas(true)) AND table_name = 'case_packs' AND column_name = 'pack_key'
       )
       AND NOT EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_schema = ANY (current_schemas(true)) AND table_name = 'case_packs' AND column_name = 'key'
+        WHERE table_schema = ANY(current_schemas(true)) AND table_name = 'case_packs' AND column_name = 'key'
       ) THEN
         EXECUTE 'ALTER TABLE case_packs ADD COLUMN key TEXT';
         EXECUTE 'UPDATE case_packs SET key = pack_key WHERE key IS NULL';
@@ -199,11 +222,11 @@ async function ensureTablesInternal(): Promise<void> {
 
       IF EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_schema = ANY (current_schemas(true)) AND table_name = 'case_pack_cases' AND column_name = 'case_pack_key'
+        WHERE table_schema = ANY(current_schemas(true)) AND table_name = 'case_pack_cases' AND column_name = 'case_pack_key'
       )
       AND NOT EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_schema = ANY (current_schemas(true)) AND table_name = 'case_pack_cases' AND column_name = 'pack_key'
+        WHERE table_schema = ANY(current_schemas(true)) AND table_name = 'case_pack_cases' AND column_name = 'pack_key'
       ) THEN
         EXECUTE 'ALTER TABLE case_pack_cases ADD COLUMN pack_key TEXT';
         EXECUTE 'UPDATE case_pack_cases SET pack_key = case_pack_key WHERE pack_key IS NULL';
@@ -212,17 +235,36 @@ async function ensureTablesInternal(): Promise<void> {
   `);
 
   await pool.query(`
-    CREATE UNIQUE INDEX IF NOT EXISTS case_packs_key_uidx
-    ON case_packs(key);
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = ANY(current_schemas(true)) AND table_name = 'case_packs' AND column_name = 'key'
+      ) THEN
+        EXECUTE 'CREATE UNIQUE INDEX IF NOT EXISTS case_packs_key_uidx ON case_packs(key)';
+      ELSIF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = ANY(current_schemas(true)) AND table_name = 'case_packs' AND column_name = 'pack_key'
+      ) THEN
+        EXECUTE 'CREATE UNIQUE INDEX IF NOT EXISTS case_packs_pack_key_uidx ON case_packs(pack_key)';
+      END IF;
+
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = ANY(current_schemas(true)) AND table_name = 'case_pack_cases' AND column_name = 'pack_key'
+      ) THEN
+        EXECUTE 'CREATE INDEX IF NOT EXISTS case_pack_cases_pack_mode_idx ON case_pack_cases(pack_key, mode_player_count, active)';
+      ELSIF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = ANY(current_schemas(true)) AND table_name = 'case_pack_cases' AND column_name = 'case_pack_key'
+      ) THEN
+        EXECUTE 'CREATE INDEX IF NOT EXISTS case_pack_cases_case_pack_mode_idx ON case_pack_cases(case_pack_key, mode_player_count, active)';
+      END IF;
+    END $$;
   `);
 
-  await pool.query(`
-    CREATE INDEX IF NOT EXISTS case_pack_cases_pack_mode_idx
-    ON case_pack_cases(pack_key, mode_player_count, active);
-  `);
-
-  schemaColumnsPromise = null;
-  await detectSchemaColumns();
+  columnsPromise = null;
+  await resolveColumns();
 }
 
 function titleFromPackKey(packKey: string): string {
@@ -235,25 +277,34 @@ function titleFromPackKey(packKey: string): string {
     .join(" ");
 }
 
-async function ensurePackRowsFromCases(): Promise<void> {
-  const columns = await detectSchemaColumns();
-  const keysResult = await pool.query<{ pack_key: string }>(`
-    SELECT DISTINCT ${columns.casesPackKey} AS pack_key
-    FROM case_pack_cases
-    WHERE active = TRUE
-  `);
+async function ensurePackRowsFromCases(attempt = 0): Promise<void> {
+  const columns = await resolveColumns();
 
-  for (const row of keysResult.rows) {
-    const key = normalizeCasePackKey(row.pack_key);
-    await pool.query(
-      `
-        INSERT INTO case_packs (id, ${columns.packsKey}, title, description, is_adult, sort_order, active, updated_at)
-        VALUES ($1, $2, $3, $4, FALSE, 100, TRUE, NOW())
-        ON CONFLICT (${columns.packsKey})
-        DO UPDATE SET active = TRUE, updated_at = NOW()
-      `,
-      [crypto.randomUUID(), key, titleFromPackKey(key), "Пак дел из базы данных."],
-    );
+  try {
+    const keysResult = await pool.query<{ pack_key: string }>(`
+      SELECT DISTINCT ${columns.casesPackKey} AS pack_key
+      FROM case_pack_cases
+      WHERE active = TRUE
+    `);
+
+    for (const row of keysResult.rows) {
+      const key = normalizeCasePackKey(row.pack_key);
+      await pool.query(
+        `
+          INSERT INTO case_packs (id, ${columns.packsKey}, title, description, is_adult, sort_order, active, updated_at)
+          VALUES ($1, $2, $3, $4, FALSE, 100, TRUE, NOW())
+          ON CONFLICT (${columns.packsKey})
+          DO UPDATE SET active = TRUE, updated_at = NOW()
+        `,
+        [crypto.randomUUID(), key, titleFromPackKey(key), "Пак дел из базы данных."],
+      );
+    }
+  } catch (error) {
+    if (attempt === 0 && isUndefinedColumnError(error)) {
+      columnsPromise = null;
+      return ensurePackRowsFromCases(1);
+    }
+    throw error;
   }
 }
 
@@ -298,7 +349,7 @@ function buildRolesFromFacts(
   return result;
 }
 
-export async function listCasePacks(): Promise<CasePackInfo[]> {
+export async function listCasePacks(attempt = 0): Promise<CasePackInfo[]> {
   try {
     await ensureCasePacksStorage();
     try {
@@ -307,7 +358,7 @@ export async function listCasePacks(): Promise<CasePackInfo[]> {
       // ignore
     }
 
-    const columns = await detectSchemaColumns();
+    const columns = await resolveColumns();
     const dbResult = await pool.query<{
       key: string;
       title: string;
@@ -342,56 +393,71 @@ export async function listCasePacks(): Promise<CasePackInfo[]> {
     }));
 
     if (mapped.length > 0) return mapped;
-  } catch {
-    // fallback below
+  } catch (error) {
+    if (attempt === 0 && isUndefinedColumnError(error)) {
+      columnsPromise = null;
+      return listCasePacks(1);
+    }
   }
 
   return STATIC_PACKS_FALLBACK;
 }
 
-async function pickCaseFromPackDb(packKey: string, modePlayerCount: number): Promise<StoredCaseData | null> {
+async function pickCaseFromPackDb(
+  packKey: string,
+  modePlayerCount: number,
+  attempt = 0,
+): Promise<StoredCaseData | null> {
   await ensureCasePacksStorage();
-  const columns = await detectSchemaColumns();
+  const columns = await resolveColumns();
   const safeCount = modePlayerCount as 3 | 4 | 5 | 6;
 
-  const result = await pool.query<{
-    case_key: string;
-    title: string;
-    description: string;
-    truth: string;
-    evidence_json: unknown;
-    facts_json: unknown;
-  }>(
-    `
-      SELECT case_key, title, description, truth, evidence_json, facts_json
-      FROM case_pack_cases
-      WHERE active = TRUE
-        AND ${columns.casesPackKey} = $1
-        AND mode_player_count = $2
-      ORDER BY RANDOM()
-      LIMIT 1
-    `,
-    [packKey, safeCount],
-  );
+  try {
+    const result = await pool.query<{
+      case_key: string;
+      title: string;
+      description: string;
+      truth: string;
+      evidence_json: unknown;
+      facts_json: unknown;
+    }>(
+      `
+        SELECT case_key, title, description, truth, evidence_json, facts_json
+        FROM case_pack_cases
+        WHERE active = TRUE
+          AND ${columns.casesPackKey} = $1
+          AND mode_player_count = $2
+        ORDER BY RANDOM()
+        LIMIT 1
+      `,
+      [packKey, safeCount],
+    );
 
-  if (!result.rowCount) return null;
-  const row = result.rows[0];
-  const facts =
-    row.facts_json && typeof row.facts_json === "object"
-      ? (row.facts_json as Partial<Record<RoleKey, string[]>>)
-      : {};
+    if (!result.rowCount) return null;
+    const row = result.rows[0];
+    const facts =
+      row.facts_json && typeof row.facts_json === "object"
+        ? (row.facts_json as Partial<Record<RoleKey, string[]>>)
+        : {};
 
-  return {
-    id: row.case_key,
-    mode: `Режим на ${safeCount}`,
-    title: row.title,
-    description: row.description,
-    truth: row.truth,
-    evidence: Array.isArray(row.evidence_json)
-      ? row.evidence_json.filter((item): item is string => typeof item === "string")
-      : [],
-    roles: buildRolesFromFacts(facts),
-  };
+    return {
+      id: row.case_key,
+      mode: `Режим на ${safeCount}`,
+      title: row.title,
+      description: row.description,
+      truth: row.truth,
+      evidence: Array.isArray(row.evidence_json)
+        ? row.evidence_json.filter((item): item is string => typeof item === "string")
+        : [],
+      roles: buildRolesFromFacts(facts),
+    };
+  } catch (error) {
+    if (attempt === 0 && isUndefinedColumnError(error)) {
+      columnsPromise = null;
+      return pickCaseFromPackDb(packKey, modePlayerCount, 1);
+    }
+    throw error;
+  }
 }
 
 export async function pickCaseForRoom(
