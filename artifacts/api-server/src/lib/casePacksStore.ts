@@ -231,6 +231,32 @@ async function ensureTablesInternal(): Promise<void> {
         EXECUTE 'ALTER TABLE case_pack_cases ADD COLUMN pack_key TEXT';
         EXECUTE 'UPDATE case_pack_cases SET pack_key = case_pack_key WHERE pack_key IS NULL';
       END IF;
+
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = ANY(current_schemas(true)) AND table_name = 'case_pack_cases' AND column_name = 'evidence_json'
+      ) THEN
+        EXECUTE 'ALTER TABLE case_pack_cases ADD COLUMN evidence_json JSONB NOT NULL DEFAULT ''[]''::jsonb';
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = ANY(current_schemas(true)) AND table_name = 'case_pack_cases' AND column_name = 'evidence'
+        ) THEN
+          EXECUTE 'UPDATE case_pack_cases SET evidence_json = COALESCE(to_jsonb(evidence), ''[]''::jsonb)';
+        END IF;
+      END IF;
+
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = ANY(current_schemas(true)) AND table_name = 'case_pack_cases' AND column_name = 'facts_json'
+      ) THEN
+        EXECUTE 'ALTER TABLE case_pack_cases ADD COLUMN facts_json JSONB NOT NULL DEFAULT ''{}''::jsonb';
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = ANY(current_schemas(true)) AND table_name = 'case_pack_cases' AND column_name = 'facts'
+        ) THEN
+          EXECUTE 'UPDATE case_pack_cases SET facts_json = COALESCE(to_jsonb(facts), ''{}''::jsonb)';
+        END IF;
+      END IF;
     END $$;
   `);
 
