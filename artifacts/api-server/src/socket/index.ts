@@ -1474,8 +1474,8 @@ export function setupSocket(httpServer: HttpServer) {
         if (!room || !targetPlayerId) return;
 
         const actorInfo = socketToRoom.get(socket.id);
-        if (!actorInfo || actorInfo.roomCode !== roomCode || actorInfo.playerId !== room.hostId) {
-          socket.emit("error", { message: "Управлять ботами может только ведущий комнаты." });
+        if (!actorInfo || actorInfo.roomCode !== roomCode) {
+          socket.emit("error", { message: "Недоступно вне текущей комнаты." });
           return;
         }
         if (!(await isCreatorAdmin(authToken))) {

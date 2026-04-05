@@ -592,7 +592,10 @@ function normalizeModeKey(modeKey: RoomModeKey | undefined): RoomModeKey {
 function normalizeCasePackKey(casePackKey: string | undefined): string {
   const raw = (casePackKey ?? "").trim().toLowerCase();
   if (!raw) return "classic";
-  const safe = raw.replace(/[^a-z0-9_-]/g, "");
+  const safe = raw
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .replace(/_{2,}/g, "_");
   return safe || "classic";
 }
 

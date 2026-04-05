@@ -123,7 +123,10 @@ const STATIC_PACKS_BY_KEY = new Map<string, CasePackInfo>(
 export function normalizeCasePackKey(input?: string | null): string {
   const raw = (input ?? "").trim().toLowerCase();
   if (!raw) return "classic";
-  const safe = raw.replace(/[^a-z0-9_-]/g, "");
+  const safe = raw
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .replace(/_{2,}/g, "_");
   return safe || "classic";
 }
 
@@ -503,6 +506,30 @@ async function pickCaseFromPackDb(
   const safeCount = modePlayerCount as 3 | 4 | 5 | 6;
 
   try {
+    const packRows = await pool.query<{
+      pack_id: string | null;
+      pack_key: string | null;
+    }>(`
+      SELECT
+        COALESCE(
+          NULLIF(to_jsonb(cp)->>'id', ''),
+          NULLIF(to_jsonb(cp)->>'pack_id', '')
+        ) AS pack_id,
+        COALESCE(
+          NULLIF(to_jsonb(cp)->>'key', ''),
+          NULLIF(to_jsonb(cp)->>'pack_key', '')
+        ) AS pack_key
+      FROM case_packs cp
+    `);
+    const packKeyById = new Map<string, string>();
+    for (const row of packRows.rows) {
+      const id = (row.pack_id ?? "").trim();
+      const key = normalizeCasePackKey(row.pack_key);
+      if (id && key) {
+        packKeyById.set(id, key);
+      }
+    }
+
     const result = await pool.query<{
       case_key: string;
       title: string;
@@ -510,6 +537,12 @@ async function pickCaseFromPackDb(
       truth: string;
       evidence_json: unknown;
       facts_json: unknown;
+      pack_key_raw: string | null;
+      case_pack_key_raw: string | null;
+      pack_slug_raw: string | null;
+      pack_name_raw: string | null;
+      case_pack_id_raw: string | null;
+      pack_id_raw: string | null;
     }>(
       `
         SELECT
@@ -530,21 +563,45 @@ async function pickCaseFromPackDb(
             to_jsonb(c)->'facts_json',
             to_jsonb(c)->'facts',
             '{}'::jsonb
-          ) AS facts_json
+          ) AS facts_json,
+          NULLIF(to_jsonb(c)->>'pack_key', '') AS pack_key_raw,
+          NULLIF(to_jsonb(c)->>'case_pack_key', '') AS case_pack_key_raw,
+          NULLIF(to_jsonb(c)->>'pack_slug', '') AS pack_slug_raw,
+          NULLIF(to_jsonb(c)->>'pack_name', '') AS pack_name_raw,
+          NULLIF(to_jsonb(c)->>'case_pack_id', '') AS case_pack_id_raw,
+          NULLIF(to_jsonb(c)->>'pack_id', '') AS pack_id_raw
         FROM case_pack_cases c
-        LEFT JOIN case_packs cp
-          ON NULLIF(to_jsonb(c)->>'case_pack_id', '') = to_jsonb(cp)->>'id'
-        WHERE regexp_replace(lower(COALESCE(${CASE_PACK_KEY_FROM_ROW_SQL}, '')), '[^a-z0-9_-]', '', 'g') = $1
-          AND COALESCE(NULLIF(to_jsonb(c)->>'mode_player_count', ''), '0')::int = $2
+        WHERE COALESCE(NULLIF(to_jsonb(c)->>'mode_player_count', ''), '0')::int = $1
           AND COALESCE(NULLIF(to_jsonb(c)->>'active', ''), 'true') <> 'false'
-        ORDER BY RANDOM()
-        LIMIT 1
       `,
-      [packKey, safeCount],
+      [safeCount],
     );
 
     if (!result.rowCount) return null;
-    const row = result.rows[0];
+
+    const matchedRows = result.rows.filter((row) => {
+      const keys = new Set<string>();
+
+      const addKey = (value: string | null | undefined) => {
+        const normalized = normalizeCasePackKey(value);
+        if (normalized) keys.add(normalized);
+      };
+
+      addKey(row.pack_key_raw);
+      addKey(row.case_pack_key_raw);
+      addKey(row.pack_slug_raw);
+      addKey(row.pack_name_raw);
+
+      const byCasePackId = packKeyById.get((row.case_pack_id_raw ?? "").trim());
+      if (byCasePackId) keys.add(byCasePackId);
+      const byPackId = packKeyById.get((row.pack_id_raw ?? "").trim());
+      if (byPackId) keys.add(byPackId);
+
+      return keys.has(packKey);
+    });
+
+    if (matchedRows.length === 0) return null;
+    const row = matchedRows[Math.floor(Math.random() * matchedRows.length)];
     const facts =
       row.facts_json && typeof row.facts_json === "object"
         ? (row.facts_json as Partial<Record<RoleKey, string[]>>)

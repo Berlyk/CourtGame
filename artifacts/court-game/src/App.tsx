@@ -2251,10 +2251,17 @@ function PlayerCard({
     onClick: () => void;
   } | null;
   onKick?: () => void;
-  onOpenProfile?: (userId?: string) => void;
+  onOpenProfile?: (payload: {
+    playerId: string;
+    userId?: string;
+    name: string;
+    avatar?: string;
+    banner?: string;
+    selectedBadgeKey?: string;
+  }) => void;
   nowTs: number;
 }) {
-  const canOpenProfile = !!player.userId && !!onOpenProfile;
+  const canOpenProfile = !!onOpenProfile;
   const badgeTheme = getBadgeTheme(player.selectedBadgeKey);
   const disconnectRemainingMs =
     typeof player.disconnectedUntil === "number"
@@ -2295,14 +2302,21 @@ function PlayerCard({
             className="pointer-events-none absolute inset-[6px] rounded-[16px] opacity-85"
             style={getBannerStyle(player.banner, player.avatar, player.name)}
           />
-          {isHost && (
-            <div className="pointer-events-none absolute inset-x-[24px] bottom-[10px] h-12 rounded-full bg-red-500/22 blur-2xl" />
-          )}
           <div className="pointer-events-none absolute inset-[6px] rounded-[16px] bg-black/35" />
           <button
             type="button"
             disabled={!canOpenProfile}
-            onClick={() => canOpenProfile && onOpenProfile?.(player.userId)}
+            onClick={() =>
+              canOpenProfile &&
+              onOpenProfile?.({
+                playerId: player.id,
+                userId: player.userId,
+                name: player.name,
+                avatar: player.avatar,
+                banner: player.banner,
+                selectedBadgeKey: player.selectedBadgeKey,
+              })
+            }
             className={`relative z-10 flex items-center gap-3 min-w-0 text-left ${
               canOpenProfile
                 ? "cursor-pointer transition-colors hover:text-zinc-100"
@@ -2407,11 +2421,13 @@ function ContextHelp({
   onOpenChange,
   query,
   onQueryChange,
+  floatingOffsetClass = "bottom-5",
 }: {
   open: boolean;
   onOpenChange: (value: boolean) => void;
   query: string;
   onQueryChange: (value: string) => void;
+  floatingOffsetClass?: string;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -2424,7 +2440,7 @@ function ContextHelp({
           exit="exit"
           whileHover={{ y: -2, scale: 1.02 }}
           whileTap={{ scale: 0.97 }}
-          className={`fixed right-5 bottom-5 left-auto z-40 h-11 rounded-2xl px-3.5 inline-flex items-center gap-2 border backdrop-blur-md shadow-[0_12px_30px_rgba(0,0,0,0.45)] transition-colors ${
+          className={`fixed right-5 ${floatingOffsetClass} left-auto z-40 h-11 rounded-2xl px-3.5 inline-flex items-center gap-2 border backdrop-blur-md shadow-[0_12px_30px_rgba(0,0,0,0.45)] transition-colors ${
             open
               ? "border-red-500/55 bg-red-950/75 text-red-100"
               : "border-zinc-700 bg-zinc-900/90 text-zinc-100 hover:bg-zinc-900 hover:border-zinc-500"
@@ -2659,6 +2675,8 @@ export default function App() {
   const [manageProtestLimitEnabled, setManageProtestLimitEnabled] = useState(false);
   const [manageProtestLimit, setManageProtestLimit] = useState(2);
   const [manageTransferHostId, setManageTransferHostId] = useState("");
+  const [manageRoomPassword, setManageRoomPassword] = useState("");
+  const [manageRoomPasswordVisible, setManageRoomPasswordVisible] = useState(false);
   const [adminBotCount, setAdminBotCount] = useState(1);
   const [adminPanelOpen, setAdminPanelOpen] = useState(false);
   const [adminFabPos, setAdminFabPos] = useState<{ x: number; y: number }>({ x: 20, y: 20 });
@@ -2768,6 +2786,7 @@ export default function App() {
   >("main");
   const myIdRef = useRef<string | null>(null);
   const myProfileRef = useRef<PublicUserProfile | null>(null);
+  const knownUserIdByPlayerIdRef = useRef<Record<string, string>>({});
   const influenceAnnouncementTimerRef = useRef<number | null>(null);
   const lastAutoRejoinAttemptAtRef = useRef(0);
   const speechTimerStageRef = useRef<string>("");
@@ -2777,6 +2796,15 @@ export default function App() {
   const sharedBanner = banner;
   const isAuthenticated = !!authUser && !!authToken;
   const isCreatorAdmin = (authUser?.login ?? "").trim().toLowerCase() === "berly";
+  const rememberKnownUserIds = useCallback((players?: Array<{ id?: string; userId?: string }>) => {
+    if (!Array.isArray(players)) return;
+    players.forEach((player) => {
+      const pid = typeof player?.id === "string" ? player.id : "";
+      const uid = typeof player?.userId === "string" ? player.userId : "";
+      if (!pid || !uid) return;
+      knownUserIdByPlayerIdRef.current[pid] = uid;
+    });
+  }, []);
   const selectedCreateMode = getRoomModeMeta(createRoomMode);
   const baseCreatePackKey = casePacks.find((pack) => pack.key === "classic")?.key ?? casePacks[0]?.key ?? "classic";
   const freeCreatePack = casePacks.find((pack) => pack.key === baseCreatePackKey) ?? casePacks[0] ?? null;
@@ -2880,6 +2908,8 @@ export default function App() {
     setManageProtestLimitEnabled(!!room.protestLimitEnabled);
     const protestLimit = typeof room.maxProtestsPerPlayer === "number" ? room.maxProtestsPerPlayer : 2;
     setManageProtestLimit(Math.max(1, Math.min(10, protestLimit)));
+    setManageRoomPassword("");
+    setManageRoomPasswordVisible(false);
   }, [room]);
   const notesStorageKey =
     game && game.me ? `court_notes_${game.code}_${game.me.id}` : null;
@@ -3585,6 +3615,7 @@ export default function App() {
             setScreen("home");
             return;
           }
+          rememberKnownUserIds(roomState.players);
           setRoom({
             ...roomState,
             players: roomState.players.map((p) =>
@@ -3616,6 +3647,7 @@ export default function App() {
             setScreen("home");
             return;
           }
+          rememberKnownUserIds(gameState.players);
           setGame({
             ...gameState,
             players: gameState.players.map((p) =>
@@ -3676,6 +3708,7 @@ export default function App() {
         requiresPassword?: boolean;
         lobbyChat?: LobbyChatMessage[];
       }) => {
+        rememberKnownUserIds(players);
         setRoom((prev) => {
           if (!prev) return prev;
           const mergedPlayers = players.map((nextPlayer) => {
@@ -3719,6 +3752,7 @@ export default function App() {
     );
 
     socket.on("game_players_updated", ({ players }: { players: PlayerInfo[] }) => {
+      rememberKnownUserIds(players);
       setGame((prev) => {
         if (!prev) return prev;
         const mergedPlayers = players.map((nextPlayer) => {
@@ -3760,6 +3794,7 @@ export default function App() {
         revealedFacts: RevealedFact[];
         usedCards: UsedCard[];
       }) => {
+        rememberKnownUserIds(players);
         setGame((prev) => {
           if (!prev) return prev;
           const updatedMe =
@@ -4135,7 +4170,7 @@ export default function App() {
       socket.off("verdict_set");
       socket.off("error");
     };
-  }, [socket, avatar, authToken, clearReconnectWindow, sharedAvatar, startReconnectWindow, syncRankResultAfterMatch]);
+  }, [socket, avatar, authToken, clearReconnectWindow, sharedAvatar, startReconnectWindow, syncRankResultAfterMatch, rememberKnownUserIds]);
 
   const createQuickRoom = useCallback(() => {
     const name = playerName.trim() || getOrCreateGuestName();
@@ -4412,6 +4447,54 @@ export default function App() {
     [],
   );
 
+  const openUserProfileFromPlayer = useCallback(
+    (payload: {
+      playerId: string;
+      userId?: string;
+      name: string;
+      avatar?: string;
+      banner?: string;
+      selectedBadgeKey?: string;
+    }) => {
+      if (payload.userId) {
+        void openUserProfile(payload.userId);
+        return;
+      }
+      setViewPlayerProfileOpen(true);
+      setViewPlayerProfileLoading(false);
+      setViewPlayerProfileError("");
+      setViewProfileBadgeHintOpen(false);
+      setViewPlayerProfile({
+        id: payload.playerId || `guest-${Date.now()}`,
+        nickname: payload.name || "Гость",
+        avatar: payload.avatar,
+        banner: payload.banner,
+        bio: "Гостевой профиль. Полная статистика доступна только для зарегистрированных игроков.",
+        hideAge: true,
+        createdAt: Date.now(),
+        stats: {
+          totalMatches: 0,
+          totalWins: 0,
+          totalWinRate: 0,
+          roleStats: [],
+        },
+        selectedBadgeKey: payload.selectedBadgeKey,
+        badges: payload.selectedBadgeKey
+          ? [
+              {
+                key: payload.selectedBadgeKey,
+                title: getBadgeTitleByKey(payload.selectedBadgeKey, myProfile?.badges),
+                description: "Детали доступны в полном профиле зарегистрированного игрока.",
+                active: true,
+                category: "manual",
+              },
+            ]
+          : [],
+      });
+    },
+    [openUserProfile, myProfile?.badges],
+  );
+
   const sendLobbyChatMessage = useCallback(() => {
     const text = lobbyChatInput.trim();
     if (!room || !mySessionToken || !text) return;
@@ -4633,13 +4716,6 @@ export default function App() {
       ? adminHostSessionToken ?? mySessionToken
       : mySessionToken;
   const adminTargetRoomCode = room?.code ?? game?.code ?? null;
-  const adminTargetHostId = room?.hostId ?? game?.hostId ?? null;
-  const adminControlActorId =
-    room && roomControlPlayerId
-      ? roomControlPlayerId
-      : game && gameControlPlayerId
-        ? gameControlPlayerId
-        : myId;
 
   const startGame = useCallback(() => {
     if (!room || !roomControlSessionToken) return;
@@ -4707,15 +4783,14 @@ export default function App() {
   }, [socket, room, authToken, isCreatorAdmin, roomControlPlayerId, adminBotCount]);
 
   const controlAdminPlayer = useCallback((targetPlayerId: string) => {
-    if (!adminTargetRoomCode || !adminTargetHostId || !authToken || !isCreatorAdmin) return;
-    if (adminControlActorId !== adminTargetHostId) return;
+    if (!adminTargetRoomCode || !authToken || !isCreatorAdmin) return;
     if (!targetPlayerId) return;
     socket.emit("admin_control_player", {
       code: adminTargetRoomCode,
       targetPlayerId,
       authToken,
     });
-  }, [socket, adminTargetRoomCode, adminTargetHostId, authToken, isCreatorAdmin, adminControlActorId]);
+  }, [socket, adminTargetRoomCode, authToken, isCreatorAdmin]);
 
   const kickPlayerFromRoom = useCallback(
     (targetPlayerId: string) => {
@@ -7142,8 +7217,8 @@ export default function App() {
                             {isLocked && (
                               <div className="pointer-events-none absolute inset-0 rounded-2xl bg-zinc-950/78">
                                 <span className="absolute inset-0 flex items-center justify-center">
-                                  <span className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-zinc-400/70 bg-zinc-900/92 text-zinc-100 shadow-[0_0_20px_rgba(0,0,0,0.55)]">
-                                    <Lock className="h-5 w-5" />
+                                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-zinc-400/70 bg-zinc-900/92 text-zinc-100 shadow-[0_0_20px_rgba(0,0,0,0.55)]">
+                                    <Lock className="h-4 w-4" />
                                   </span>
                                 </span>
                               </div>
@@ -7575,7 +7650,6 @@ export default function App() {
     const neededPlayersForStart = isQuickRoomMode
       ? Math.max(0, 3 - activeLobbyPlayersCount)
       : Math.max(0, roomMaxPlayers - activeLobbyPlayersCount);
-    const protestLimitFillPercent = ((manageProtestLimit - 1) / 9) * 100;
     return (
       <motion.div
         key="room"
@@ -7819,42 +7893,51 @@ export default function App() {
                     ))}
                   </div>
                 </div>
-                <div className="rounded-2xl border border-zinc-800/90 bg-zinc-900/55 px-4 py-3 md:col-span-2">
-                  <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="text-sm font-medium text-zinc-100">Свидетели</div>
-                      <Switch
-                        checked={manageAllowWitnesses}
-                        onCheckedChange={(checked) => {
-                          setManageAllowWitnesses(checked);
-                          updateRoomManagementSettings({ allowWitnesses: checked });
-                        }}
-                      />
-                    </div>
-                    <div className="flex items-center justify-between gap-3 sm:justify-end">
-                      <div>
-                        <div className="text-sm font-medium text-zinc-100">Наблюдатели</div>
-                        <div className="text-xs text-zinc-500">Максимум в комнате</div>
+                <div className="rounded-2xl border border-zinc-800/90 bg-zinc-900/55 p-3 md:col-span-2">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-xl border border-zinc-800 bg-zinc-950/55 px-3 py-2.5">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-medium text-zinc-100">Свидетели</div>
+                          <div className="text-xs text-zinc-500">
+                            Вкл: новые игроки в матче могут стать свидетелями.
+                          </div>
+                        </div>
+                        <Switch
+                          checked={manageAllowWitnesses}
+                          onCheckedChange={(checked) => {
+                            setManageAllowWitnesses(checked);
+                            updateRoomManagementSettings({ allowWitnesses: checked });
+                          }}
+                        />
                       </div>
-                      <Select
-                        value={String(manageMaxObservers)}
-                        onValueChange={(value) => {
-                          const parsed = Math.max(0, Math.min(6, Number(value) || 0));
-                          setManageMaxObservers(parsed);
-                          updateRoomManagementSettings({ maxObservers: parsed });
-                        }}
-                      >
-                        <SelectTrigger className="h-10 w-24 rounded-xl border-zinc-700 bg-zinc-950 text-zinc-100 focus:ring-red-500/40">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="border-zinc-800 bg-zinc-950 text-zinc-100">
-                          {[0, 1, 2, 3, 4, 5, 6].map((value) => (
-                            <SelectItem key={`obs-limit-${value}`} value={String(value)}>
-                              {value}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                    </div>
+                    <div className="rounded-xl border border-zinc-800 bg-zinc-950/55 px-3 py-2.5">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-medium text-zinc-100">Наблюдатели</div>
+                          <div className="text-xs text-zinc-500">Максимум в комнате</div>
+                        </div>
+                        <Select
+                          value={String(manageMaxObservers)}
+                          onValueChange={(value) => {
+                            const parsed = Math.max(0, Math.min(6, Number(value) || 0));
+                            setManageMaxObservers(parsed);
+                            updateRoomManagementSettings({ maxObservers: parsed });
+                          }}
+                        >
+                          <SelectTrigger className="h-10 w-24 rounded-xl border-zinc-700 bg-zinc-950 text-zinc-100 focus:ring-red-500/40">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="border-zinc-800 bg-zinc-950 text-zinc-100">
+                            {[0, 1, 2, 3, 4, 5, 6].map((value) => (
+                              <SelectItem key={`obs-limit-${value}`} value={String(value)}>
+                                {value}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -7949,36 +8032,44 @@ export default function App() {
                     />
                   </div>
                   {manageProtestLimitEnabled && (
-                    <div className="mt-2 space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="text-xs text-zinc-500">На игрока</div>
-                        <div className="rounded-full border border-red-500/40 bg-red-600/15 px-2 py-0.5 text-xs font-semibold text-zinc-100">
-                          {manageProtestLimit}
-                        </div>
-                      </div>
-                      <input
-                        type="range"
-                        min={1}
-                        max={10}
-                        step={1}
-                        value={manageProtestLimit}
-                        onChange={(e) => {
-                          const parsed = Math.max(1, Math.min(10, Number(e.target.value) || 1));
-                          setManageProtestLimit(parsed);
+                    <div className="mt-2 flex items-center justify-between gap-2 rounded-xl border border-zinc-800 bg-zinc-950/55 px-2.5 py-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 rounded-lg border-zinc-700 bg-zinc-900 px-2.5 text-zinc-100 hover:bg-zinc-800"
+                        onClick={() => {
+                          const next = Math.max(1, manageProtestLimit - 1);
+                          setManageProtestLimit(next);
                           updateRoomManagementSettings({
                             protestLimitEnabled: true,
-                            maxProtestsPerPlayer: parsed,
+                            maxProtestsPerPlayer: next,
                           });
                         }}
-                        className="h-2 w-full cursor-pointer appearance-none rounded-full accent-red-500"
-                        style={{
-                          background: `linear-gradient(90deg, rgba(239,68,68,0.95) 0%, rgba(239,68,68,0.95) ${protestLimitFillPercent}%, rgba(63,63,70,0.9) ${protestLimitFillPercent}%, rgba(63,63,70,0.9) 100%)`,
-                        }}
-                      />
-                      <div className="flex items-center justify-between text-[10px] text-zinc-500">
-                        <span>1</span>
-                        <span>10</span>
+                        disabled={manageProtestLimit <= 1}
+                      >
+                        −
+                      </Button>
+                      <div className="rounded-full border border-red-500/35 bg-red-600/12 px-3 py-1 text-xs font-semibold text-zinc-100">
+                        {manageProtestLimit} на игрока
                       </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 rounded-lg border-zinc-700 bg-zinc-900 px-2.5 text-zinc-100 hover:bg-zinc-800"
+                        onClick={() => {
+                          const next = Math.min(10, manageProtestLimit + 1);
+                          setManageProtestLimit(next);
+                          updateRoomManagementSettings({
+                            protestLimitEnabled: true,
+                            maxProtestsPerPlayer: next,
+                          });
+                        }}
+                        disabled={manageProtestLimit >= 10}
+                      >
+                        +
+                      </Button>
                     </div>
                   )}
                 </div>
@@ -7993,17 +8084,30 @@ export default function App() {
                     />
                   </div>
                   {room.visibility === "private" && (
-                    <div className="mt-2">
+                    <div className="relative mt-2">
                       <Input
+                        value={manageRoomPassword}
                         placeholder="Пароль"
-                        type="password"
-                        className="h-10 rounded-xl border-zinc-700 bg-zinc-950 text-zinc-100"
+                        type={manageRoomPasswordVisible ? "text" : "password"}
+                        onChange={(e) => setManageRoomPassword(e.target.value)}
+                        className="h-10 rounded-xl border-zinc-700 bg-zinc-950 text-zinc-100 pr-11"
                         onBlur={(e) =>
                           updateRoomManagementSettings({
                             password: e.target.value.trim() ? e.target.value.trim() : null,
                           })
                         }
                       />
+                      <button
+                        type="button"
+                        onClick={() => setManageRoomPasswordVisible((prev) => !prev)}
+                        className="absolute inset-y-0 right-0 inline-flex w-11 items-center justify-center text-zinc-400 hover:text-zinc-200"
+                      >
+                        {manageRoomPasswordVisible ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
                     </div>
                   )}
                 </div>
@@ -8151,27 +8255,31 @@ export default function App() {
                   <div className="grid gap-3">
                     <AnimatePresence>
                       {room.players.map((player) => (
-                        <PlayerCard
-                          key={player.id}
-                          player={player}
-                          isHost={player.id === room.hostId}
-                          showLobbyAssignedRole={usePreferredRoles}
-                          rolePickerButton={
-                            usePreferredRoles &&
-                            player.id === myLobbyPlayer?.id &&
-                            player.roleKey !== "witness" &&
-                            player.roleKey !== "observer"
-                              ? {
-                                  label: "Выбрать роль",
-                                  onClick: () => setLobbyRoleDialogOpen(true),
-                                }
-                              : null
-                          }
-                          canKick={hasRoomHostControl && player.id !== room.hostId}
-                          onKick={() => kickPlayerFromRoom(player.id)}
-                          onOpenProfile={openUserProfile}
-                          nowTs={nowMs}
-                        />
+                        <div key={player.id} className="relative">
+                          {player.id === room.hostId ? (
+                            <div className="pointer-events-none absolute inset-x-8 -bottom-1 h-8 rounded-full bg-red-500/16 blur-xl" />
+                          ) : null}
+                          <PlayerCard
+                            player={player}
+                            isHost={player.id === room.hostId}
+                            showLobbyAssignedRole={usePreferredRoles}
+                            rolePickerButton={
+                              usePreferredRoles &&
+                              player.id === myLobbyPlayer?.id &&
+                              player.roleKey !== "witness" &&
+                              player.roleKey !== "observer"
+                                ? {
+                                    label: "Выбрать роль",
+                                    onClick: () => setLobbyRoleDialogOpen(true),
+                                  }
+                                : null
+                            }
+                            canKick={hasRoomHostControl && player.id !== room.hostId}
+                            onKick={() => kickPlayerFromRoom(player.id)}
+                            onOpenProfile={openUserProfileFromPlayer}
+                            nowTs={nowMs}
+                          />
+                        </div>
                       ))}
                     </AnimatePresence>
                   </div>
@@ -8947,15 +9055,23 @@ export default function App() {
                     Все участники
                   </div>
                   <div className="space-y-1">
-                    {game.players.map((p) => (
+                    {game.players.map((p) => {
+                      const profileUserId =
+                        p.userId ?? knownUserIdByPlayerIdRef.current[p.id];
+                      return (
                       <div
                         key={p.id}
-                        className={`relative overflow-hidden rounded-xl border bg-zinc-900/60 px-2.5 py-1.5 flex items-center justify-between text-sm ${
-                          p.userId
-                            ? "cursor-pointer border-zinc-800 hover:border-zinc-700"
-                            : "border-zinc-800"
-                        }`}
-                        onClick={() => p.userId && openUserProfile(p.userId)}
+                        className="relative overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/60 px-2.5 py-1.5 flex items-center justify-between text-sm cursor-pointer hover:border-zinc-700"
+                        onClick={() =>
+                          openUserProfileFromPlayer({
+                            playerId: p.id,
+                            userId: profileUserId,
+                            name: p.name,
+                            avatar: p.avatar,
+                            banner: p.banner,
+                            selectedBadgeKey: p.selectedBadgeKey,
+                          })
+                        }
                       >
                         <div
                           className="pointer-events-none absolute inset-0 opacity-80"
@@ -8963,13 +9079,7 @@ export default function App() {
                         />
                         <div className="pointer-events-none absolute inset-0 bg-black/35" />
                         <div className="relative z-10 flex items-center gap-2 min-w-0">
-                          <div
-                            className={`inline-flex items-center gap-2 min-w-0 rounded-md px-1 py-0.5 text-left ${
-                              p.userId
-                                ? "text-zinc-300 hover:text-zinc-100 transition-colors"
-                                : "text-zinc-400"
-                            }`}
-                          >
+                          <div className="inline-flex items-center gap-2 min-w-0 rounded-md px-1 py-0.5 text-left text-zinc-300 hover:text-zinc-100 transition-colors">
                             <Avatar src={p.avatar ?? null} name={p.name} size={32} />
                             <span className="truncate">{p.name}</span>
                             {p.selectedBadgeKey ? (
@@ -9015,7 +9125,8 @@ export default function App() {
                         </div>
                         <span className="relative z-10 text-zinc-500">{p.roleTitle}</span>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -9663,7 +9774,7 @@ export default function App() {
             </InfoBlock>
           </div>
           {matchExpiresAt !== null && !game.finished && (
-            <div className="fixed right-5 bottom-[4.35rem] sm:bottom-[4.45rem] left-auto z-30 rounded-xl border border-zinc-700/80 bg-zinc-950/85 px-2.5 sm:px-3 py-1.5 sm:py-2 text-[11px] sm:text-xs font-semibold text-zinc-200 shadow-[0_8px_22px_rgba(0,0,0,0.45)] backdrop-blur-sm">
+            <div className="fixed right-5 bottom-[0.45rem] sm:bottom-[0.55rem] left-auto z-30 rounded-xl border border-zinc-700/80 bg-zinc-950/85 px-2.5 sm:px-3 py-1.5 sm:py-2 text-[11px] sm:text-xs font-semibold text-zinc-200 shadow-[0_8px_22px_rgba(0,0,0,0.45)] backdrop-blur-sm">
               <span className="sm:hidden inline-flex items-center gap-2">
                 <Clock3 className="h-3.5 w-3.5 text-zinc-300" />
                 <span className="text-red-300">
@@ -9688,6 +9799,7 @@ export default function App() {
             onOpenChange={setContextHelpOpen}
             query={contextHelpQuery}
             onQueryChange={setContextHelpQuery}
+            floatingOffsetClass="bottom-[2.55rem] sm:bottom-[2.7rem]"
           />
         </div>
         {renderPublicProfileDialog()}
