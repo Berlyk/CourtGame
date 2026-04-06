@@ -411,6 +411,12 @@ type CaseCountRow = {
   case_count: number;
 };
 
+type CaseLinkRow = {
+  case_pack_id: string | null;
+  pack_key_raw: string | null;
+  case_pack_key_raw: string | null;
+};
+
 async function fetchActivePacks(): Promise<PackRow[]> {
   const result = await pool.query<PackRow>(`
     SELECT
@@ -436,17 +442,22 @@ async function fetchActivePacks(): Promise<PackRow[]> {
   return result.rows.filter((row) => parseBoolean(row.pack_active, true));
 }
 
+function isTemplatePack(key: string, title?: string | null): boolean {
+  const source = `${key} ${title ?? ""}`.toLowerCase();
+  return source.includes("template") || source.includes("\u0448\u0430\u0431\u043b\u043e\u043d");
+}
+
 export async function listCasePacks(attempt = 0): Promise<CasePackInfo[]> {
   try {
     await ensureCasePacksStorage();
     const rows = await fetchActivePacks();
-    if (rows.length === 0) return [];
 
     const packs = new Map<string, CasePackInfo>();
     const packIdToKey = new Map<string, string>();
 
     for (const row of rows) {
       const key = normalizeCasePackKey(row.pack_key ?? row.pack_title ?? "classic");
+      if (isTemplatePack(key, row.pack_title)) continue;
       const title = (row.pack_title ?? "").trim() || buildPackTitleFromKey(key);
       const description = (row.pack_description ?? "").trim() || "Пак дел.";
       const sortOrder = parseNumber(row.pack_sort_order, 100);
@@ -477,6 +488,17 @@ export async function listCasePacks(attempt = 0): Promise<CasePackInfo[]> {
       GROUP BY 1
     `);
 
+    const legacyRows = await pool.query<CaseLinkRow>(`
+      SELECT
+        NULLIF(to_jsonb(c)->>'case_pack_id', '') AS case_pack_id,
+        NULLIF(to_jsonb(c)->>'pack_key', '') AS pack_key_raw,
+        NULLIF(to_jsonb(c)->>'case_pack_key', '') AS case_pack_key_raw
+      FROM case_pack_cases c
+      WHERE COALESCE(NULLIF(to_jsonb(c)->>'active', ''), NULLIF(to_jsonb(c)->>'is_active', ''), 'true') <> 'false'
+    `);
+
+    const countsByKey = new Map<string, number>();
+
     for (const row of counts.rows) {
       const packId = (row.case_pack_id ?? "").trim();
       if (!packId) continue;
@@ -484,7 +506,37 @@ export async function listCasePacks(attempt = 0): Promise<CasePackInfo[]> {
       if (!packKey) continue;
       const pack = packs.get(packKey);
       if (!pack) continue;
-      pack.caseCount = Number.isFinite(row.case_count) ? row.case_count : 0;
+      countsByKey.set(packKey, Number.isFinite(row.case_count) ? row.case_count : 0);
+    }
+
+    for (const row of legacyRows.rows) {
+      const legacyKey = normalizeCasePackKey(row.pack_key_raw ?? row.case_pack_key_raw);
+      if (!legacyKey || isTemplatePack(legacyKey)) continue;
+
+      if (!packs.has(legacyKey)) {
+        packs.set(legacyKey, {
+          key: legacyKey,
+          title: buildPackTitleFromKey(legacyKey),
+          description: "Пак дел.",
+          isAdult: false,
+          sortOrder: 500,
+          caseCount: 0,
+        });
+      }
+
+      const linkedId = (row.case_pack_id ?? "").trim();
+      if (linkedId && packIdToKey.get(linkedId) === legacyKey) {
+        continue;
+      }
+
+      const previous = countsByKey.get(legacyKey) ?? 0;
+      countsByKey.set(legacyKey, previous + 1);
+    }
+
+    for (const [key, pack] of packs.entries()) {
+      const caseCount = countsByKey.get(key) ?? 0;
+      pack.caseCount = caseCount;
+      packs.set(key, pack);
     }
 
     return [...packs.values()].sort(
@@ -520,7 +572,6 @@ async function pickCaseFromPackDb(
   try {
     await ensureCasePacksStorage();
     const packId = await resolvePackIdByKey(packKey);
-    if (!packId) return null;
 
     const result = await pool.query<{
       case_key: string;
@@ -529,6 +580,9 @@ async function pickCaseFromPackDb(
       truth: string;
       evidence_json: unknown;
       facts_json: unknown;
+      case_pack_id: string | null;
+      pack_key_raw: string | null;
+      case_pack_key_raw: string | null;
     }>(
       `
         SELECT
@@ -537,19 +591,30 @@ async function pickCaseFromPackDb(
           COALESCE(NULLIF(to_jsonb(c)->>'description', ''), 'Описание недоступно.') AS description,
           COALESCE(NULLIF(to_jsonb(c)->>'truth', ''), 'Истина недоступна.') AS truth,
           COALESCE(to_jsonb(c)->'evidence_json', to_jsonb(c)->'evidence', '[]'::jsonb) AS evidence_json,
-          COALESCE(to_jsonb(c)->'facts_json', to_jsonb(c)->'facts', '{}'::jsonb) AS facts_json
+          COALESCE(to_jsonb(c)->'facts_json', to_jsonb(c)->'facts', '{}'::jsonb) AS facts_json,
+          NULLIF(to_jsonb(c)->>'case_pack_id', '') AS case_pack_id,
+          NULLIF(to_jsonb(c)->>'pack_key', '') AS pack_key_raw,
+          NULLIF(to_jsonb(c)->>'case_pack_key', '') AS case_pack_key_raw
         FROM case_pack_cases c
-        WHERE NULLIF(to_jsonb(c)->>'case_pack_id', '') = $1
-          AND COALESCE(NULLIF(to_jsonb(c)->>'mode_player_count', ''), '0')::int = $2
+        WHERE COALESCE(NULLIF(to_jsonb(c)->>'mode_player_count', ''), '0')::int = $1
           AND COALESCE(NULLIF(to_jsonb(c)->>'active', ''), NULLIF(to_jsonb(c)->>'is_active', ''), 'true') <> 'false'
-        ORDER BY RANDOM()
-        LIMIT 1
       `,
-      [packId, safeCount],
+      [safeCount],
     );
 
     if (!result.rowCount) return null;
-    const row = result.rows[0];
+    const linkedRows = packId
+      ? result.rows.filter((row) => (row.case_pack_id ?? "").trim() === packId)
+      : [];
+    const legacyRows = result.rows.filter((row) => {
+      const key = normalizeCasePackKey(row.pack_key_raw ?? row.case_pack_key_raw);
+      return key === packKey;
+    });
+    const selectedPool =
+      legacyRows.length > linkedRows.length ? legacyRows : linkedRows.length > 0 ? linkedRows : legacyRows;
+
+    if (selectedPool.length === 0) return null;
+    const row = selectedPool[Math.floor(Math.random() * selectedPool.length)];
     const facts = parseFactsMap(row.facts_json);
 
     return {
@@ -575,6 +640,7 @@ export async function pickCaseForRoom(
   modePlayerCount: number,
 ): Promise<StoredCaseData | null> {
   await ensureCasePacksStorage();
-  const packKey = normalizeCasePackKey(packKeyInput);
+  const requestedKey = normalizeCasePackKey(packKeyInput);
+  const packKey = isTemplatePack(requestedKey) ? "classic" : requestedKey;
   return pickCaseFromPackDb(packKey, modePlayerCount);
 }

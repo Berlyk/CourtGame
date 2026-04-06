@@ -9775,23 +9775,15 @@ export default function App() {
             </InfoBlock>
           </div>
           {matchExpiresAt !== null && !game.finished && (
-            <div className="fixed right-5 bottom-0 sm:bottom-0 left-auto z-30 rounded-xl border border-zinc-700/80 bg-zinc-950/85 px-2.5 sm:px-3 py-1.5 sm:py-2 text-[11px] sm:text-xs font-semibold text-zinc-200 shadow-[0_8px_22px_rgba(0,0,0,0.45)] backdrop-blur-sm">
-              <span className="sm:hidden inline-flex items-center gap-2">
-                <Clock3 className="h-3.5 w-3.5 text-zinc-300" />
-                <span className="text-red-300">
-                  {String(matchHoursLeft).padStart(2, "0")}:
-                  {String(matchMinutesLeft).padStart(2, "0")}:
-                  {String(matchSecondsLeft).padStart(2, "0")}
-                </span>
+            <div className="fixed right-5 bottom-[1.7rem] sm:bottom-[1.8rem] left-auto z-30 h-11 rounded-2xl px-3.5 inline-flex items-center gap-2 border border-zinc-700 bg-zinc-900/90 text-zinc-100 backdrop-blur-md shadow-[0_12px_30px_rgba(0,0,0,0.45)]">
+              <span className="inline-flex h-6 w-6 items-center justify-center rounded-lg bg-red-600 text-white shadow-sm shadow-red-900/50">
+                <Clock3 className="h-3.5 w-3.5" />
               </span>
-              <span className="hidden sm:inline-flex items-center gap-2">
-                <Clock3 className="h-3.5 w-3.5 text-zinc-300" />
-                <span>До авто-закрытия:</span>
-                <span className="text-red-300">
-                  {String(matchHoursLeft).padStart(2, "0")}:
-                  {String(matchMinutesLeft).padStart(2, "0")}:
-                  {String(matchSecondsLeft).padStart(2, "0")}
-                </span>
+              <span className="text-sm font-semibold leading-none">До авто-закрытия:</span>
+              <span className="text-sm font-semibold text-red-300 leading-none">
+                {String(matchHoursLeft).padStart(2, "0")}:
+                {String(matchMinutesLeft).padStart(2, "0")}:
+                {String(matchSecondsLeft).padStart(2, "0")}
               </span>
             </div>
           )}
@@ -9800,7 +9792,7 @@ export default function App() {
             onOpenChange={setContextHelpOpen}
             query={contextHelpQuery}
             onQueryChange={setContextHelpQuery}
-            floatingOffsetClass="bottom-[4.9rem] sm:bottom-[5.15rem]"
+            floatingOffsetClass="bottom-[4.75rem] sm:bottom-[5rem]"
           />
         </div>
         {renderPublicProfileDialog()}
