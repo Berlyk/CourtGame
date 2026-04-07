@@ -557,7 +557,7 @@ async function ensureTablesInternal(): Promise<void> {
             AND case_pack_id IS NOT NULL';
 
         BEGIN
-          EXECUTE ''ALTER TABLE case_pack_cases ALTER COLUMN pack_id DROP NOT NULL'';
+          EXECUTE 'ALTER TABLE case_pack_cases ALTER COLUMN pack_id DROP NOT NULL';
         EXCEPTION
           WHEN OTHERS THEN
             NULL;
