@@ -2279,14 +2279,6 @@ function PlayerCard({
         : player.roleKey === "observer"
           ? "Наблюдатель"
           : "Игрок";
-  const roleSourceLabel =
-    showLobbyAssignedRole && !isHost
-      ? player.roleAssignmentSource === "auto_preference"
-        ? "авто"
-        : player.roleAssignmentSource === "manual"
-          ? "вручную"
-          : ""
-      : "";
   const disconnectProgress = isDisconnected
     ? 1 - Math.min(1, disconnectRemainingMs / RECONNECT_GRACE_MS)
     : 1;
@@ -2336,7 +2328,7 @@ function PlayerCard({
                 ) : null}
               </div>
               <div className="text-sm text-zinc-400">
-                {roleSourceLabel ? `${playerRoleLabel} • ${roleSourceLabel}` : playerRoleLabel}
+                {playerRoleLabel}
               </div>
             </div>
           </button>
@@ -2681,6 +2673,7 @@ export default function App() {
   const [adminPanelOpen, setAdminPanelOpen] = useState(false);
   const [adminFabPos, setAdminFabPos] = useState<{ x: number; y: number }>({ x: 20, y: 20 });
   const [lobbyRoleDialogOpen, setLobbyRoleDialogOpen] = useState(false);
+  const [lobbyRoleTargetPlayerId, setLobbyRoleTargetPlayerId] = useState<string | null>(null);
   const [joinPasswordDialogMatch, setJoinPasswordDialogMatch] = useState<PublicMatchInfo | null>(null);
   const [joinPasswordInput, setJoinPasswordInput] = useState("");
   const [joinPasswordDialogError, setJoinPasswordDialogError] = useState("");
@@ -4711,14 +4704,15 @@ export default function App() {
     });
   }, [socket, room, roomControlSessionToken]);
 
-  const chooseLobbyRole = useCallback((roleKey: AssignableRole | null) => {
-    if (!room || !mySessionToken) return;
+  const chooseLobbyRole = useCallback((roleKey: AssignableRole | null, targetPlayerId?: string) => {
+    if (!room || !roomControlSessionToken) return;
     socket.emit("choose_lobby_role", {
       code: room.code,
-      sessionToken: mySessionToken,
+      sessionToken: roomControlSessionToken,
       roleKey,
+      targetPlayerId,
     });
-  }, [socket, room, mySessionToken]);
+  }, [socket, room, roomControlSessionToken]);
 
   const updateRoomManagementSettings = useCallback((patch: Record<string, unknown>) => {
     if (!room || !roomControlSessionToken) return;
@@ -4739,13 +4733,25 @@ export default function App() {
   }, [socket, room, roomControlSessionToken]);
 
   const addAdminBots = useCallback(() => {
-    if (!room || !authToken || !isCreatorAdmin || roomControlPlayerId !== room.hostId) return;
+    const canManageInRoom = !!room && roomControlPlayerId === room.hostId;
+    const canManageInGame = !!game && gameControlPlayerId === game.hostId;
+    if (!adminTargetRoomCode || !authToken || !isCreatorAdmin || (!canManageInRoom && !canManageInGame)) return;
     socket.emit("admin_add_bots", {
-      code: room.code,
+      code: adminTargetRoomCode,
       authToken,
       count: Math.max(1, Math.min(6, adminBotCount)),
     });
-  }, [socket, room, authToken, isCreatorAdmin, roomControlPlayerId, adminBotCount]);
+  }, [
+    socket,
+    room,
+    game,
+    authToken,
+    isCreatorAdmin,
+    roomControlPlayerId,
+    gameControlPlayerId,
+    adminBotCount,
+    adminTargetRoomCode,
+  ]);
 
   const controlAdminPlayer = useCallback((targetPlayerId: string) => {
     if (!adminTargetRoomCode || !authToken || !isCreatorAdmin) return;
@@ -7129,13 +7135,10 @@ export default function App() {
                       </Button>
                       <Button
                         type="button"
-                        onClick={() => {
-                          setError("Создание своего пака скоро появится.");
-                          setTimeout(() => setError(""), 2500);
-                        }}
-                        className="h-9 rounded-xl bg-red-600 hover:bg-red-500 text-white border-0"
+                        disabled
+                        className="h-9 rounded-xl bg-zinc-800 text-zinc-400 border border-zinc-700 cursor-not-allowed"
                       >
-                        Создать пак
+                        Создать пак · В разработке
                       </Button>
                     </div>
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -7589,6 +7592,7 @@ export default function App() {
       (player) => player.roleKey !== "witness" && player.roleKey !== "observer",
     );
     const activeLobbyPlayersCount = activeLobbyPlayers.length;
+    const hasExplicitLobbyRoles = activeLobbyPlayers.some((player) => !!player.lobbyAssignedRole);
     const lobbyAssignableRoles = getLobbyAssignableRoles(
       room.modeKey,
       activeLobbyPlayersCount,
@@ -7606,6 +7610,23 @@ export default function App() {
       (player) => player.isBot || /^бот-\d+$/i.test((player.name ?? "").trim()),
     );
     const hasRoomHostControl = roomControlPlayerId === room.hostId;
+    const roleDialogTargetPlayer =
+      room.players.find((player) => player.id === lobbyRoleTargetPlayerId) ?? myLobbyPlayer;
+    const canOpenRolePickerForPlayer = (player: PlayerInfo) => {
+      if (player.roleKey === "witness" || player.roleKey === "observer") return false;
+      if (hasRoomHostControl) {
+        if (!usePreferredRoles) return true;
+        return player.id === myLobbyPlayer?.id;
+      }
+      return usePreferredRoles && player.id === myLobbyPlayer?.id;
+    };
+    const canRenderRoleDialog =
+      !!roleDialogTargetPlayer &&
+      roleDialogTargetPlayer.roleKey !== "witness" &&
+      roleDialogTargetPlayer.roleKey !== "observer" &&
+      (hasRoomHostControl
+        ? !usePreferredRoles || roleDialogTargetPlayer.id === myLobbyPlayer?.id
+        : usePreferredRoles && roleDialogTargetPlayer.id === myLobbyPlayer?.id);
     const canStartRoomNow = isQuickRoomMode
       ? activeLobbyPlayersCount >= 3 && activeLobbyPlayersCount <= roomMaxPlayers
       : activeLobbyPlayersCount === roomMaxPlayers;
@@ -7706,25 +7727,28 @@ export default function App() {
             )}
           </>
         )}
-        {usePreferredRoles &&
-          myLobbyPlayer &&
-          myLobbyPlayer.roleKey !== "witness" &&
-          myLobbyPlayer.roleKey !== "observer" && (
-          <Dialog open={lobbyRoleDialogOpen} onOpenChange={setLobbyRoleDialogOpen}>
+        {canRenderRoleDialog && roleDialogTargetPlayer && (
+          <Dialog
+            open={lobbyRoleDialogOpen}
+            onOpenChange={(open) => {
+              setLobbyRoleDialogOpen(open);
+              if (!open) setLobbyRoleTargetPlayerId(null);
+            }}
+          >
             <DialogContent className="rounded-2xl border-zinc-800 bg-zinc-950 text-zinc-100 sm:max-w-xl">
               <DialogHeader>
                 <DialogTitle>Выбор роли</DialogTitle>
                 <DialogDescription className="text-zinc-400">
-                  Свободные роли можно выбрать сразу. Занятые роли помечены владельцем.
+                  Игрок: {roleDialogTargetPlayer.name}. Свободные роли можно выбрать сразу.
                 </DialogDescription>
               </DialogHeader>
-              {myLobbyPlayer.rolePreferenceStatus === "conflict" && (
-                <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+              {roleDialogTargetPlayer.rolePreferenceStatus === "conflict" && (
+                <div className="rounded-xl border border-red-500/35 bg-red-500/10 px-3 py-2 text-xs text-red-200">
                   Предпочитаемая роль занята. Выберите другую.
                 </div>
               )}
-              {myLobbyPlayer.rolePreferenceStatus === "unavailable" && (
-                <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+              {roleDialogTargetPlayer.rolePreferenceStatus === "unavailable" && (
+                <div className="rounded-xl border border-zinc-700 bg-zinc-900/80 px-3 py-2 text-xs text-zinc-200">
                   Предпочитаемая роль недоступна в этом режиме.
                 </div>
               )}
@@ -7732,11 +7756,12 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => {
-                    chooseLobbyRole(null);
+                    chooseLobbyRole(null, roleDialogTargetPlayer.id);
                     setLobbyRoleDialogOpen(false);
+                    setLobbyRoleTargetPlayerId(null);
                   }}
                   className={`rounded-2xl border px-4 py-3 text-left transition ${
-                    !myLobbyPlayer.lobbyAssignedRole
+                    !roleDialogTargetPlayer.lobbyAssignedRole
                       ? "border-red-500 bg-red-600/20 text-white shadow-[0_0_18px_rgba(239,68,68,0.25)]"
                       : "border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800"
                   }`}
@@ -7754,16 +7779,17 @@ export default function App() {
                 <div className="grid gap-2 sm:grid-cols-2">
                   {lobbyAssignableRoles.map((roleKey) => {
                     const owner = occupiedLobbyRolesByPlayer.get(roleKey);
-                    const occupiedByOther = !!owner && owner.id !== myLobbyPlayer.id;
-                    const isSelected = myLobbyPlayer.lobbyAssignedRole === roleKey;
+                    const occupiedByOther = !!owner && owner.id !== roleDialogTargetPlayer.id;
+                    const isSelected = roleDialogTargetPlayer.lobbyAssignedRole === roleKey;
                     return (
                       <button
                         key={roleKey}
                         type="button"
                         disabled={occupiedByOther}
                         onClick={() => {
-                          chooseLobbyRole(roleKey);
+                          chooseLobbyRole(roleKey, roleDialogTargetPlayer.id);
                           setLobbyRoleDialogOpen(false);
+                          setLobbyRoleTargetPlayerId(null);
                         }}
                         className={`rounded-2xl border px-3 py-3 text-left transition ${
                           isSelected
@@ -8250,15 +8276,15 @@ export default function App() {
                           <PlayerCard
                             player={{ ...player, userId: resolvedUserId }}
                             isHost={player.id === room.hostId}
-                            showLobbyAssignedRole={usePreferredRoles}
+                            showLobbyAssignedRole={usePreferredRoles || hasExplicitLobbyRoles}
                             rolePickerButton={
-                              usePreferredRoles &&
-                              player.id === myLobbyPlayer?.id &&
-                              player.roleKey !== "witness" &&
-                              player.roleKey !== "observer"
+                              canOpenRolePickerForPlayer(player)
                                 ? {
                                     label: "Выбрать роль",
-                                    onClick: () => setLobbyRoleDialogOpen(true),
+                                    onClick: () => {
+                                      setLobbyRoleTargetPlayerId(player.id);
+                                      setLobbyRoleDialogOpen(true);
+                                    },
                                   }
                                 : null
                             }
@@ -8600,6 +8626,23 @@ export default function App() {
                       Вернуться к ведущему
                     </button>
                   )}
+                </div>
+                <div className="mt-2 flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={1}
+                    max={6}
+                    value={adminBotCount}
+                    onChange={(e) => setAdminBotCount(Math.max(1, Math.min(6, Number(e.target.value) || 1)))}
+                    className="h-9 w-20 rounded-lg border-zinc-700 bg-zinc-900 text-zinc-100"
+                  />
+                  <Button
+                    type="button"
+                    onClick={addAdminBots}
+                    className="h-9 flex-1 rounded-lg bg-red-600 px-3 text-xs text-white hover:bg-red-500"
+                  >
+                    Добавить ботов
+                  </Button>
                 </div>
               </div>
             )}
@@ -9775,7 +9818,7 @@ export default function App() {
             </InfoBlock>
           </div>
           {matchExpiresAt !== null && !game.finished && (
-            <div className="fixed right-5 bottom-[1.55rem] sm:bottom-[1.65rem] left-auto z-30 h-11 rounded-2xl px-3.5 inline-flex items-center gap-2 border border-zinc-700 bg-zinc-900/90 text-zinc-100 backdrop-blur-md shadow-[0_12px_30px_rgba(0,0,0,0.45)]">
+            <div className="fixed right-5 bottom-[0.95rem] sm:bottom-[1.05rem] left-auto z-30 h-11 rounded-2xl px-3.5 inline-flex items-center gap-2 border border-zinc-700 bg-zinc-900/90 text-zinc-100 backdrop-blur-md shadow-[0_12px_30px_rgba(0,0,0,0.45)]">
               <span className="inline-flex h-6 w-6 items-center justify-center rounded-lg bg-red-600 text-white shadow-sm shadow-red-900/50">
                 <Clock3 className="h-3.5 w-3.5" />
               </span>
@@ -9792,7 +9835,7 @@ export default function App() {
             onOpenChange={setContextHelpOpen}
             query={contextHelpQuery}
             onQueryChange={setContextHelpQuery}
-            floatingOffsetClass="bottom-[4.65rem] sm:bottom-[4.9rem]"
+            floatingOffsetClass="bottom-[5.25rem] sm:bottom-[5.45rem]"
           />
         </div>
         {renderPublicProfileDialog()}

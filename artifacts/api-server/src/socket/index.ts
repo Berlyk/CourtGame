@@ -1399,10 +1399,12 @@ export function setupSocket(httpServer: HttpServer) {
       ({
         code,
         roleKey,
+        targetPlayerId,
         sessionToken,
       }: {
         code: string;
         roleKey?: AssignableRole | null;
+        targetPlayerId?: string;
         sessionToken?: string;
       }) => {
         const roomCode = normalizeRoomCode(code);
@@ -1415,7 +1417,7 @@ export function setupSocket(httpServer: HttpServer) {
           sessionToken,
         });
         if (!actorId) return;
-        const result = chooseLobbyRole(roomCode, actorId, roleKey ?? null);
+        const result = chooseLobbyRole(roomCode, actorId, targetPlayerId ?? actorId, roleKey ?? null);
         if (!result) return;
         if (!result.ok) {
           socket.emit("error", { message: result.reason });
@@ -1438,7 +1440,7 @@ export function setupSocket(httpServer: HttpServer) {
       }) => {
         const roomCode = normalizeRoomCode(code);
         const room = getRoom(roomCode);
-        if (!room || room.started) return;
+        if (!room) return;
         const actorInfo = socketToRoom.get(socket.id);
         if (!actorInfo || actorInfo.roomCode !== roomCode || actorInfo.playerId !== room.hostId) {
           socket.emit("error", { message: "Добавлять ботов может только ведущий комнаты." });
@@ -1451,6 +1453,11 @@ export function setupSocket(httpServer: HttpServer) {
         const updated = addAdminBotsToRoom(roomCode, Number.isFinite(count) ? Number(count) : 1);
         if (!updated) return;
         io.to(roomCode).emit("room_updated", buildRoomUpdatePayload(updated));
+        if (updated.game) {
+          io.to(roomCode).emit("game_players_updated", {
+            players: mapGamePlayers(updated.game.players),
+          });
+        }
         emitPublicMatches(io);
         persistRoom(roomCode);
       },

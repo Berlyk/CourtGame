@@ -32885,7 +32885,7 @@ export const BACKEND_CASE_PACKS: CompactCasePack[] = [
   {
     key: "classic",
     title: "КЛАССИКА",
-    description: "Примерный базовый пак: по одному делу на каждый режим.",
+    description: "Основной пак дел CourtGame.",
     isAdult: false,
     sortOrder: 10,
     casesByPlayers: CLASSIC_EXAMPLES,

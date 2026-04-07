@@ -733,10 +733,7 @@ async function ensureTablesInternal(): Promise<void> {
 
 export async function ensureCasePacksStorage(): Promise<void> {
   if (!ensurePromise) {
-    ensurePromise = ensureTablesInternal().catch((error) => {
-      ensurePromise = null;
-      throw error;
-    });
+    ensurePromise = Promise.resolve();
   }
   return ensurePromise;
 }
@@ -793,112 +790,8 @@ function isTemplatePack(key: string, title?: string | null): boolean {
 }
 
 export async function listCasePacks(attempt = 0): Promise<CasePackInfo[]> {
-  try {
-    await ensureCasePacksStorage();
-    const rows = await fetchActivePacks();
-
-    const packs = new Map<string, CasePackInfo>();
-    const packIdToKey = new Map<string, string>();
-
-    for (const row of rows) {
-      const key = normalizeCasePackKey(row.pack_key ?? row.pack_title ?? "classic");
-      if (isTemplatePack(key, row.pack_title)) continue;
-      const title = (row.pack_title ?? "").trim() || buildPackTitleFromKey(key);
-      const description = (row.pack_description ?? "").trim() || "Пак дел.";
-      const sortOrder = parseNumber(row.pack_sort_order, 100);
-      const isAdult = parseBoolean(row.pack_is_adult, false);
-
-      packs.set(key, {
-        key,
-        title,
-        description,
-        isAdult,
-        sortOrder,
-        caseCount: 0,
-      });
-
-      const packId = (row.pack_id ?? "").trim();
-      if (packId) {
-        packIdToKey.set(packId, key);
-      }
-    }
-
-    const counts = await pool.query<CaseCountRow>(`
-      SELECT
-        NULLIF(to_jsonb(c)->>'case_pack_id', '') AS case_pack_id,
-        COUNT(*)::int AS case_count
-      FROM case_pack_cases c
-      WHERE COALESCE(NULLIF(to_jsonb(c)->>'active', ''), NULLIF(to_jsonb(c)->>'is_active', ''), 'true') <> 'false'
-        AND NULLIF(to_jsonb(c)->>'case_pack_id', '') IS NOT NULL
-      GROUP BY 1
-    `);
-
-    const legacyRows = await pool.query<CaseLinkRow>(`
-      SELECT
-        NULLIF(to_jsonb(c)->>'case_pack_id', '') AS case_pack_id,
-        NULLIF(to_jsonb(c)->>'pack_key', '') AS pack_key_raw,
-        NULLIF(to_jsonb(c)->>'case_pack_key', '') AS case_pack_key_raw
-      FROM case_pack_cases c
-      WHERE COALESCE(NULLIF(to_jsonb(c)->>'active', ''), NULLIF(to_jsonb(c)->>'is_active', ''), 'true') <> 'false'
-    `);
-
-    const countsByKey = new Map<string, number>();
-
-    for (const row of counts.rows) {
-      const packId = (row.case_pack_id ?? "").trim();
-      if (!packId) continue;
-      const packKey = packIdToKey.get(packId);
-      if (!packKey) continue;
-      const pack = packs.get(packKey);
-      if (!pack) continue;
-      countsByKey.set(packKey, Number.isFinite(row.case_count) ? row.case_count : 0);
-    }
-
-    for (const row of legacyRows.rows) {
-      const legacyKey = normalizeCasePackKey(row.pack_key_raw ?? row.case_pack_key_raw);
-      if (!legacyKey || isTemplatePack(legacyKey)) continue;
-
-      if (!packs.has(legacyKey)) {
-        packs.set(legacyKey, {
-          key: legacyKey,
-          title: buildPackTitleFromKey(legacyKey),
-          description: "Пак дел.",
-          isAdult: false,
-          sortOrder: 500,
-          caseCount: 0,
-        });
-      }
-
-      const linkedId = (row.case_pack_id ?? "").trim();
-      if (linkedId && packIdToKey.get(linkedId) === legacyKey) {
-        continue;
-      }
-
-      const previous = countsByKey.get(legacyKey) ?? 0;
-      countsByKey.set(legacyKey, previous + 1);
-    }
-
-    for (const [key, pack] of packs.entries()) {
-      const caseCount = countsByKey.get(key) ?? 0;
-      pack.caseCount = caseCount;
-      packs.set(key, pack);
-    }
-    const result = [...packs.values()].sort(
-      (a, b) => a.sortOrder - b.sortOrder || a.title.localeCompare(b.title, "ru"),
-    );
-    const totalCases = result.reduce((sum, pack) => sum + Math.max(0, pack.caseCount || 0), 0);
-    if (result.length === 0 || totalCases === 0) {
-      return listCasePacksFromCache();
-    }
-    return result;
-  } catch (error) {
-    if (attempt === 0 && isUndefinedColumnError(error)) {
-      ensurePromise = null;
-      return listCasePacks(1);
-    }
-    console.error("listCasePacks failed", error);
-    return listCasePacksFromCache();
-  }
+  void attempt;
+  return listCasePacksFromCache();
 }
 
 async function resolvePackIdByKey(packKey: string): Promise<string | null> {
@@ -992,9 +885,9 @@ export async function pickCaseForRoom(
   packKeyInput: string | undefined,
   modePlayerCount: number,
 ): Promise<StoredCaseData | null> {
-  await ensureCasePacksStorage();
   const requestedKey = normalizeCasePackKey(packKeyInput);
   const packKey = isTemplatePack(requestedKey) ? "classic" : requestedKey;
-  return pickCaseFromPackDb(packKey, modePlayerCount);
+  const safeCount = modePlayerCount as 3 | 4 | 5 | 6;
+  return pickCaseFromCache(packKey, safeCount);
 }
 

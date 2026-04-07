@@ -315,13 +315,38 @@ function assignLobbyRole(
 function rebalanceLobbyRoleAssignments(room: Room) {
   const requiredRoles = new Set<AssignableRole>(getRequiredRolesForRoom(room));
   const activePlayers = getActiveLobbyPlayers(room);
-  if (!room.usePreferredRoles) {
-    activePlayers.forEach(clearLobbyRoleState);
-    return;
-  }
-
   const occupiedRoles = new Set<AssignableRole>();
   const manualAssigned = new Set<string>();
+
+  if (!room.usePreferredRoles) {
+    activePlayers.forEach((player) => {
+      const currentRole = player.lobbyAssignedRole;
+      const isManual = player.roleAssignmentSource === "manual";
+      if (currentRole && isManual && requiredRoles.has(currentRole) && !occupiedRoles.has(currentRole)) {
+        assignLobbyRole(player, currentRole, "manual");
+        occupiedRoles.add(currentRole);
+        manualAssigned.add(player.id);
+        return;
+      }
+      clearLobbyRoleState(player);
+      player.roleAssignmentSource = "random";
+    });
+
+    if (room.isHostJudge) {
+      const host = activePlayers.find((player) => player.id === room.hostId);
+      if (host && requiredRoles.has("judge") && !occupiedRoles.has("judge")) {
+        assignLobbyRole(host, "judge", "manual");
+        occupiedRoles.add("judge");
+      }
+    }
+
+    activePlayers.forEach((player) => {
+      if (player.lobbyAssignedRole) return;
+      player.rolePreferenceStatus = "idle";
+      player.roleAssignmentSource = "random";
+    });
+    return;
+  }
 
   activePlayers.forEach((player) => {
     const currentRole = player.lobbyAssignedRole;
@@ -799,13 +824,29 @@ export function updateRoomManagement(
 
 export function chooseLobbyRole(
   code: string,
-  playerId: string,
+  actorId: string,
+  targetPlayerId: string,
   role: AssignableRole | null,
 ): { room: Room; ok: true } | { room: Room; ok: false; reason: string } | null {
   const room = rooms.get(code);
-  if (!room || room.started || !room.usePreferredRoles) return null;
-  const player = room.players.find((entry) => entry.id === playerId);
+  if (!room || room.started) return null;
+  const actor = room.players.find((entry) => entry.id === actorId);
+  if (!actor) return null;
+  const player = room.players.find((entry) => entry.id === targetPlayerId);
   if (!player) return null;
+
+  const isHostActor = actor.id === room.hostId;
+  if (!isHostActor) {
+    if (actor.id !== player.id) {
+      return { room, ok: false, reason: "Можно менять только свою роль." };
+    }
+    if (!room.usePreferredRoles) {
+      return { room, ok: false, reason: "Ведущий не разрешил выбор ролей для игроков." };
+    }
+  } else if (room.usePreferredRoles && actor.id !== player.id) {
+    return { room, ok: false, reason: "При включенном выборе ролей игроки выбирают роль сами." };
+  }
+
   if (player.roleKey === "witness" || player.roleKey === "observer") {
     return { room, ok: false, reason: "Свидетели и наблюдатели не выбирают роль." };
   }
@@ -845,7 +886,7 @@ export function addAdminBotsToRoom(
   count: number,
 ): Room | null {
   const room = rooms.get(code);
-  if (!room || room.started) return null;
+  if (!room) return null;
   const safeCount = Math.max(1, Math.min(6, Math.floor(count)));
   for (let i = 0; i < safeCount; i += 1) {
     const botId = crypto.randomUUID();
@@ -859,18 +900,50 @@ export function addAdminBotsToRoom(
     );
     let num = 1;
     while (existingNumbers.has(num)) num += 1;
-    room.players.push({
+    const baseBot: Player = {
       id: botId,
       name: `Бот-${num}`,
       isBot: true,
       socketId: `bot:${botId}`,
+      sessionToken: crypto.randomUUID(),
       preferredRole: null,
       lobbyAssignedRole: null,
       roleAssignmentSource: "random",
       rolePreferenceStatus: "idle",
+    };
+
+    if (!room.started || !room.game) {
+      room.players.push(baseBot);
+      continue;
+    }
+
+    const supportRole = getSupportRoleForJoin(room);
+    if (!canAddSupportRole(room, supportRole)) {
+      continue;
+    }
+
+    const botInMatch: Player = {
+      ...baseBot,
+      roleKey: supportRole,
+      roleTitle: supportRole === "witness" ? getWitnessRoleTitle(room) : "Наблюдатель",
+      goal:
+        supportRole === "witness"
+          ? "Наблюдать за процессом суда и, по требованию судьи, давать показания."
+          : "Наблюдать за процессом суда без участия в механиках и действиях сторон.",
+      facts: [],
+      cards: [],
+    };
+
+    room.players.push(botInMatch);
+    room.game.players.push({
+      ...botInMatch,
+      facts: [],
+      cards: [],
     });
   }
-  rebalanceLobbyRoleAssignments(room);
+  if (!room.started) {
+    rebalanceLobbyRoleAssignments(room);
+  }
   return room;
 }
 
@@ -1590,35 +1663,37 @@ export function startGame(
   const stages = buildStagesByPlayerCount(count);
 
   const roleByPlayerId = new Map<string, AssignableRole>();
-  if (room.usePreferredRoles) {
-    const remainingRoles = [...baseRoleKeys];
-    mainPlayers.forEach((player) => {
-      const role = player.lobbyAssignedRole;
-      if (!role) return;
-      const idx = remainingRoles.indexOf(role);
-      if (idx < 0) return;
-      roleByPlayerId.set(player.id, role);
-      remainingRoles.splice(idx, 1);
-    });
-    const unassigned = shuffle(mainPlayers.filter((player) => !roleByPlayerId.has(player.id)));
-    unassigned.forEach((player, index) => {
-      const role = remainingRoles[index];
-      if (role) roleByPlayerId.set(player.id, role);
-    });
-  } else {
-    const roleKeys = shuffle(baseRoleKeys);
-    if (room.isHostJudge) {
-      const hostIndex = mainPlayers.findIndex((player) => player.id === room.hostId);
-      const judgeRoleIndex = roleKeys.indexOf("judge");
-      if (hostIndex !== -1 && judgeRoleIndex !== -1 && hostIndex !== judgeRoleIndex) {
-        [roleKeys[hostIndex], roleKeys[judgeRoleIndex]] = [roleKeys[judgeRoleIndex], roleKeys[hostIndex]];
+  const remainingRoles = [...baseRoleKeys];
+
+  mainPlayers.forEach((player) => {
+    const role = player.lobbyAssignedRole;
+    if (!role) return;
+    const idx = remainingRoles.indexOf(role);
+    if (idx < 0) return;
+    roleByPlayerId.set(player.id, role);
+    remainingRoles.splice(idx, 1);
+  });
+
+  if (room.isHostJudge) {
+    const host = mainPlayers.find((player) => player.id === room.hostId);
+    if (host) {
+      const currentHostRole = roleByPlayerId.get(host.id);
+      if (currentHostRole && currentHostRole !== "judge") {
+        remainingRoles.push(currentHostRole);
       }
+      const judgeRoleIndex = remainingRoles.indexOf("judge");
+      if (judgeRoleIndex !== -1) {
+        remainingRoles.splice(judgeRoleIndex, 1);
+      }
+      roleByPlayerId.set(host.id, "judge");
     }
-    mainPlayers.forEach((player, index) => {
-      const role = roleKeys[index];
-      if (role) roleByPlayerId.set(player.id, role);
-    });
   }
+
+  const unassigned = shuffle(mainPlayers.filter((player) => !roleByPlayerId.has(player.id)));
+  unassigned.forEach((player, index) => {
+    const role = remainingRoles[index];
+    if (role) roleByPlayerId.set(player.id, role);
+  });
 
   const assignedPlayers: Player[] = mainPlayers.map((player) => {
     const roleKey = roleByPlayerId.get(player.id) ?? "plaintiff";
