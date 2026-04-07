@@ -376,6 +376,43 @@ async function ensureTablesInternal(): Promise<void> {
       ) THEN
         EXECUTE 'ALTER TABLE case_pack_cases ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 100';
       END IF;
+
+      EXECUTE '
+        UPDATE case_pack_cases c
+        SET active = FALSE
+        FROM case_packs cp
+        WHERE c.case_pack_id = cp.id
+          AND c.active = TRUE
+          AND cp.active = TRUE
+          AND (
+            lower(coalesce(cp.key, '''')) LIKE ''%template%''
+            OR lower(coalesce(cp.title, '''')) LIKE ''%шаблон%''
+          )';
+
+      EXECUTE '
+        UPDATE case_packs cp
+        SET active = FALSE
+        WHERE cp.active = TRUE
+          AND (
+            lower(coalesce(cp.key, '''')) LIKE ''%template%''
+            OR lower(coalesce(cp.title, '''')) LIKE ''%шаблон%''
+          )';
+
+      EXECUTE '
+        WITH legacy_classic AS (
+          SELECT cp.id
+          FROM case_packs cp
+          JOIN case_pack_cases c ON c.case_pack_id = cp.id
+          WHERE cp.active = TRUE
+            AND c.active = TRUE
+            AND lower(coalesce(cp.key, '''')) = ''classic''
+          GROUP BY cp.id
+          HAVING COUNT(*) BETWEEN 80 AND 81
+        )
+        UPDATE case_pack_cases c
+        SET active = FALSE
+        WHERE c.active = TRUE
+          AND c.case_pack_id IN (SELECT id FROM legacy_classic)';
     END $$;
   `);
 
