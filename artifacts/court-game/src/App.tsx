@@ -1741,6 +1741,25 @@ function Avatar({
 }) {
   const gifMeta = parseGifCropMeta(src);
   const finalSrc = gifMeta?.src ?? src;
+  if (finalSrc && gifMeta?.target === "avatar") {
+    return (
+      <div
+        className="relative overflow-hidden rounded-full flex-shrink-0 border border-zinc-700"
+        style={{ width: size, height: size }}
+      >
+        <img
+          src={finalSrc}
+          alt={name}
+          className="h-full w-full object-cover select-none pointer-events-none"
+          style={{
+            objectPosition: `${gifMeta.focusX}% ${gifMeta.focusY}%`,
+            transform: `${gifMeta.flipX ? "scaleX(-1) " : ""}scale(${gifMeta.zoom})`,
+            transformOrigin: `${gifMeta.focusX}% ${gifMeta.focusY}%`,
+          }}
+        />
+      </div>
+    );
+  }
   if (finalSrc) {
     return (
       <img
@@ -1750,18 +1769,6 @@ function Avatar({
         style={{
           width: size,
           height: size,
-          objectPosition:
-            gifMeta?.target === "avatar"
-              ? `${gifMeta.focusX}% ${gifMeta.focusY}%`
-              : undefined,
-          transform:
-            gifMeta?.target === "avatar"
-              ? `${gifMeta.flipX ? "scaleX(-1) " : ""}scale(${gifMeta.zoom})`
-              : undefined,
-          transformOrigin:
-            gifMeta?.target === "avatar"
-              ? `${gifMeta.focusX}% ${gifMeta.focusY}%`
-              : undefined,
         }}
       />
     );
