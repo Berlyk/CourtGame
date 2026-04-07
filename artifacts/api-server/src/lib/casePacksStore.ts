@@ -207,6 +207,97 @@ function mapImportedFacts(
   };
 }
 
+type CachedCasePack = {
+  key: string;
+  title: string;
+  description: string;
+  isAdult: boolean;
+  sortOrder: number;
+  casesByPlayers: Record<3 | 4 | 5 | 6, StoredCaseData[]>;
+};
+
+function cloneStoredCase(source: StoredCaseData): StoredCaseData {
+  return JSON.parse(JSON.stringify(source)) as StoredCaseData;
+}
+
+function buildImportedPackCache(): CachedCasePack[] {
+  if (!Array.isArray(BACKEND_CASE_PACKS)) return [];
+  return BACKEND_CASE_PACKS.map((sourcePack) => {
+    const key = mapImportedPackKey(sourcePack);
+    const title = (sourcePack.title ?? "").trim().toUpperCase() || buildPackTitleFromKey(key);
+    const description = (sourcePack.description ?? "").trim() || "Пак дел.";
+    const sortOrder = parseNumber(String(sourcePack.sortOrder), 100);
+    const isAdult = Boolean(sourcePack.isAdult);
+
+    const casesByPlayers = {
+      3: [] as StoredCaseData[],
+      4: [] as StoredCaseData[],
+      5: [] as StoredCaseData[],
+      6: [] as StoredCaseData[],
+    };
+
+    for (const playerCount of [3, 4, 5, 6] as const) {
+      const sourceCases = sourcePack.casesByPlayers?.[playerCount] ?? [];
+      for (let index = 0; index < sourceCases.length; index += 1) {
+        const sourceCase = sourceCases[index];
+        const caseKey = sanitizeCasePackKey(sourceCase?.key) || `case_${playerCount}_${index + 1}`;
+        const facts = mapImportedFacts(sourceCase?.facts);
+        casesByPlayers[playerCount].push({
+          id: caseKey,
+          mode: resolveOfficialModeTitle(playerCount),
+          title: (sourceCase?.title ?? "").trim() || "Дело",
+          description: (sourceCase?.description ?? "").trim() || "Описание недоступно.",
+          truth: (sourceCase?.truth ?? "").trim() || "Истина недоступна.",
+          evidence: parseStringArray(sourceCase?.evidence),
+          roles: buildRolesFromFacts(facts),
+        });
+      }
+    }
+
+    return {
+      key,
+      title,
+      description,
+      isAdult,
+      sortOrder,
+      casesByPlayers,
+    };
+  });
+}
+
+const IMPORTED_PACK_CACHE = buildImportedPackCache();
+
+function listCasePacksFromCache(): CasePackInfo[] {
+  return [...IMPORTED_PACK_CACHE]
+    .map((pack) => ({
+      key: pack.key,
+      title: pack.title,
+      description: pack.description,
+      isAdult: pack.isAdult,
+      sortOrder: pack.sortOrder,
+      caseCount:
+        pack.casesByPlayers[3].length +
+        pack.casesByPlayers[4].length +
+        pack.casesByPlayers[5].length +
+        pack.casesByPlayers[6].length,
+    }))
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.title.localeCompare(b.title, "ru"));
+}
+
+function pickCaseFromCache(packKey: string, modePlayerCount: 3 | 4 | 5 | 6): StoredCaseData | null {
+  const directPack = IMPORTED_PACK_CACHE.find((pack) => pack.key === packKey);
+  const fallbackPack =
+    IMPORTED_PACK_CACHE.find((pack) => pack.key === "classic") ??
+    IMPORTED_PACK_CACHE[0] ??
+    null;
+  const selectedPack = directPack ?? fallbackPack;
+  if (!selectedPack) return null;
+  const pool = selectedPack.casesByPlayers[modePlayerCount] ?? [];
+  if (pool.length === 0) return null;
+  const randomCase = pool[Math.floor(Math.random() * pool.length)];
+  return cloneStoredCase(randomCase);
+}
+
 async function syncCasePacksFromImportFile(): Promise<void> {
   if (!Array.isArray(BACKEND_CASE_PACKS) || BACKEND_CASE_PACKS.length === 0) return;
 
@@ -716,17 +807,21 @@ export async function listCasePacks(attempt = 0): Promise<CasePackInfo[]> {
       pack.caseCount = caseCount;
       packs.set(key, pack);
     }
-
-    return [...packs.values()].sort(
+    const result = [...packs.values()].sort(
       (a, b) => a.sortOrder - b.sortOrder || a.title.localeCompare(b.title, "ru"),
     );
+    const totalCases = result.reduce((sum, pack) => sum + Math.max(0, pack.caseCount || 0), 0);
+    if (result.length === 0 || totalCases === 0) {
+      return listCasePacksFromCache();
+    }
+    return result;
   } catch (error) {
     if (attempt === 0 && isUndefinedColumnError(error)) {
       ensurePromise = null;
       return listCasePacks(1);
     }
     console.error("listCasePacks failed", error);
-    return [];
+    return listCasePacksFromCache();
   }
 }
 
@@ -792,7 +887,9 @@ async function pickCaseFromPackDb(
     const selectedPool =
       legacyRows.length > linkedRows.length ? legacyRows : linkedRows.length > 0 ? linkedRows : legacyRows;
 
-    if (selectedPool.length === 0) return null;
+    if (selectedPool.length === 0) {
+      return pickCaseFromCache(packKey, safeCount);
+    }
     const row = selectedPool[Math.floor(Math.random() * selectedPool.length)];
     const facts = parseFactsMap(row.facts_json);
 
@@ -811,7 +908,7 @@ async function pickCaseFromPackDb(
       return pickCaseFromPackDb(packKey, modePlayerCount, 1);
     }
     console.error("pickCaseFromPackDb failed", error);
-    return null;
+    return pickCaseFromCache(packKey, safeCount);
   }
 }
 
