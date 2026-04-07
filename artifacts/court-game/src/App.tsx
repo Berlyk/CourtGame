@@ -7587,12 +7587,12 @@ export default function App() {
     const roomMaxPlayers = room.maxPlayers ?? roomModeMeta.maxPlayers;
     const usePreferredRoles = !!room.usePreferredRoles;
     const lobbyObservers = room.players.filter((player) => player.roleKey === "observer");
+    const visibleRoomPlayers = room.players.filter((player) => player.roleKey !== "observer");
     const isQuickRoomMode = room.modeKey === "quick_flex";
     const activeLobbyPlayers = room.players.filter(
       (player) => player.roleKey !== "witness" && player.roleKey !== "observer",
     );
     const activeLobbyPlayersCount = activeLobbyPlayers.length;
-    const hasExplicitLobbyRoles = activeLobbyPlayers.some((player) => !!player.lobbyAssignedRole);
     const lobbyAssignableRoles = getLobbyAssignableRoles(
       room.modeKey,
       activeLobbyPlayersCount,
@@ -8265,7 +8265,7 @@ export default function App() {
                 <div className="relative flex min-h-[460px] lg:min-h-[660px] flex-col pb-12">
                   <div className="grid gap-3">
                     <AnimatePresence>
-                      {room.players.map((player) => {
+                      {visibleRoomPlayers.map((player) => {
                         const resolvedUserId =
                           player.userId ?? knownUserIdByPlayerIdRef.current[player.id];
                         return (
@@ -8276,7 +8276,9 @@ export default function App() {
                           <PlayerCard
                             player={{ ...player, userId: resolvedUserId }}
                             isHost={player.id === room.hostId}
-                            showLobbyAssignedRole={usePreferredRoles || hasExplicitLobbyRoles}
+                            showLobbyAssignedRole={
+                              usePreferredRoles || (!usePreferredRoles && !!player.lobbyAssignedRole)
+                            }
                             rolePickerButton={
                               canOpenRolePickerForPlayer(player)
                                 ? {
@@ -8446,7 +8448,7 @@ export default function App() {
         </div>
         {renderPublicProfileDialog()}
         <Dialog open={observerListDialogOpen} onOpenChange={setObserverListDialogOpen}>
-          <DialogContent className="max-w-md border-zinc-800 bg-zinc-950 text-zinc-100">
+          <DialogContent className="max-w-lg border-zinc-800 bg-zinc-950 text-zinc-100">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Eye className="h-4 w-4" />
@@ -8457,11 +8459,61 @@ export default function App() {
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-2">
-              {lobbyObservers.map((player) => (
-                <div key={player.id} className="rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-sm text-zinc-200">
-                  {player.name}
-                </div>
-              ))}
+              {lobbyObservers.map((player) => {
+                const profileUserId =
+                  player.userId ?? knownUserIdByPlayerIdRef.current[player.id];
+                const canOpenProfile = !!profileUserId;
+                return (
+                  <button
+                    key={player.id}
+                    type="button"
+                    disabled={!canOpenProfile}
+                    onClick={() =>
+                      canOpenProfile
+                        ? openUserProfileFromPlayer({
+                            playerId: player.id,
+                            userId: profileUserId,
+                            name: player.name,
+                            avatar: player.avatar,
+                            banner: player.banner,
+                            selectedBadgeKey: player.selectedBadgeKey,
+                          })
+                        : undefined
+                    }
+                    className={`relative w-full overflow-hidden rounded-xl border bg-zinc-900/60 px-2.5 py-2 text-left ${
+                      canOpenProfile
+                        ? "cursor-pointer border-zinc-700 hover:border-zinc-500"
+                        : "cursor-default border-zinc-800"
+                    }`}
+                  >
+                    <div
+                      className="pointer-events-none absolute inset-0 opacity-80"
+                      style={getBannerStyle(player.banner, player.avatar, player.name)}
+                    />
+                    <div className="pointer-events-none absolute inset-0 bg-black/35" />
+                    <div className="relative z-10 flex items-center justify-between gap-2 min-w-0">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Avatar src={player.avatar ?? null} name={player.name} size={34} />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="truncate text-sm font-semibold text-zinc-100">{player.name}</span>
+                            {player.selectedBadgeKey ? (
+                              <span
+                                className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-zinc-600/80 shadow-[0_0_0_1px_rgba(0,0,0,0.28)] ${
+                                  getBadgeTheme(player.selectedBadgeKey).icon
+                                }`}
+                              >
+                                <BadgeGlyph badgeKey={player.selectedBadgeKey} className="h-3 w-3" />
+                              </span>
+                            ) : null}
+                          </div>
+                          <div className="text-xs text-zinc-300">Наблюдатель</div>
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </DialogContent>
         </Dialog>
@@ -9087,7 +9139,9 @@ export default function App() {
                     Все участники
                   </div>
                   <div className="space-y-1">
-                    {game.players.map((p) => {
+                    {game.players
+                      .filter((player) => player.roleKey !== "observer")
+                      .map((p) => {
                       const profileUserId =
                         p.userId ?? knownUserIdByPlayerIdRef.current[p.id];
                       return (
@@ -9818,7 +9872,7 @@ export default function App() {
             </InfoBlock>
           </div>
           {matchExpiresAt !== null && !game.finished && (
-            <div className="fixed right-5 bottom-[0.95rem] sm:bottom-[1.05rem] left-auto z-30 h-11 rounded-2xl px-3.5 inline-flex items-center gap-2 border border-zinc-700 bg-zinc-900/90 text-zinc-100 backdrop-blur-md shadow-[0_12px_30px_rgba(0,0,0,0.45)]">
+            <div className="fixed right-5 bottom-[0.55rem] sm:bottom-[0.65rem] left-auto z-30 h-11 rounded-2xl px-3.5 inline-flex items-center gap-2 border border-zinc-700 bg-zinc-900/90 text-zinc-100 backdrop-blur-md shadow-[0_12px_30px_rgba(0,0,0,0.45)]">
               <span className="inline-flex h-6 w-6 items-center justify-center rounded-lg bg-red-600 text-white shadow-sm shadow-red-900/50">
                 <Clock3 className="h-3.5 w-3.5" />
               </span>
@@ -9835,12 +9889,12 @@ export default function App() {
             onOpenChange={setContextHelpOpen}
             query={contextHelpQuery}
             onQueryChange={setContextHelpQuery}
-            floatingOffsetClass="bottom-[5.25rem] sm:bottom-[5.45rem]"
+            floatingOffsetClass="bottom-[5.35rem] sm:bottom-[5.55rem]"
           />
         </div>
         {renderPublicProfileDialog()}
         <Dialog open={observerListDialogOpen} onOpenChange={setObserverListDialogOpen}>
-          <DialogContent className="max-w-md border-zinc-800 bg-zinc-950 text-zinc-100">
+          <DialogContent className="max-w-lg border-zinc-800 bg-zinc-950 text-zinc-100">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Eye className="h-4 w-4" />
@@ -9851,11 +9905,61 @@ export default function App() {
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-2">
-              {gameObservers.map((player) => (
-                <div key={player.id} className="rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-sm text-zinc-200">
-                  {player.name}
-                </div>
-              ))}
+              {gameObservers.map((player) => {
+                const profileUserId =
+                  player.userId ?? knownUserIdByPlayerIdRef.current[player.id];
+                const canOpenProfile = !!profileUserId;
+                return (
+                  <button
+                    key={player.id}
+                    type="button"
+                    disabled={!canOpenProfile}
+                    onClick={() =>
+                      canOpenProfile
+                        ? openUserProfileFromPlayer({
+                            playerId: player.id,
+                            userId: profileUserId,
+                            name: player.name,
+                            avatar: player.avatar,
+                            banner: player.banner,
+                            selectedBadgeKey: player.selectedBadgeKey,
+                          })
+                        : undefined
+                    }
+                    className={`relative w-full overflow-hidden rounded-xl border bg-zinc-900/60 px-2.5 py-2 text-left ${
+                      canOpenProfile
+                        ? "cursor-pointer border-zinc-700 hover:border-zinc-500"
+                        : "cursor-default border-zinc-800"
+                    }`}
+                  >
+                    <div
+                      className="pointer-events-none absolute inset-0 opacity-80"
+                      style={getBannerStyle(player.banner, player.avatar, player.name)}
+                    />
+                    <div className="pointer-events-none absolute inset-0 bg-black/35" />
+                    <div className="relative z-10 flex items-center justify-between gap-2 min-w-0">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Avatar src={player.avatar ?? null} name={player.name} size={34} />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="truncate text-sm font-semibold text-zinc-100">{player.name}</span>
+                            {player.selectedBadgeKey ? (
+                              <span
+                                className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-zinc-600/80 shadow-[0_0_0_1px_rgba(0,0,0,0.28)] ${
+                                  getBadgeTheme(player.selectedBadgeKey).icon
+                                }`}
+                              >
+                                <BadgeGlyph badgeKey={player.selectedBadgeKey} className="h-3 w-3" />
+                              </span>
+                            ) : null}
+                          </div>
+                          <div className="text-xs text-zinc-300">Наблюдатель</div>
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </DialogContent>
         </Dialog>

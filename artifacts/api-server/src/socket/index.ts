@@ -39,7 +39,11 @@ import {
   type AssignableRole,
   type CreateRoomOptions,
 } from "./roomManager.js";
-import { getUserByToken, recordMatchOutcome } from "../lib/authStore.js";
+import {
+  getPublicUserProfileById,
+  getUserByToken,
+  recordMatchOutcome,
+} from "../lib/authStore.js";
 import {
   ensureCasePacksStorage,
   listCasePacks,
@@ -893,6 +897,11 @@ export function setupSocket(httpServer: HttpServer) {
           typeof authToken === "string" && authToken.trim()
             ? await getUserByToken(authToken.trim())
             : null;
+        const authPublicProfile = authUser?.id
+          ? await getPublicUserProfileById(authUser.id).catch(() => null)
+          : null;
+        const authSelectedBadgeKey =
+          authPublicProfile?.selectedBadgeKey ?? authUser?.selectedBadgeKey ?? undefined;
         const normalizedPlayerName = authUser
           ? (playerName || authUser.nickname || "Игрок 1").trim() || authUser.nickname
           : createGuestName();
@@ -905,7 +914,7 @@ export function setupSocket(httpServer: HttpServer) {
           sessionToken,
           avatar: avatar || authUser?.avatar || undefined,
           banner: banner || authUser?.banner || undefined,
-          selectedBadgeKey: authUser?.selectedBadgeKey || undefined,
+          selectedBadgeKey: authSelectedBadgeKey,
           preferredRole: (authUser?.preferredRole as AssignableRole | undefined) ?? null,
           lobbyAssignedRole: null,
           roleAssignmentSource: "random" as const,
@@ -932,6 +941,11 @@ export function setupSocket(httpServer: HttpServer) {
         typeof authToken === "string" && authToken.trim()
           ? await getUserByToken(authToken.trim())
           : null;
+      const authPublicProfile = authUser?.id
+        ? await getPublicUserProfileById(authUser.id).catch(() => null)
+        : null;
+      const authSelectedBadgeKey =
+        authPublicProfile?.selectedBadgeKey ?? authUser?.selectedBadgeKey ?? undefined;
       const existingNames = room
         ? [
             ...room.players.map((player: any) => player.name),
@@ -1077,7 +1091,7 @@ export function setupSocket(httpServer: HttpServer) {
         sessionToken,
         avatar: avatar || authUser?.avatar || undefined,
         banner: banner || authUser?.banner || undefined,
-        selectedBadgeKey: authUser?.selectedBadgeKey || undefined,
+        selectedBadgeKey: authSelectedBadgeKey,
         preferredRole: (authUser?.preferredRole as AssignableRole | undefined) ?? null,
         lobbyAssignedRole: null,
         roleAssignmentSource: "random" as const,
