@@ -540,6 +540,30 @@ async function ensureTablesInternal(): Promise<void> {
             OR NULLIF(to_jsonb(c)->>''pack_id'', '''') = cp.id::text
           )';
 
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = current_schema() AND table_name = 'case_pack_cases' AND column_name = 'pack_id'
+      ) THEN
+        EXECUTE '
+          UPDATE case_pack_cases
+          SET case_pack_id = COALESCE(case_pack_id, pack_id)
+          WHERE case_pack_id IS NULL
+            AND pack_id IS NOT NULL';
+
+        EXECUTE '
+          UPDATE case_pack_cases
+          SET pack_id = COALESCE(pack_id, case_pack_id)
+          WHERE pack_id IS NULL
+            AND case_pack_id IS NOT NULL';
+
+        BEGIN
+          EXECUTE ''ALTER TABLE case_pack_cases ALTER COLUMN pack_id DROP NOT NULL'';
+        EXCEPTION
+          WHEN OTHERS THEN
+            NULL;
+        END;
+      END IF;
+
       IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns
         WHERE table_schema = current_schema() AND table_name = 'case_pack_cases' AND column_name = 'mode_player_count'
