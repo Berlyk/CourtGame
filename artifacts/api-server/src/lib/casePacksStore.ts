@@ -1,4 +1,9 @@
+import crypto from "node:crypto";
 import { pool } from "@workspace/db";
+import {
+  BACKEND_CASE_PACKS,
+  type CompactCasePack,
+} from "./casePacksImportData.js";
 
 export interface CasePackInfo {
   key: string;
@@ -48,6 +53,17 @@ const ROLE_GOALS: Record<RoleKey, string> = {
 };
 
 let ensurePromise: Promise<void> | null = null;
+
+const IMPORT_PACK_KEY_MAP: Record<string, string> = {
+  classic: "classic",
+  template_pack_a: "medieval",
+  template_pack_b: "hard",
+  template_pack_c: "cyberpunk_2077",
+  template_pack_d: "wild_west",
+  template_pack_e: "the_boys",
+  template_pack_f: "adult_18_plus",
+  template_pack_g: "ancient_rome",
+};
 
 const KNOWN_PACK_ALIAS_MAP = new Map<string, string>();
 
@@ -166,6 +182,185 @@ function buildRolesFromFacts(
     };
   }
   return result;
+}
+
+function normalizeImportedPackKey(pack: CompactCasePack): string {
+  const rawKey = sanitizeCasePackKey(pack.key);
+  const mappedByKey = IMPORT_PACK_KEY_MAP[rawKey];
+  if (mappedByKey) return mappedByKey;
+  if (rawKey.startsWith("template_pack_")) {
+    const fromTitle = resolveKnownPackKey(pack.title) || sanitizeCasePackKey(pack.title);
+    if (fromTitle) return fromTitle;
+  }
+  return normalizeCasePackKey(rawKey || pack.title || "classic");
+}
+
+function normalizeImportedCaseKey(
+  rawKey: string | undefined,
+  playerCount: 3 | 4 | 5 | 6,
+  index: number,
+): string {
+  const safe = sanitizeCasePackKey(rawKey);
+  if (safe) return safe;
+  return `case_${playerCount}_${index + 1}`;
+}
+
+async function shouldHydrateCasePacksFromImportSource(): Promise<boolean> {
+  const stats = await pool.query<{
+    active_pack_count: string;
+    active_case_count: string;
+    classic_case_count: string;
+  }>(`
+    SELECT
+      (
+        SELECT COUNT(*)
+        FROM case_packs cp
+        WHERE COALESCE(NULLIF(to_jsonb(cp)->>'active', ''), NULLIF(to_jsonb(cp)->>'is_active', ''), 'true') <> 'false'
+      )::text AS active_pack_count,
+      (
+        SELECT COUNT(*)
+        FROM case_pack_cases c
+        WHERE COALESCE(NULLIF(to_jsonb(c)->>'active', ''), NULLIF(to_jsonb(c)->>'is_active', ''), 'true') <> 'false'
+      )::text AS active_case_count,
+      (
+        SELECT COUNT(*)
+        FROM case_pack_cases c
+        JOIN case_packs cp
+          ON NULLIF(to_jsonb(c)->>'case_pack_id', '') = NULLIF(to_jsonb(cp)->>'id', '')
+        WHERE COALESCE(NULLIF(to_jsonb(c)->>'active', ''), NULLIF(to_jsonb(c)->>'is_active', ''), 'true') <> 'false'
+          AND COALESCE(NULLIF(to_jsonb(cp)->>'active', ''), NULLIF(to_jsonb(cp)->>'is_active', ''), 'true') <> 'false'
+          AND lower(COALESCE(NULLIF(to_jsonb(cp)->>'key', ''), NULLIF(to_jsonb(cp)->>'pack_key', ''), '')) = 'classic'
+      )::text AS classic_case_count
+  `);
+
+  const row = stats.rows[0];
+  const activePacks = parseNumber(row?.active_pack_count, 0);
+  const activeCases = parseNumber(row?.active_case_count, 0);
+  const classicCases = parseNumber(row?.classic_case_count, 0);
+
+  if (activePacks === 0 || activeCases === 0) return true;
+  if (classicCases >= 1 && classicCases <= 81) return true;
+  return false;
+}
+
+async function hydrateCasePacksFromImportSource(): Promise<void> {
+  if (!Array.isArray(BACKEND_CASE_PACKS) || BACKEND_CASE_PACKS.length === 0) return;
+  if (!(await shouldHydrateCasePacksFromImportSource())) return;
+
+  await pool.query("BEGIN");
+  try {
+    await pool.query(`
+      UPDATE case_pack_cases
+      SET active = FALSE
+      WHERE active = TRUE
+    `);
+    await pool.query(`
+      UPDATE case_packs
+      SET active = FALSE
+      WHERE active = TRUE
+    `);
+
+    for (const sourcePack of BACKEND_CASE_PACKS) {
+      const packKey = normalizeImportedPackKey(sourcePack);
+      const packTitle = (sourcePack.title ?? "").trim().toUpperCase() || buildPackTitleFromKey(packKey);
+      const packDescription = (sourcePack.description ?? "").trim() || "Пак дел.";
+      const packSortOrder = parseNumber(String(sourcePack.sortOrder), 100);
+      const packIsAdult = Boolean(sourcePack.isAdult);
+
+      const packUpsert = await pool.query<{ id: string }>(
+        `
+          INSERT INTO case_packs (
+            id, key, title, description, is_adult, sort_order, active, created_at, updated_at
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, TRUE, NOW(), NOW())
+          ON CONFLICT (key) DO UPDATE
+          SET
+            title = EXCLUDED.title,
+            description = EXCLUDED.description,
+            is_adult = EXCLUDED.is_adult,
+            sort_order = EXCLUDED.sort_order,
+            active = TRUE,
+            updated_at = NOW()
+          RETURNING id
+        `,
+        [crypto.randomUUID(), packKey, packTitle, packDescription, packIsAdult, packSortOrder],
+      );
+      const packId = packUpsert.rows[0]?.id;
+      if (!packId) continue;
+
+      await pool.query(`UPDATE case_pack_cases SET active = FALSE WHERE case_pack_id = $1`, [packId]);
+
+      const usedCaseKeys = new Set<string>();
+      for (const playerCount of [3, 4, 5, 6] as const) {
+        const cases = sourcePack.casesByPlayers?.[playerCount] ?? [];
+        for (let index = 0; index < cases.length; index += 1) {
+          const caseItem = cases[index];
+          let caseKey = normalizeImportedCaseKey(caseItem?.key, playerCount, index);
+          if (usedCaseKeys.has(caseKey)) {
+            caseKey = `${caseKey}_${playerCount}_${index + 1}`;
+          }
+          usedCaseKeys.add(caseKey);
+
+          const title = (caseItem?.title ?? "").trim() || "Дело";
+          const description = (caseItem?.description ?? "").trim() || "Описание недоступно.";
+          const truth = (caseItem?.truth ?? "").trim() || "Истина недоступна.";
+          const evidence = parseStringArray(caseItem?.evidence);
+          const facts = parseFactsMap(caseItem?.facts);
+
+          await pool.query(
+            `
+              INSERT INTO case_pack_cases (
+                id,
+                case_pack_id,
+                case_key,
+                mode_player_count,
+                title,
+                description,
+                truth,
+                evidence_json,
+                facts_json,
+                sort_order,
+                active,
+                created_at,
+                updated_at
+              )
+              VALUES (
+                $1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10, TRUE, NOW(), NOW()
+              )
+              ON CONFLICT (case_pack_id, case_key) DO UPDATE
+              SET
+                mode_player_count = EXCLUDED.mode_player_count,
+                title = EXCLUDED.title,
+                description = EXCLUDED.description,
+                truth = EXCLUDED.truth,
+                evidence_json = EXCLUDED.evidence_json,
+                facts_json = EXCLUDED.facts_json,
+                sort_order = EXCLUDED.sort_order,
+                active = TRUE,
+                updated_at = NOW()
+            `,
+            [
+              crypto.randomUUID(),
+              packId,
+              caseKey,
+              playerCount,
+              title,
+              description,
+              truth,
+              JSON.stringify(evidence),
+              JSON.stringify(facts),
+              index + 1,
+            ],
+          );
+        }
+      }
+    }
+
+    await pool.query("COMMIT");
+  } catch (error) {
+    await pool.query("ROLLBACK");
+    throw error;
+  }
 }
 
 function isUndefinedColumnError(error: unknown): boolean {
@@ -418,9 +613,12 @@ async function ensureTablesInternal(): Promise<void> {
 
   await pool.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS case_packs_key_uidx ON case_packs(key);
+    CREATE UNIQUE INDEX IF NOT EXISTS case_pack_cases_pack_case_uidx ON case_pack_cases(case_pack_id, case_key);
     CREATE INDEX IF NOT EXISTS case_pack_cases_mode_idx ON case_pack_cases(mode_player_count);
     CREATE INDEX IF NOT EXISTS case_pack_cases_case_pack_id_mode_idx ON case_pack_cases(case_pack_id, mode_player_count);
   `);
+
+  await hydrateCasePacksFromImportSource();
 }
 
 export async function ensureCasePacksStorage(): Promise<void> {
