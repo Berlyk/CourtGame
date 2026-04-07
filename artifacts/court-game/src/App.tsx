@@ -1716,6 +1716,20 @@ interface RoomState {
   lobbyChat?: LobbyChatMessage[];
 }
 
+type GifCropTarget = "avatar" | "banner";
+type GifCropMeta = {
+  v: 1;
+  kind: "gif_crop";
+  src: string;
+  target: GifCropTarget;
+  zoom: number;
+  focusX: number;
+  focusY: number;
+  flipX: boolean;
+};
+
+const GIF_CROP_PREFIX = "cgif1:";
+
 function Avatar({
   src,
   name,
@@ -1725,13 +1739,30 @@ function Avatar({
   name: string;
   size?: number;
 }) {
-  if (src) {
+  const gifMeta = parseGifCropMeta(src);
+  const finalSrc = gifMeta?.src ?? src;
+  if (finalSrc) {
     return (
       <img
-        src={src}
+        src={finalSrc}
         alt={name}
         className="rounded-full object-cover flex-shrink-0 border border-zinc-700"
-        style={{ width: size, height: size }}
+        style={{
+          width: size,
+          height: size,
+          objectPosition:
+            gifMeta?.target === "avatar"
+              ? `${gifMeta.focusX}% ${gifMeta.focusY}%`
+              : undefined,
+          transform:
+            gifMeta?.target === "avatar"
+              ? `${gifMeta.flipX ? "scaleX(-1) " : ""}scale(${gifMeta.zoom})`
+              : undefined,
+          transformOrigin:
+            gifMeta?.target === "avatar"
+              ? `${gifMeta.focusX}% ${gifMeta.focusY}%`
+              : undefined,
+        }}
       />
     );
   }
@@ -1750,12 +1781,59 @@ function buildNeutralBannerGradient(): string {
   return "linear-gradient(180deg, rgba(70,74,84,0.88) 0%, rgba(46,49,58,0.9) 100%)";
 }
 
+function encodeGifCropMeta(meta: GifCropMeta): string {
+  try {
+    const json = JSON.stringify(meta);
+    return `${GIF_CROP_PREFIX}${btoa(json)}`;
+  } catch {
+    return meta.src;
+  }
+}
+
+function parseGifCropMeta(value: string | null | undefined): GifCropMeta | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed.startsWith(GIF_CROP_PREFIX)) return null;
+  try {
+    const encoded = trimmed.slice(GIF_CROP_PREFIX.length);
+    const decoded = atob(encoded);
+    const parsed = JSON.parse(decoded) as Partial<GifCropMeta>;
+    if (parsed?.kind !== "gif_crop" || parsed?.v !== 1 || typeof parsed.src !== "string") {
+      return null;
+    }
+    const zoom = Number(parsed.zoom);
+    const focusX = Number(parsed.focusX);
+    const focusY = Number(parsed.focusY);
+    return {
+      v: 1,
+      kind: "gif_crop",
+      src: parsed.src,
+      target: parsed.target === "avatar" ? "avatar" : "banner",
+      zoom: Number.isFinite(zoom) ? Math.max(1, Math.min(3, zoom)) : 1,
+      focusX: Number.isFinite(focusX) ? Math.max(0, Math.min(100, focusX)) : 50,
+      focusY: Number.isFinite(focusY) ? Math.max(0, Math.min(100, focusY)) : 50,
+      flipX: !!parsed.flipX,
+    };
+  } catch {
+    return null;
+  }
+}
+
 function getBannerStyle(
   banner: string | null | undefined,
   _avatar: string | null | undefined,
   _seedName: string,
 ): React.CSSProperties {
   const normalizedBanner = typeof banner === "string" ? banner.trim() : "";
+  const gifMeta = parseGifCropMeta(normalizedBanner);
+  if (gifMeta?.target === "banner") {
+    return {
+      backgroundImage: `url(${gifMeta.src})`,
+      backgroundSize: `${Math.max(100, gifMeta.zoom * 100)}%`,
+      backgroundPosition: `${gifMeta.focusX}% ${gifMeta.focusY}%`,
+      backgroundRepeat: "no-repeat",
+    };
+  }
   if (normalizedBanner) {
     return {
       backgroundImage: `url(${normalizedBanner})`,
@@ -2691,6 +2769,7 @@ export default function App() {
   const [imageCropDialogOpen, setImageCropDialogOpen] = useState(false);
   const [imageCropTarget, setImageCropTarget] = useState<CropTarget>("avatar");
   const [imageCropSource, setImageCropSource] = useState<string | null>(null);
+  const [imageCropSourceIsGif, setImageCropSourceIsGif] = useState(false);
   const [imageCropZoom, setImageCropZoom] = useState(1);
   const [imageCropOffsetX, setImageCropOffsetX] = useState(0);
   const [imageCropOffsetY, setImageCropOffsetY] = useState(0);
@@ -5044,10 +5123,9 @@ export default function App() {
   }, []);
 
   const openImageCropper = useCallback(
-    (file: File, target: CropTarget) => {
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const dataUrl = (ev.target?.result as string) || "";
+    async (file: File, target: CropTarget) => {
+      try {
+        const dataUrl = await readFileAsDataUrl(file);
         if (!dataUrl) return;
         const img = new Image();
         img.onload = () => {
@@ -5055,6 +5133,7 @@ export default function App() {
           setImageCropNaturalHeight(Math.max(1, img.naturalHeight || img.height || 1024));
           setImageCropTarget(target);
           setImageCropSource(dataUrl);
+          setImageCropSourceIsGif(isGifUpload(file));
           setImageCropZoom(1);
           setImageCropOffsetX(0);
           setImageCropOffsetY(0);
@@ -5066,6 +5145,7 @@ export default function App() {
           setImageCropNaturalHeight(1024);
           setImageCropTarget(target);
           setImageCropSource(dataUrl);
+          setImageCropSourceIsGif(isGifUpload(file));
           setImageCropZoom(1);
           setImageCropOffsetX(0);
           setImageCropOffsetY(0);
@@ -5073,16 +5153,43 @@ export default function App() {
           setImageCropDialogOpen(true);
         };
         img.src = dataUrl;
-      };
-      reader.readAsDataURL(file);
+      } catch {
+        setError("Не удалось загрузить изображение.");
+        setTimeout(() => setError(""), 3000);
+      }
     },
-    [],
+    [isGifUpload, readFileAsDataUrl],
   );
 
   const applyImageCrop = useCallback(async () => {
     if (!imageCropSource) return;
     setImageCropLoading(true);
     try {
+      if (imageCropSourceIsGif) {
+        const safeDisplayWidth = Math.max(1, imageCropDisplayWidth);
+        const safeDisplayHeight = Math.max(1, imageCropDisplayHeight);
+        const focusX = Math.max(0, Math.min(100, (0.5 - imageCropOffsetX / safeDisplayWidth) * 100));
+        const focusY = Math.max(0, Math.min(100, (0.5 - imageCropOffsetY / safeDisplayHeight) * 100));
+        const encodedGif = encodeGifCropMeta({
+          v: 1,
+          kind: "gif_crop",
+          src: imageCropSource,
+          target: imageCropTarget,
+          zoom: Math.max(1, Math.min(3, imageCropZoom)),
+          focusX,
+          focusY,
+          flipX: imageCropFlipX,
+        });
+        if (imageCropTarget === "avatar") {
+          setProfileAvatarDraft(encodedGif);
+        } else {
+          setProfileBannerDraft(encodedGif);
+        }
+        setImageCropDialogOpen(false);
+        setImageCropSource(null);
+        setImageCropSourceIsGif(false);
+        return;
+      }
       const cropped = await cropImageDataUrl({
         sourceDataUrl: imageCropSource,
         target: imageCropTarget,
@@ -5102,15 +5209,19 @@ export default function App() {
 
       setImageCropDialogOpen(false);
       setImageCropSource(null);
+      setImageCropSourceIsGif(false);
     } finally {
       setImageCropLoading(false);
     }
   }, [
     compressImage,
+    imageCropDisplayHeight,
+    imageCropDisplayWidth,
     imageCropOffsetX,
     imageCropOffsetY,
     imageCropFlipX,
     imageCropSource,
+    imageCropSourceIsGif,
     imageCropTarget,
     imageCropZoom,
   ]);
@@ -5168,47 +5279,23 @@ export default function App() {
   }, [imageCropMaxOffsetX, imageCropMaxOffsetY]);
 
   const handleAvatarChange = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
+    (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      if (isGifUpload(file)) {
-        try {
-          const gifDataUrl = await readFileAsDataUrl(file);
-          setProfileAvatarDraft(gifDataUrl);
-        } catch {
-          setError("Не удалось загрузить GIF-аватар.");
-          setTimeout(() => setError(""), 3000);
-        } finally {
-          e.target.value = "";
-        }
-        return;
-      }
-      openImageCropper(file, "avatar");
+      void openImageCropper(file, "avatar");
       e.target.value = "";
     },
-    [isGifUpload, openImageCropper, readFileAsDataUrl],
+    [openImageCropper],
   );
 
   const handleBannerChange = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
+    (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      if (isGifUpload(file)) {
-        try {
-          const gifDataUrl = await readFileAsDataUrl(file);
-          setProfileBannerDraft(gifDataUrl);
-        } catch {
-          setError("Не удалось загрузить GIF-баннер.");
-          setTimeout(() => setError(""), 3000);
-        } finally {
-          e.target.value = "";
-        }
-        return;
-      }
-      openImageCropper(file, "banner");
+      void openImageCropper(file, "banner");
       e.target.value = "";
     },
-    [isGifUpload, openImageCropper, readFileAsDataUrl],
+    [openImageCropper],
   );
 
   const copyCode = useCallback((code: string) => {
@@ -6119,6 +6206,7 @@ export default function App() {
             setImageCropDialogOpen(open);
             if (!open) {
               setImageCropSource(null);
+              setImageCropSourceIsGif(false);
               setImageCropLoading(false);
             }
           }}
