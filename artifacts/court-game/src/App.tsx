@@ -160,6 +160,8 @@ const RECONNECT_PERSISTENT_STORAGE_KEY = "court_reconnect_persistent";
 const RANK_TOAST_PENDING_STORAGE_KEY = "court_rank_toast_pending";
 const GUEST_NAME_PREFIX = "Гость-";
 const PROFILE_BIO_MAX = 150;
+const MAX_PROFILE_IMAGE_UPLOAD_BYTES = 6 * 1024 * 1024;
+const MAX_PROFILE_GIF_UPLOAD_BYTES = 3 * 1024 * 1024;
 const PACK_PAYWALL_PREVIEW_ENABLED = false;
 const PACK_PREVIEW_LOCKED_TITLES = new Set(["THE BOYS", "18+"]);
 
@@ -1726,6 +1728,10 @@ type GifCropMeta = {
   focusX: number;
   focusY: number;
   flipX: boolean;
+  displayRatioX?: number;
+  displayRatioY?: number;
+  offsetRatioX?: number;
+  offsetRatioY?: number;
 };
 
 const GIF_CROP_PREFIX = "cgif1:";
@@ -1742,6 +1748,29 @@ function Avatar({
   const gifMeta = parseGifCropMeta(src);
   const finalSrc = gifMeta?.src ?? src;
   if (finalSrc && gifMeta?.target === "avatar") {
+    const hasPreciseRatios =
+      typeof gifMeta.displayRatioX === "number" &&
+      Number.isFinite(gifMeta.displayRatioX) &&
+      gifMeta.displayRatioX > 0 &&
+      typeof gifMeta.displayRatioY === "number" &&
+      Number.isFinite(gifMeta.displayRatioY) &&
+      gifMeta.displayRatioY > 0 &&
+      typeof gifMeta.offsetRatioX === "number" &&
+      Number.isFinite(gifMeta.offsetRatioX) &&
+      typeof gifMeta.offsetRatioY === "number" &&
+      Number.isFinite(gifMeta.offsetRatioY);
+    const mediaWidth = hasPreciseRatios
+      ? size * (gifMeta.displayRatioX ?? 1)
+      : size;
+    const mediaHeight = hasPreciseRatios
+      ? size * (gifMeta.displayRatioY ?? 1)
+      : size;
+    const offsetXPx = hasPreciseRatios
+      ? size * (gifMeta.offsetRatioX ?? 0)
+      : 0;
+    const offsetYPx = hasPreciseRatios
+      ? size * (gifMeta.offsetRatioY ?? 0)
+      : 0;
     return (
       <div
         className="relative overflow-hidden rounded-full flex-shrink-0 border border-zinc-700"
@@ -1750,11 +1779,16 @@ function Avatar({
         <img
           src={finalSrc}
           alt={name}
-          className="h-full w-full object-cover select-none pointer-events-none"
+          className="absolute left-1/2 top-1/2 max-w-none select-none pointer-events-none"
           style={{
-            objectPosition: `${gifMeta.focusX}% ${gifMeta.focusY}%`,
-            transform: `${gifMeta.flipX ? "scaleX(-1) " : ""}scale(${gifMeta.zoom})`,
-            transformOrigin: `${gifMeta.focusX}% ${gifMeta.focusY}%`,
+            width: mediaWidth,
+            height: mediaHeight,
+            objectFit: "cover",
+            objectPosition: hasPreciseRatios ? "50% 50%" : `${gifMeta.focusX}% ${gifMeta.focusY}%`,
+            transform: hasPreciseRatios
+              ? `translate(calc(-50% + ${offsetXPx}px), calc(-50% + ${offsetYPx}px)) scaleX(${gifMeta.flipX ? -1 : 1})`
+              : `translate(-50%, -50%) ${gifMeta.flipX ? "scaleX(-1) " : ""}scale(${gifMeta.zoom})`,
+            transformOrigin: hasPreciseRatios ? "center center" : `${gifMeta.focusX}% ${gifMeta.focusY}%`,
           }}
         />
       </div>
@@ -1811,6 +1845,10 @@ function parseGifCropMeta(value: string | null | undefined): GifCropMeta | null 
     const zoom = Number(parsed.zoom);
     const focusX = Number(parsed.focusX);
     const focusY = Number(parsed.focusY);
+    const displayRatioX = Number(parsed.displayRatioX);
+    const displayRatioY = Number(parsed.displayRatioY);
+    const offsetRatioX = Number(parsed.offsetRatioX);
+    const offsetRatioY = Number(parsed.offsetRatioY);
     return {
       v: 1,
       kind: "gif_crop",
@@ -1820,6 +1858,10 @@ function parseGifCropMeta(value: string | null | undefined): GifCropMeta | null 
       focusX: Number.isFinite(focusX) ? Math.max(0, Math.min(100, focusX)) : 50,
       focusY: Number.isFinite(focusY) ? Math.max(0, Math.min(100, focusY)) : 50,
       flipX: !!parsed.flipX,
+      displayRatioX: Number.isFinite(displayRatioX) ? Math.max(0.1, Math.min(10, displayRatioX)) : undefined,
+      displayRatioY: Number.isFinite(displayRatioY) ? Math.max(0.1, Math.min(10, displayRatioY)) : undefined,
+      offsetRatioX: Number.isFinite(offsetRatioX) ? Math.max(-5, Math.min(5, offsetRatioX)) : undefined,
+      offsetRatioY: Number.isFinite(offsetRatioY) ? Math.max(-5, Math.min(5, offsetRatioY)) : undefined,
     };
   } catch {
     return null;
@@ -1919,7 +1961,7 @@ function parseRuDateToIso(value: string): string | null {
 }
 
 type CropTarget = "avatar" | "banner";
-const AVATAR_CROP_VIEW_SIZE = 280;
+const AVATAR_CROP_VIEW_SIZE = 320;
 const BANNER_CROP_VIEW_WIDTH = 960;
 const BANNER_CROP_VIEW_HEIGHT = 270;
 
@@ -2042,17 +2084,25 @@ async function authRequest<T>(
     body?: unknown;
   },
 ): Promise<T> {
-  const response = await fetch(`/api${path}`, {
-    method: options?.method ?? "GET",
-    headers: {
-      "Content-Type": "application/json",
-      ...(options?.token ? { Authorization: `Bearer ${options.token}` } : {}),
-    },
-    body: options?.body !== undefined ? JSON.stringify(options.body) : undefined,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`/api${path}`, {
+      method: options?.method ?? "GET",
+      headers: {
+        "Content-Type": "application/json",
+        ...(options?.token ? { Authorization: `Bearer ${options.token}` } : {}),
+      },
+      body: options?.body !== undefined ? JSON.stringify(options.body) : undefined,
+    });
+  } catch {
+    throw new Error("Не удалось выполнить запрос. Проверьте подключение.");
+  }
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
+    if (response.status === 413) {
+      throw new Error("Файл слишком большой. Уменьшите размер изображения.");
+    }
     const message =
       typeof payload?.message === "string" && payload.message.trim()
         ? payload.message
@@ -4365,22 +4415,28 @@ export default function App() {
       setProfileBirthDateError("Вам должно быть не меньше 13 лет.");
       return false;
     }
+    const authAvatar = authUser?.avatar ?? null;
+    const authBanner = authUser?.banner ?? null;
+    const profilePatch: Record<string, unknown> = {
+      nickname: normalizedName,
+      bio: profileBio.trim() || null,
+      gender: profileGender || null,
+      birthDate: normalizedBirthDate || null,
+      hideAge: profileHideAge,
+      selectedBadgeKey: selectedBadgeKey || null,
+      preferredRole: preferredRoleDraft || null,
+    };
+    const nextAvatar = profileAvatarDraft ?? null;
+    if (nextAvatar !== authAvatar) profilePatch.avatar = nextAvatar;
+    const nextBanner = profileBannerDraft ?? null;
+    if (nextBanner !== authBanner) profilePatch.banner = nextBanner;
+
     setProfileActionLoading(true);
     try {
       const payload = await authRequest<{ user: AuthUser }>("/auth/profile", {
         method: "PATCH",
         token: authToken,
-        body: {
-          nickname: normalizedName,
-          avatar: profileAvatarDraft,
-          banner: profileBannerDraft,
-          bio: profileBio.trim() || null,
-          gender: profileGender || null,
-          birthDate: normalizedBirthDate || null,
-          hideAge: profileHideAge,
-          selectedBadgeKey: selectedBadgeKey || null,
-          preferredRole: preferredRoleDraft || null,
-        },
+        body: profilePatch,
       });
       setAuthUser(payload.user);
       localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(payload.user));
@@ -4428,6 +4484,7 @@ export default function App() {
       setProfileActionLoading(false);
     }
   }, [
+    authUser,
     authToken,
     profileNicknameDraft,
     profileBirthDate,
@@ -5132,6 +5189,20 @@ export default function App() {
   const openImageCropper = useCallback(
     async (file: File, target: CropTarget) => {
       try {
+        const gifFile = isGifUpload(file);
+        const maxBytes = gifFile ? MAX_PROFILE_GIF_UPLOAD_BYTES : MAX_PROFILE_IMAGE_UPLOAD_BYTES;
+        if (file.size > maxBytes) {
+          const maxMb = gifFile
+            ? Math.round(MAX_PROFILE_GIF_UPLOAD_BYTES / (1024 * 1024))
+            : Math.round(MAX_PROFILE_IMAGE_UPLOAD_BYTES / (1024 * 1024));
+          setError(
+            gifFile
+              ? `GIF слишком тяжелый. Максимум ${maxMb} МБ.`
+              : `Файл слишком тяжелый. Максимум ${maxMb} МБ.`,
+          );
+          setTimeout(() => setError(""), 3500);
+          return;
+        }
         const dataUrl = await readFileAsDataUrl(file);
         if (!dataUrl) return;
         const img = new Image();
@@ -5140,7 +5211,7 @@ export default function App() {
           setImageCropNaturalHeight(Math.max(1, img.naturalHeight || img.height || 1024));
           setImageCropTarget(target);
           setImageCropSource(dataUrl);
-          setImageCropSourceIsGif(isGifUpload(file));
+          setImageCropSourceIsGif(gifFile);
           setImageCropZoom(1);
           setImageCropOffsetX(0);
           setImageCropOffsetY(0);
@@ -5152,7 +5223,7 @@ export default function App() {
           setImageCropNaturalHeight(1024);
           setImageCropTarget(target);
           setImageCropSource(dataUrl);
-          setImageCropSourceIsGif(isGifUpload(file));
+          setImageCropSourceIsGif(gifFile);
           setImageCropZoom(1);
           setImageCropOffsetX(0);
           setImageCropOffsetY(0);
@@ -5177,6 +5248,10 @@ export default function App() {
         const safeDisplayHeight = Math.max(1, imageCropDisplayHeight);
         const focusX = Math.max(0, Math.min(100, (0.5 - imageCropOffsetX / safeDisplayWidth) * 100));
         const focusY = Math.max(0, Math.min(100, (0.5 - imageCropOffsetY / safeDisplayHeight) * 100));
+        const displayRatioX = safeDisplayWidth / Math.max(1, imageCropViewport.width);
+        const displayRatioY = safeDisplayHeight / Math.max(1, imageCropViewport.height);
+        const offsetRatioX = imageCropOffsetX / Math.max(1, imageCropViewport.width);
+        const offsetRatioY = imageCropOffsetY / Math.max(1, imageCropViewport.height);
         const encodedGif = encodeGifCropMeta({
           v: 1,
           kind: "gif_crop",
@@ -5186,6 +5261,10 @@ export default function App() {
           focusX,
           focusY,
           flipX: imageCropFlipX,
+          displayRatioX,
+          displayRatioY,
+          offsetRatioX,
+          offsetRatioY,
         });
         if (imageCropTarget === "avatar") {
           setProfileAvatarDraft(encodedGif);
@@ -5230,6 +5309,8 @@ export default function App() {
     imageCropSource,
     imageCropSourceIsGif,
     imageCropTarget,
+    imageCropViewport.height,
+    imageCropViewport.width,
     imageCropZoom,
   ]);
 
@@ -6218,7 +6299,11 @@ export default function App() {
             }
           }}
         >
-          <DialogContent className="max-w-[1120px] border-zinc-800 bg-zinc-950 text-zinc-100">
+          <DialogContent
+            className={`border-zinc-800 bg-zinc-950 text-zinc-100 ${
+              imageCropTarget === "avatar" ? "max-w-[560px]" : "max-w-[1120px]"
+            }`}
+          >
             <DialogHeader>
               <DialogTitle>Редактировать изображение</DialogTitle>
               <DialogDescription className="text-zinc-400">
@@ -6229,41 +6314,36 @@ export default function App() {
               <div className="space-y-4">
                 <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
                   {imageCropTarget === "avatar" ? (
-                    <div
-                      className="relative mx-auto h-[320px] w-[320px] overflow-hidden rounded-2xl border border-zinc-700 bg-zinc-950"
-                      onPointerDown={startImageCropDrag}
-                      onPointerMove={moveImageCropDrag}
-                      onPointerUp={endImageCropDrag}
-                      onPointerCancel={endImageCropDrag}
-                      onWheel={onImageCropWheel}
-                    >
-                      <img
-                        src={imageCropSource}
-                        alt="crop-bg"
-                        draggable={false}
-                        className="absolute left-1/2 top-1/2 max-w-none select-none pointer-events-none"
+                    <div className="mx-auto flex justify-center">
+                      <div
+                        className="relative overflow-hidden rounded-2xl border border-zinc-700 bg-zinc-950 touch-none"
                         style={{
-                          transform: `translate(calc(-50% + ${imageCropOffsetX}px), calc(-50% + ${imageCropOffsetY}px)) scaleX(${imageCropFlipX ? -1 : 1})`,
-                          transformOrigin: "center center",
-                          width: `${imageCropDisplayWidth}px`,
-                          height: `${imageCropDisplayHeight}px`,
+                          width: `${imageCropViewport.width}px`,
+                          height: `${imageCropViewport.height}px`,
+                          maxWidth: "100%",
                         }}
-                      />
-                      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                        <div className="h-[280px] w-[280px] rounded-full border border-zinc-200/90 shadow-[0_0_0_9999px_rgba(0,0,0,0.42)]" />
+                        onPointerDown={startImageCropDrag}
+                        onPointerMove={moveImageCropDrag}
+                        onPointerUp={endImageCropDrag}
+                        onPointerCancel={endImageCropDrag}
+                        onWheel={onImageCropWheel}
+                      >
+                        <img
+                          src={imageCropSource}
+                          alt="crop-bg"
+                          draggable={false}
+                          className="absolute left-1/2 top-1/2 max-w-none select-none pointer-events-none"
+                          style={{
+                            transform: `translate(calc(-50% + ${imageCropOffsetX}px), calc(-50% + ${imageCropOffsetY}px)) scaleX(${imageCropFlipX ? -1 : 1})`,
+                            transformOrigin: "center center",
+                            width: `${imageCropDisplayWidth}px`,
+                            height: `${imageCropDisplayHeight}px`,
+                          }}
+                        />
+                        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                          <div className="h-full w-full rounded-full border border-zinc-200/90 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.14)]" />
+                        </div>
                       </div>
-                      <img
-                        src={imageCropSource}
-                        alt="crop-active"
-                        draggable={false}
-                        className="absolute left-1/2 top-1/2 max-w-none select-none pointer-events-none opacity-0"
-                        style={{
-                          transform: `translate(calc(-50% + ${imageCropOffsetX}px), calc(-50% + ${imageCropOffsetY}px)) scaleX(${imageCropFlipX ? -1 : 1})`,
-                          transformOrigin: "center center",
-                          width: `${imageCropDisplayWidth}px`,
-                          height: `${imageCropDisplayHeight}px`,
-                        }}
-                      />
                     </div>
                   ) : (
                     <div
@@ -6305,7 +6385,7 @@ export default function App() {
                     </div>
                   )}
                 </div>
-                <div className="grid gap-3 md:grid-cols-2">
+                <div className={`grid gap-3 ${imageCropTarget === "avatar" ? "" : "md:grid-cols-2"}`}>
                   <div className="space-y-1">
                     <label className="text-xs text-zinc-400">Масштаб</label>
                     <Input

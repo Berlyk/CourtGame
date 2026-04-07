@@ -495,7 +495,8 @@ function buildRoomUpdatePayload(room: any) {
 export function setupSocket(httpServer: HttpServer) {
   const io = new SocketIOServer(httpServer, {
     cors: { origin: "*" },
-    path: "/api/socket.io"
+    path: "/api/socket.io",
+    maxHttpBufferSize: 20 * 1024 * 1024,
   });
 
   const socketToRoom = new Map<
