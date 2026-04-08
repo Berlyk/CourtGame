@@ -5922,7 +5922,7 @@ export default function App() {
   const renderUpsellModal = () => (
     <Dialog open={upsellModalOpen} onOpenChange={setUpsellModalOpen}>
       <DialogContent
-        overlayClassName={upsellNestedBackdrop ? "bg-black/10" : undefined}
+        overlayClassName={upsellNestedBackdrop ? "!bg-transparent" : undefined}
         className="max-w-[470px] border-red-950/70 bg-[radial-gradient(130%_110%_at_0%_0%,rgba(239,68,68,0.22),transparent_50%),linear-gradient(160deg,rgba(12,10,11,0.98),rgba(10,10,12,0.98))] text-zinc-100 shadow-[0_24px_84px_rgba(0,0,0,0.72)]"
       >
         <DialogHeader>
@@ -6088,21 +6088,6 @@ export default function App() {
                 >
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/45 to-black/15" />
                   <div className="absolute inset-0 opacity-0 group-hover/banner:opacity-100 transition-opacity bg-black/15" />
-                  {profileBannerLocked && (
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        openSubscriptionUpsell(
-                          "canUseProfileBanner",
-                          "Баннер профиля доступен с подписки «Практик».",
-                        );
-                      }}
-                      className="absolute right-3 top-3 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full border border-zinc-600 bg-zinc-900/85 text-zinc-100 hover:bg-zinc-800"
-                    >
-                      <Lock className="h-3.5 w-3.5" />
-                    </button>
-                  )}
                   <div className="relative z-10 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                       <div className="flex items-center gap-4 min-w-0">
                       <div
@@ -6450,17 +6435,11 @@ export default function App() {
                             Рейтинг заблокирован
                           </div>
                           <div className="text-sm text-zinc-300 leading-relaxed">
-                            Подключите «Стажер», чтобы открыть ранговую систему и прогрессию.
+                            Рейтинг открывается с подпиской «Стажер».
                           </div>
-                          <div className="rounded-lg border border-zinc-800 bg-zinc-950/70 px-3 py-2">
-                            <div className="flex items-center justify-between text-xs text-zinc-500">
-                              <span>Прогресс ранга</span>
-                              <span>0%</span>
-                            </div>
-                            <div className="mt-2 h-1.5 w-full rounded-full bg-zinc-800">
-                              <div className="h-1.5 w-[16%] rounded-full bg-red-500/70" />
-                            </div>
-                            <div className="mt-2 text-xs text-zinc-400">Откроется после активации подписки.</div>
+                          <div className="rounded-lg border border-zinc-800 bg-zinc-950/70 px-3 py-2 text-xs text-zinc-400">
+                            Текущие очки сохранены: {currentRank?.points ?? 0}. Пока подписка не активна, прогресс
+                            ранга не изменяется.
                           </div>
                         </div>
                       ) : (
@@ -8029,9 +8008,7 @@ export default function App() {
               }}
             >
               <DialogContent
-                className={`w-[calc(100vw-1rem)] sm:w-[calc(100vw-2rem)] ${
-                  createPackCatalogOpen ? "max-w-2xl" : "max-w-[720px]"
-                } max-h-[88vh] overflow-y-auto border-zinc-800 bg-zinc-950 text-zinc-100 p-4 sm:p-6 ${HIDE_SCROLLBAR_CLASS} [scrollbar-width:thin] [scrollbar-color:rgba(82,82,91,0.35)_transparent] [&::-webkit-scrollbar]:w-[4px] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-600/45 [&::-webkit-scrollbar-thumb:hover]:bg-zinc-500/60 [&>button]:h-12 [&>button]:w-12 [&>button>svg]:h-7 [&>button>svg]:w-7 [&>button]:top-2 [&>button]:right-2`}
+                className={`w-[calc(100vw-1rem)] sm:w-[calc(100vw-2rem)] max-w-[720px] max-h-[88vh] overflow-y-auto border-zinc-800 bg-zinc-950 text-zinc-100 p-4 sm:p-6 ${HIDE_SCROLLBAR_CLASS} [scrollbar-width:thin] [scrollbar-color:rgba(82,82,91,0.35)_transparent] [&::-webkit-scrollbar]:w-[4px] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-600/45 [&::-webkit-scrollbar-thumb:hover]:bg-zinc-500/60 [&>button]:h-12 [&>button]:w-12 [&>button>svg]:h-7 [&>button>svg]:w-7 [&>button]:top-2 [&>button]:right-2`}
               >
                 <DialogHeader className="space-y-1">
                   <DialogTitle>Создать матч</DialogTitle>
@@ -8098,9 +8075,11 @@ export default function App() {
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0">
                                 <div className="text-sm font-semibold text-zinc-100 break-words">{displayTitle}</div>
-                                <div className="mt-0.5 text-[11px] leading-4 text-zinc-300 break-words">
-                                  {pack.description}
-                                </div>
+                                {!isLocked && (
+                                  <div className="mt-0.5 text-[11px] leading-4 text-zinc-300 break-words">
+                                    {pack.description}
+                                  </div>
+                                )}
                               </div>
                               <div className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${visual.countChip}`}>
                                 {pack.caseCount ?? 0} дел
@@ -8108,8 +8087,8 @@ export default function App() {
                             </div>
                             {isLocked && (
                               <>
-                                <div className="pointer-events-none absolute inset-0 rounded-2xl border border-zinc-600/65 bg-[linear-gradient(180deg,rgba(9,10,13,0.2),rgba(9,10,13,0.78))]" />
-                                <span className="pointer-events-none absolute left-1/2 top-1/2 inline-flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-zinc-500/75 bg-zinc-950/92 text-zinc-200 shadow-[0_0_14px_rgba(0,0,0,0.45)]">
+                                <div className="pointer-events-none absolute inset-0 rounded-2xl bg-black/58" />
+                                <span className="pointer-events-none absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-full border border-zinc-500/80 bg-zinc-950/92 text-zinc-200 shadow-[0_0_10px_rgba(0,0,0,0.45)]">
                                   <Lock className="h-3.5 w-3.5" />
                                 </span>
                               </>
@@ -8455,8 +8434,9 @@ export default function App() {
                       setPromoCodeResult(null);
                       setPromoDialogOpen(true);
                     }}
-                    className="h-10 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                    className="h-11 rounded-2xl border-zinc-700/80 bg-[linear-gradient(180deg,rgba(24,24,27,0.96),rgba(16,16,20,0.96))] px-5 text-zinc-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] hover:bg-zinc-800/95 hover:text-zinc-100"
                   >
+                    <Sparkles className="mr-2 h-4 w-4 text-red-300" />
                     Активировать промокод
                   </Button>
                 </div>
@@ -8535,17 +8515,17 @@ export default function App() {
               </CardContent>
             </Card>
             <Dialog open={promoDialogOpen} onOpenChange={setPromoDialogOpen}>
-              <DialogContent className="max-w-[560px] border-zinc-800 bg-[radial-gradient(120%_100%_at_0%_0%,rgba(239,68,68,0.2),transparent_55%),linear-gradient(145deg,rgba(13,13,17,0.98),rgba(10,10,12,0.98))] text-zinc-100 p-7">
+              <DialogContent className="max-w-[460px] border-zinc-800 bg-[radial-gradient(120%_100%_at_0%_0%,rgba(239,68,68,0.2),transparent_55%),linear-gradient(145deg,rgba(13,13,17,0.98),rgba(10,10,12,0.98))] text-zinc-100 p-8 sm:p-9">
                 <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2">
-                    <Sparkles className="h-4 w-4 text-red-300" />
+                  <DialogTitle className="flex items-center gap-2 text-2xl">
+                    <Sparkles className="h-5 w-5 text-red-300" />
                     Активация промокода
                   </DialogTitle>
-                  <DialogDescription className="text-zinc-400">
+                  <DialogDescription className="text-base text-zinc-400">
                     Введите код, чтобы активировать подписку или бонусный период.
                   </DialogDescription>
                 </DialogHeader>
-                <div className="space-y-3">
+                <div className="space-y-4">
                   <Input
                     value={promoCodeInput}
                     onChange={(event) => setPromoCodeInput(event.target.value.toUpperCase())}
@@ -8556,7 +8536,7 @@ export default function App() {
                       }
                     }}
                     placeholder="Введите промокод"
-                    className="h-12 rounded-xl border-zinc-700 bg-zinc-950/90 text-base text-zinc-100 placeholder:text-zinc-500"
+                    className="h-14 rounded-xl border-zinc-700 bg-zinc-950/90 text-lg text-zinc-100 placeholder:text-zinc-500"
                   />
                   <Button
                     type="button"
@@ -8564,7 +8544,7 @@ export default function App() {
                       void applyPromoCode();
                     }}
                     disabled={promoCodeLoading}
-                    className="h-12 w-full rounded-xl bg-[linear-gradient(135deg,rgba(239,68,68,1),rgba(220,38,38,1))] text-white shadow-[0_10px_20px_rgba(239,68,68,0.28)] hover:brightness-110 disabled:bg-zinc-700 disabled:text-zinc-300"
+                    className="h-14 w-full rounded-xl bg-[linear-gradient(135deg,rgba(239,68,68,1),rgba(220,38,38,1))] text-lg font-semibold text-white shadow-[0_10px_20px_rgba(239,68,68,0.28)] hover:brightness-110 disabled:bg-zinc-700 disabled:text-zinc-300"
                   >
                     {promoCodeLoading ? "Проверяем" : "Активировать"}
                   </Button>
@@ -8690,6 +8670,16 @@ export default function App() {
             </Card>
           </div>
         )}
+        <div className="mx-auto mt-8 max-w-6xl rounded-2xl border border-zinc-800 bg-zinc-900/70 px-4 py-4 text-center text-xs text-zinc-400 sm:text-sm">
+          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
+            <span className="hover:text-zinc-200 transition-colors">Политика конфиденциальности</span>
+            <span className="text-zinc-700">•</span>
+            <span className="hover:text-zinc-200 transition-colors">Пользовательское соглашение</span>
+            <span className="text-zinc-700">•</span>
+            <span className="hover:text-zinc-200 transition-colors">Политика оплаты</span>
+          </div>
+          <div className="mt-2 text-zinc-500">© 2026 CourtGame. Все права защищены.</div>
+        </div>
         {renderPublicProfileDialog()}
         {renderUpsellModal()}
         <ScreenTransitionLoader open={globalBlockingLoading} />

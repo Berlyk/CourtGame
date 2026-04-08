@@ -2051,7 +2051,7 @@ export async function recordMatchOutcome(input: {
       await pool.query(
         `
           INSERT INTO auth_user_ranks (user_id, points, updated_at)
-          VALUES ($1, $2, NOW())
+          VALUES ($1, GREATEST(0, $2), NOW())
           ON CONFLICT (user_id)
           DO UPDATE SET
             points = GREATEST(0, auth_user_ranks.points + EXCLUDED.points),
