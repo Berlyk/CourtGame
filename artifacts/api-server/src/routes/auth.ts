@@ -1,5 +1,6 @@
 ﻿import { Router } from "express";
 import {
+  applyPromoCodeByToken,
   assignSubscriptionByUserId,
   changeEmailByToken,
   changePasswordByToken,
@@ -9,6 +10,7 @@ import {
   loginAccount,
   logoutByToken,
   registerAccount,
+  upsertPromoCodeByAdmin,
   updateProfileByToken,
 } from "../lib/authStore.js";
 
@@ -262,6 +264,31 @@ authRouter.get("/auth/public/:id", async (req, res) => {
   return res.status(200).json({ profile });
 });
 
+authRouter.patch("/auth/promo/apply", async (req, res) => {
+  const token = getRequestToken(req.headers as Record<string, unknown>);
+  if (!token) {
+    return res.status(401).json({ message: "Не авторизован." });
+  }
+  const code = String(req.body?.code ?? "").trim();
+  if (!code) {
+    return res.status(400).json({ message: "Введите промокод." });
+  }
+  try {
+    const result = await applyPromoCodeByToken(token, code);
+    if (!result) {
+      return res.status(401).json({ message: "Сессия недействительна." });
+    }
+    return res.status(200).json({
+      ok: true,
+      message: result.message,
+      subscription: result.subscription,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Не удалось применить промокод.";
+    return res.status(400).json({ message });
+  }
+});
+
 authRouter.patch("/auth/admin/subscription", async (req, res) => {
   const token = getRequestToken(req.headers as Record<string, unknown>);
   if (!token) {
@@ -309,6 +336,60 @@ authRouter.patch("/auth/admin/subscription", async (req, res) => {
     return res.status(200).json({ ok: true, subscription });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Не удалось выдать подписку.";
+    return res.status(400).json({ message });
+  }
+});
+
+authRouter.patch("/auth/admin/promo", async (req, res) => {
+  const token = getRequestToken(req.headers as Record<string, unknown>);
+  if (!token) {
+    return res.status(401).json({ message: "Не авторизован." });
+  }
+  const adminUser = await getUserByToken(token);
+  if (!adminUser || adminUser.login.trim().toLowerCase() !== "berly") {
+    return res.status(403).json({ message: "Недостаточно прав." });
+  }
+
+  const code = String(req.body?.code ?? "").trim();
+  const tier = String(req.body?.tier ?? "").trim();
+  if (!code || !tier) {
+    return res.status(400).json({ message: "Нужны code и tier." });
+  }
+
+  try {
+    const promo = await upsertPromoCodeByAdmin({
+      code,
+      tier,
+      duration:
+        req.body?.duration === null || typeof req.body?.duration === "string"
+          ? req.body.duration
+          : undefined,
+      source:
+        req.body?.source === null || typeof req.body?.source === "string"
+          ? req.body.source
+          : undefined,
+      isActive: typeof req.body?.isActive === "boolean" ? req.body.isActive : true,
+      maxUses:
+        req.body?.maxUses === null || typeof req.body?.maxUses === "number"
+          ? req.body.maxUses
+          : undefined,
+      startsAt:
+        req.body?.startsAt === null ||
+        typeof req.body?.startsAt === "string" ||
+        typeof req.body?.startsAt === "number"
+          ? req.body.startsAt
+          : undefined,
+      expiresAt:
+        req.body?.expiresAt === null ||
+        typeof req.body?.expiresAt === "string" ||
+        typeof req.body?.expiresAt === "number"
+          ? req.body.expiresAt
+          : undefined,
+      createdByUserId: adminUser.id,
+    });
+    return res.status(200).json({ ok: true, promo });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Не удалось сохранить промокод.";
     return res.status(400).json({ message });
   }
 });

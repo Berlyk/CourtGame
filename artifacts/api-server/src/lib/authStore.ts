@@ -88,6 +88,11 @@ export interface UserSubscriptionView {
   capabilities: ReturnType<typeof getCapabilitiesForTier>;
 }
 
+export interface PromoApplyResult {
+  message: string;
+  subscription: UserSubscriptionView;
+}
+
 export interface UserMatchParticipantView {
   userId?: string;
   nickname: string;
@@ -600,6 +605,33 @@ async function ensureTables(): Promise<void> {
       await pool.query(`
         CREATE INDEX IF NOT EXISTS auth_user_match_history_user_finished_idx
         ON auth_user_match_history(user_id, finished_at DESC);
+      `);
+
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS auth_subscription_promocodes (
+          code_normalized TEXT PRIMARY KEY,
+          code_display TEXT NOT NULL,
+          tier TEXT NOT NULL DEFAULT 'free',
+          duration TEXT NOT NULL DEFAULT '1_month',
+          source TEXT NOT NULL DEFAULT 'system',
+          is_active BOOLEAN NOT NULL DEFAULT TRUE,
+          max_uses INTEGER,
+          used_count INTEGER NOT NULL DEFAULT 0,
+          starts_at TIMESTAMPTZ,
+          expires_at TIMESTAMPTZ,
+          created_by UUID,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS auth_user_promo_redemptions (
+          user_id UUID NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
+          code_normalized TEXT NOT NULL REFERENCES auth_subscription_promocodes(code_normalized) ON DELETE CASCADE,
+          redeemed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          PRIMARY KEY (user_id, code_normalized)
+        );
       `);
     })();
   }
@@ -1629,6 +1661,254 @@ export async function assignSubscriptionByUserId(input: {
   );
   if (!updated.rowCount) return null;
   return getSubscriptionByUserId(input.userId);
+}
+
+function normalizePromoCode(value: string): string {
+  return value.trim().toUpperCase().replace(/\s+/g, "");
+}
+
+function promoDurationLabel(duration: SubscriptionDuration): string {
+  switch (duration) {
+    case "1_day":
+      return "1 день";
+    case "7_days":
+      return "7 дней";
+    case "1_month":
+      return "1 месяц";
+    case "1_year":
+      return "1 год";
+    case "forever":
+      return "навсегда";
+    default:
+      return "1 месяц";
+  }
+}
+
+export async function applyPromoCodeByToken(
+  token: string,
+  code: string,
+): Promise<PromoApplyResult | null> {
+  await cleanupSessions();
+  const user = await getUserByToken(token);
+  if (!user) return null;
+
+  const normalizedCode = normalizePromoCode(code);
+  if (!normalizedCode) {
+    throw new Error("Введите промокод.");
+  }
+
+  const client = await pool.connect();
+  let tier: SubscriptionTier = "free";
+  let duration: SubscriptionDuration = "1_month";
+  try {
+    await client.query("BEGIN");
+    const promoResult = await client.query<{
+      tier: string;
+      duration: string;
+      source: string;
+      is_active: boolean;
+      max_uses: number | null;
+      used_count: number;
+      starts_at: Date | null;
+      expires_at: Date | null;
+    }>(
+      `
+        SELECT
+          tier,
+          duration,
+          source,
+          is_active,
+          max_uses,
+          used_count,
+          starts_at,
+          expires_at
+        FROM auth_subscription_promocodes
+        WHERE code_normalized = $1
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [normalizedCode],
+    );
+    if (!promoResult.rowCount) {
+      throw new Error("Промокод не найден.");
+    }
+    const promo = promoResult.rows[0];
+    if (!promo.is_active) {
+      throw new Error("Промокод выключен.");
+    }
+
+    const nowMs = Date.now();
+    if (promo.starts_at && promo.starts_at.getTime() > nowMs) {
+      throw new Error("Промокод еще не активен.");
+    }
+    if (promo.expires_at && promo.expires_at.getTime() <= nowMs) {
+      throw new Error("Срок действия промокода истек.");
+    }
+    if (
+      typeof promo.max_uses === "number" &&
+      Number.isFinite(promo.max_uses) &&
+      promo.max_uses >= 0 &&
+      promo.used_count >= promo.max_uses
+    ) {
+      throw new Error("Лимит активаций промокода исчерпан.");
+    }
+
+    const alreadyRedeemed = await client.query(
+      `
+        SELECT 1
+        FROM auth_user_promo_redemptions
+        WHERE user_id = $1 AND code_normalized = $2
+        LIMIT 1
+      `,
+      [user.id, normalizedCode],
+    );
+    if (alreadyRedeemed.rowCount) {
+      throw new Error("Этот промокод уже активирован на вашем аккаунте.");
+    }
+
+    tier = normalizeSubscriptionTier(promo.tier);
+    duration = normalizeSubscriptionDuration(promo.duration);
+    const source = normalizeSubscriptionSource(promo.source);
+    const startAt = new Date();
+    const durationMs = getDurationMs(duration);
+    const isLifetime = tier !== "free" && duration === "forever";
+    const endAt =
+      tier === "free"
+        ? null
+        : durationMs === null
+          ? null
+          : new Date(startAt.getTime() + durationMs);
+
+    await client.query(
+      `
+        UPDATE auth_users
+        SET
+          subscription_tier = $1,
+          subscription_start_at = $2,
+          subscription_end_at = $3,
+          subscription_is_lifetime = $4,
+          subscription_source = $5,
+          subscription_duration = $6
+        WHERE id = $7
+      `,
+      [tier, tier === "free" ? null : startAt, endAt, isLifetime, source, duration, user.id],
+    );
+
+    await client.query(
+      `
+        INSERT INTO auth_user_promo_redemptions (user_id, code_normalized, redeemed_at)
+        VALUES ($1, $2, NOW())
+      `,
+      [user.id, normalizedCode],
+    );
+
+    await client.query(
+      `
+        UPDATE auth_subscription_promocodes
+        SET used_count = used_count + 1, updated_at = NOW()
+        WHERE code_normalized = $1
+      `,
+      [normalizedCode],
+    );
+
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  const subscription = await getSubscriptionByUserId(user.id);
+  return {
+    message:
+      tier === "free"
+        ? "Промокод активирован."
+        : `Промокод активирован: ${subscription.label} (${promoDurationLabel(duration)}).`,
+    subscription,
+  };
+}
+
+export async function upsertPromoCodeByAdmin(input: {
+  code: string;
+  tier: string;
+  duration?: string | null;
+  source?: string | null;
+  isActive?: boolean;
+  maxUses?: number | null;
+  startsAt?: Date | string | number | null;
+  expiresAt?: Date | string | number | null;
+  createdByUserId?: string | null;
+}): Promise<{ code: string; tier: SubscriptionTier; duration: SubscriptionDuration }> {
+  await ensureTables();
+  const normalizedCode = normalizePromoCode(input.code);
+  if (!normalizedCode) {
+    throw new Error("Укажите промокод.");
+  }
+  const tier = normalizeSubscriptionTier(input.tier);
+  const duration = normalizeSubscriptionDuration(input.duration ?? "1_month");
+  const source = normalizeSubscriptionSource(input.source ?? "system");
+  const maxUses =
+    typeof input.maxUses === "number" && Number.isFinite(input.maxUses)
+      ? Math.max(0, Math.floor(input.maxUses))
+      : null;
+  const startsAt =
+    input.startsAt instanceof Date
+      ? input.startsAt
+      : input.startsAt
+        ? new Date(input.startsAt)
+        : null;
+  const expiresAt =
+    input.expiresAt instanceof Date
+      ? input.expiresAt
+      : input.expiresAt
+        ? new Date(input.expiresAt)
+        : null;
+
+  await pool.query(
+    `
+      INSERT INTO auth_subscription_promocodes (
+        code_normalized,
+        code_display,
+        tier,
+        duration,
+        source,
+        is_active,
+        max_uses,
+        starts_at,
+        expires_at,
+        created_by,
+        created_at,
+        updated_at
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW(),NOW())
+      ON CONFLICT (code_normalized)
+      DO UPDATE SET
+        code_display = EXCLUDED.code_display,
+        tier = EXCLUDED.tier,
+        duration = EXCLUDED.duration,
+        source = EXCLUDED.source,
+        is_active = EXCLUDED.is_active,
+        max_uses = EXCLUDED.max_uses,
+        starts_at = EXCLUDED.starts_at,
+        expires_at = EXCLUDED.expires_at,
+        updated_at = NOW()
+    `,
+    [
+      normalizedCode,
+      normalizedCode,
+      tier,
+      duration,
+      source,
+      input.isActive !== false,
+      maxUses,
+      startsAt && Number.isFinite(startsAt.getTime()) ? startsAt : null,
+      expiresAt && Number.isFinite(expiresAt.getTime()) ? expiresAt : null,
+      input.createdByUserId ?? null,
+    ],
+  );
+
+  return { code: normalizedCode, tier, duration };
 }
 
 export async function recordMatchOutcome(input: {

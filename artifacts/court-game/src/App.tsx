@@ -2821,6 +2821,12 @@ export default function App() {
   const [shopDuration, setShopDuration] = useState<
     Extract<SubscriptionDuration, "1_month" | "1_year">
   >("1_month");
+  const [promoCodeInput, setPromoCodeInput] = useState("");
+  const [promoCodeLoading, setPromoCodeLoading] = useState(false);
+  const [promoCodeResult, setPromoCodeResult] = useState<{
+    kind: "success" | "error";
+    text: string;
+  } | null>(null);
   const [upsellModalOpen, setUpsellModalOpen] = useState(false);
   const [upsellTitle, setUpsellTitle] = useState("Функция недоступна");
   const [upsellDescription, setUpsellDescription] = useState("");
@@ -3115,6 +3121,21 @@ export default function App() {
       ? freeCreatePack?.caseCount ?? 0
       : selectedCreatePack?.caseCount ?? 0,
   );
+  const navigateToShop = useCallback(() => {
+    setUpsellModalOpen(false);
+    setCreateMatchDialogOpen(false);
+    setCreatePackCatalogOpen(false);
+    setJoinPasswordDialogOpen(false);
+    setJoinPasswordDialogMatch(null);
+    setJoinPasswordInput("");
+    setJoinPasswordDialogError("");
+    setJoinPasswordVisible(false);
+    setRoomManageOpen(false);
+    setLobbyRoleDialogOpen(false);
+    setObserverListDialogOpen(false);
+    setHomeTab("shop");
+    setScreen("home");
+  }, []);
   const openSubscriptionUpsell = useCallback(
     (
       capability: SubscriptionCapabilityKey,
@@ -3129,6 +3150,51 @@ export default function App() {
     },
     [],
   );
+  const applyPromoCode = useCallback(async () => {
+    if (promoCodeLoading) return;
+    const code = promoCodeInput.trim();
+    if (!code) {
+      setPromoCodeResult({ kind: "error", text: "Введите промокод." });
+      return;
+    }
+    if (!authToken) {
+      setPromoCodeResult({
+        kind: "error",
+        text: "Нужно войти в аккаунт для активации промокода.",
+      });
+      setAuthMode("login");
+      setAuthDialogOpen(true);
+      return;
+    }
+    setPromoCodeLoading(true);
+    setPromoCodeResult(null);
+    try {
+      const payload = await authRequest<{ ok: true; message: string }>("/auth/promo/apply", {
+        method: "PATCH",
+        token: authToken,
+        body: { code },
+      });
+      setPromoCodeInput("");
+      setPromoCodeResult({
+        kind: "success",
+        text: payload.message || "Промокод активирован.",
+      });
+      const profilePayload = await authRequest<{ profile: PublicUserProfile }>("/auth/profile", {
+        token: authToken,
+      });
+      setMyProfile(profilePayload.profile);
+    } catch (error) {
+      setPromoCodeResult({
+        kind: "error",
+        text:
+          error instanceof Error
+            ? localizeAuthError(error.message)
+            : "Не удалось активировать промокод.",
+      });
+    } finally {
+      setPromoCodeLoading(false);
+    }
+  }, [authToken, promoCodeInput, promoCodeLoading]);
   useEffect(() => {
     if (canCreatePrivateRooms || !createRoomPrivate) return;
     setCreateRoomPrivate(false);
@@ -5796,16 +5862,19 @@ export default function App() {
 
   const renderUpsellModal = () => (
     <Dialog open={upsellModalOpen} onOpenChange={setUpsellModalOpen}>
-      <DialogContent className="max-w-md border-zinc-800 bg-zinc-950 text-zinc-100">
+      <DialogContent className="max-w-[460px] border-zinc-700 bg-[radial-gradient(120%_100%_at_50%_0%,rgba(239,68,68,0.16),transparent_52%),linear-gradient(160deg,rgba(10,10,14,0.98),rgba(16,16,22,0.98))] text-zinc-100 shadow-[0_24px_80px_rgba(0,0,0,0.68)]">
         <DialogHeader>
-          <DialogTitle>{upsellTitle}</DialogTitle>
-          <DialogDescription className="text-zinc-400">
+          <div className="mb-1 inline-flex h-9 w-9 items-center justify-center rounded-full border border-red-500/45 bg-red-600/15 text-red-200">
+            <Lock className="h-4 w-4" />
+          </div>
+          <DialogTitle className="text-xl">{upsellTitle}</DialogTitle>
+          <DialogDescription className="text-zinc-300">
             {upsellDescription}
           </DialogDescription>
         </DialogHeader>
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/70 px-3 py-3 text-sm text-zinc-300">
+        <div className="rounded-xl border border-zinc-700 bg-zinc-900/85 px-3 py-3 text-sm text-zinc-300">
           Требуется подписка:{" "}
-          <span className="font-semibold text-zinc-100">
+          <span className="font-semibold text-red-100">
             {getSubscriptionTierLabel(upsellRequiredTier)}
           </span>
         </div>
@@ -5813,11 +5882,7 @@ export default function App() {
           <Button
             type="button"
             className="h-10 flex-1 rounded-xl bg-red-600 text-white hover:bg-red-500"
-            onClick={() => {
-              setUpsellModalOpen(false);
-              setHomeTab("shop");
-              setScreen("home");
-            }}
+            onClick={navigateToShop}
           >
             Перейти в магазин
           </Button>
@@ -5870,7 +5935,6 @@ export default function App() {
     const totalWinRate = profileData?.stats?.totalWinRate ?? 0;
     const profileSubscription = resolveSubscriptionView(profileData?.subscription);
     const profileTier = normalizeSubscriptionTier(profileSubscription.tier);
-    const profilePlan = SUBSCRIPTION_PLANS.find((plan) => plan.tier === profileTier);
     const lockedRatingForProfile = !hasCapability(profileTier, "canUseRating");
     const profileBannerLocked = !canUseProfileBanner;
     const currentRank = profileData?.rank;
@@ -5965,23 +6029,20 @@ export default function App() {
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/45 to-black/15" />
                   <div className="absolute inset-0 opacity-0 group-hover/banner:opacity-100 transition-opacity bg-black/15" />
                   {profileBannerLocked && (
-                    <div className="pointer-events-none absolute inset-0 z-20">
-                      <div className="absolute inset-0 bg-black/45" />
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          openSubscriptionUpsell(
-                            "canUseProfileBanner",
-                            "Баннер профиля доступен с подписки «Практик».",
-                          );
-                        }}
-                        className="pointer-events-auto absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-full border border-zinc-600 bg-zinc-900/85 px-3 py-1 text-xs text-zinc-100 hover:bg-zinc-800"
-                      >
-                        <Lock className="h-3.5 w-3.5" />
-                        Баннер с «Практик»
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        openSubscriptionUpsell(
+                          "canUseProfileBanner",
+                          "Баннер профиля доступен с подписки «Практик».",
+                        );
+                      }}
+                      className="absolute right-3 top-3 z-20 inline-flex items-center gap-1.5 rounded-full border border-zinc-600 bg-zinc-900/85 px-3 py-1 text-xs text-zinc-100 hover:bg-zinc-800"
+                    >
+                      <Lock className="h-3.5 w-3.5" />
+                      Баннер с «Практик»
+                    </button>
                   )}
                   <div className="relative z-10 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                       <div className="flex items-center gap-4 min-w-0">
@@ -6310,30 +6371,12 @@ export default function App() {
                               ? "Ограниченный доступ"
                               : "Срок уточняется"}
                       </div>
-                      <div className="mt-3 space-y-1 text-xs text-zinc-300">
-                        {(profileTier === "free"
-                          ? [
-                              "Откроется рейтинг",
-                              "Доступ к дополнительным пакам",
-                              "Статусные возможности профиля",
-                            ]
-                          : profilePlan?.features.slice(0, 4) ?? []
-                        ).map((feature) => (
-                          <div key={`sub-feature-${feature}`} className="flex items-start gap-2">
-                            <span className="mt-1 inline-flex h-1.5 w-1.5 rounded-full bg-red-400" />
-                            <span>{feature}</span>
-                          </div>
-                        ))}
-                      </div>
                       <Button
                         type="button"
                         className="mt-3 h-9 w-full rounded-xl bg-red-600 text-white hover:bg-red-500"
-                        onClick={() => {
-                          setHomeTab("shop");
-                          setScreen("home");
-                        }}
+                        onClick={navigateToShop}
                       >
-                        {profileTier === "free" ? "Перейти в магазин" : "Управление подпиской"}
+                        Обновить план
                       </Button>
                     </div>
                   </div>
@@ -6350,16 +6393,6 @@ export default function App() {
                           <div className="text-sm text-zinc-300">
                             Рейтинг доступен с подписки «Стажер».
                           </div>
-                          <Button
-                            type="button"
-                            className="h-9 rounded-xl bg-red-600 text-white hover:bg-red-500"
-                            onClick={() => {
-                              setHomeTab("shop");
-                              setScreen("home");
-                            }}
-                          >
-                            Открыть в магазине
-                          </Button>
                         </div>
                       ) : (
                         <>
@@ -8007,12 +8040,9 @@ export default function App() {
                             </div>
                             {isLocked && (
                               <div className="pointer-events-none absolute inset-0 rounded-2xl bg-zinc-950/78">
-                                <span className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+                                <span className="absolute inset-0 flex items-center justify-center">
                                   <span className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-zinc-400/70 bg-zinc-900/92 text-zinc-100 shadow-[0_0_20px_rgba(0,0,0,0.55)]">
                                     <Lock className="h-4 w-4" />
-                                  </span>
-                                  <span className="rounded-full border border-zinc-600/80 bg-zinc-900/92 px-2 py-0.5 text-[10px] text-zinc-200">
-                                    С {getSubscriptionTierLabel(requiredTier)}
                                   </span>
                                 </span>
                               </div>
@@ -8163,9 +8193,7 @@ export default function App() {
                               </span>
                             </div>
                             <div className="text-xs text-zinc-500">
-                              {canCreatePrivateRooms
-                                ? "В приватную комнату можно зайти только по коду и паролю."
-                                : "Доступно только в подписке «Арбитр»."}
+                              В приватную комнату можно зайти только по коду и паролю.
                             </div>
                           </div>
                           <Switch
@@ -8355,7 +8383,8 @@ export default function App() {
                     </button>
                   ))}
                 </div>
-                <div className="mt-5 grid gap-3 md:grid-cols-3">
+                <h3 className="mt-6 text-center text-2xl font-semibold">Обновите свой план</h3>
+                <div className="mt-5 grid gap-4 xl:grid-cols-3">
                   {SUBSCRIPTION_PLANS.map((plan) => {
                     const isCurrent = myTier === plan.tier;
                     const displayPrice =
@@ -8363,29 +8392,41 @@ export default function App() {
                     return (
                       <div
                         key={`shop-plan-${plan.tier}`}
-                        className={`rounded-2xl border px-4 py-4 ${
+                        className={`relative flex min-h-[520px] flex-col rounded-3xl border p-5 ${
                           plan.isPopular
-                            ? "border-red-500/70 bg-red-950/20 shadow-[0_0_0_1px_rgba(239,68,68,0.35),0_0_24px_rgba(239,68,68,0.25)]"
-                            : "border-zinc-700 bg-zinc-950/70"
+                            ? "border-red-400/70 bg-[radial-gradient(120%_100%_at_50%_0%,rgba(239,68,68,0.28),transparent_60%),linear-gradient(160deg,rgba(40,14,18,0.95),rgba(22,22,28,0.95))] shadow-[0_0_0_1px_rgba(248,113,113,0.35),0_0_26px_rgba(239,68,68,0.26)]"
+                            : "border-zinc-700 bg-[linear-gradient(160deg,rgba(26,26,30,0.96),rgba(20,20,24,0.96))]"
                         }`}
                       >
                         {plan.isPopular && (
-                          <div className="mb-2 inline-flex rounded-full border border-red-400/60 bg-red-600/20 px-2.5 py-1 text-[11px] font-semibold text-red-100">
-                            Самый популярный
+                          <div className="absolute right-4 top-4 inline-flex rounded-full border border-red-300/60 bg-red-600/25 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-red-100">
+                            Рекомендуется
                           </div>
                         )}
-                        <div className="text-lg font-semibold">{plan.title}</div>
-                        <div className="text-xs text-zinc-400">{plan.shortLabel}</div>
-                        <div className="mt-3 text-2xl font-bold text-zinc-100">
-                          {displayPrice} RUB
+                        <div className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-zinc-600 bg-zinc-900/70 text-zinc-100">
+                          {plan.tier === "trainee" ? (
+                            <Shield className="h-4 w-4" />
+                          ) : plan.tier === "practitioner" ? (
+                            <Gem className="h-4 w-4" />
+                          ) : (
+                            <Crown className="h-4 w-4" />
+                          )}
                         </div>
-                        <div className="text-xs text-zinc-400">
-                          / {shopDuration === "1_year" ? "год" : "месяц"}
+                        <div className="mt-4 text-3xl font-bold text-zinc-100">{plan.title}</div>
+                        <div className="mt-1 text-sm text-zinc-400">{plan.shortLabel}</div>
+                        <div className="mt-4 text-4xl font-bold leading-none text-zinc-100">
+                          {displayPrice}
                         </div>
-                        <div className="mt-3 space-y-1 text-sm text-zinc-200">
+                        <div className="mt-1 text-sm text-zinc-400">
+                          RUB / {shopDuration === "1_year" ? "год" : "месяц"}
+                        </div>
+                        <div className="mt-4 h-px w-full bg-zinc-700/60" />
+                        <div className="mt-4 space-y-2 text-sm text-zinc-200">
                           {plan.features.map((feature) => (
-                            <div key={`${plan.tier}-${feature}`} className="flex items-start gap-2">
-                              <span className="mt-1 inline-flex h-1.5 w-1.5 rounded-full bg-red-400" />
+                            <div key={`${plan.tier}-${feature}`} className="flex items-start gap-2.5">
+                              <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-zinc-600 bg-zinc-900/75">
+                                <Sparkles className="h-3 w-3 text-zinc-300" />
+                              </span>
                               <span>{feature}</span>
                             </div>
                           ))}
@@ -8400,13 +8441,13 @@ export default function App() {
                             setUpsellRequiredTier(plan.tier);
                             setUpsellModalOpen(true);
                           }}
-                          className={`mt-4 h-10 w-full rounded-xl ${
+                          className={`mt-auto h-11 w-full rounded-xl ${
                             isCurrent
-                              ? "bg-zinc-700 text-zinc-200 hover:bg-zinc-700"
+                              ? "bg-zinc-700 text-zinc-300 hover:bg-zinc-700"
                               : "bg-red-600 text-white hover:bg-red-500"
                           }`}
                         >
-                          {isCurrent ? "Текущий тариф" : "Оформить"}
+                          {isCurrent ? "Ваш текущий план" : "Выбрать"}
                         </Button>
                       </div>
                     );
@@ -8417,45 +8458,50 @@ export default function App() {
 
             <Card className="rounded-[28px] border-zinc-800 bg-zinc-900/95 text-zinc-100">
               <CardContent className="p-6 md:p-8">
-                <h3 className="text-xl font-semibold">Сравнение возможностей</h3>
-                <div className="mt-4 overflow-x-auto">
-                  <table className="w-full min-w-[680px] border-separate border-spacing-0 text-sm">
-                    <thead>
-                      <tr className="text-left text-zinc-400">
-                        <th className="pb-2 pr-2">Функция</th>
-                        <th className="pb-2 pr-2">Free</th>
-                        <th className="pb-2 pr-2">Стажер</th>
-                        <th className="pb-2 pr-2">Практик</th>
-                        <th className="pb-2">Арбитр</th>
-                      </tr>
-                    </thead>
-                    <tbody className="text-zinc-200">
-                      {[
-                        ["Рейтинг", "canUseRating"],
-                        ["Пак «Особо тяжкие»", "canAccessPackSevere"],
-                        ["Пак «18+»", "canAccessPack18"],
-                        ["Все паки", "canAccessAllPacks"],
-                        ["Выбор своей роли (хост)", "canChooseRoleInOwnLobby"],
-                        ["Разрешить игрокам выбирать роли", "canLetPlayersChooseRoles"],
-                        ["Баннер профиля", "canUseProfileBanner"],
-                        ["GIF-аватар/GIF-баннер", "canUseAnimatedProfileMedia"],
-                        ["Подсветка комнаты", "canHighlightHostedMatch"],
-                        ["Приватные комнаты", "canCreatePrivateRooms"],
-                        ["Выбор роли в чужих лобби", "canChooseRoleInOtherLobbies"],
-                        ["Создание паков (скоро)", "canCreatePacks"],
-                      ].map(([label, key]) => (
-                        <tr key={`shop-compare-${key}`} className="border-t border-zinc-800/60">
-                          <td className="border-t border-zinc-800/60 py-2 pr-2">{label}</td>
-                          {(["free", "trainee", "practitioner", "arbiter"] as SubscriptionTier[]).map((tier) => (
-                            <td key={`shop-compare-${key}-${tier}`} className="border-t border-zinc-800/60 py-2 pr-2">
-                              {hasCapability(tier, key as SubscriptionCapabilityKey) ? "Да" : "Нет"}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <h3 className="text-xl font-semibold">Промокод</h3>
+                <p className="mt-2 text-sm text-zinc-400">
+                  Введите код, чтобы активировать подписку или бонусный период.
+                </p>
+                <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
+                  <Input
+                    value={promoCodeInput}
+                    onChange={(event) => setPromoCodeInput(event.target.value.toUpperCase())}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        void applyPromoCode();
+                      }
+                    }}
+                    placeholder="Например: COURT-TRIAL-7D"
+                    className="h-11 rounded-xl border-zinc-700 bg-zinc-950 text-zinc-100 placeholder:text-zinc-500"
+                  />
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      void applyPromoCode();
+                    }}
+                    disabled={promoCodeLoading}
+                    className="h-11 rounded-xl bg-red-600 px-5 text-white hover:bg-red-500 disabled:bg-zinc-700 disabled:text-zinc-300"
+                  >
+                    {promoCodeLoading ? "Проверяем" : "Активировать"}
+                  </Button>
                 </div>
+                {promoCodeResult && (
+                  <div
+                    className={`mt-3 rounded-xl border px-3 py-2 text-sm ${
+                      promoCodeResult.kind === "success"
+                        ? "border-emerald-500/45 bg-emerald-600/10 text-emerald-200"
+                        : "border-red-500/45 bg-red-600/10 text-red-200"
+                    }`}
+                  >
+                    {promoCodeResult.text}
+                  </div>
+                )}
+                {!authToken && (
+                  <div className="mt-3 text-xs text-zinc-500">
+                    Для активации промокода нужно войти в аккаунт.
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -8614,31 +8660,9 @@ export default function App() {
       if (player.roleKey === "witness" || player.roleKey === "observer") return null;
       const isSelf = player.id === myLobbyPlayer?.id;
       if (hasRoomHostControl) {
-        if (isSelf && !canChooseRoleInOwnLobby) {
-          return {
-            label: "Роль закрыта",
-            locked: true,
-            hint: "Доступно с подписки «Стажер».",
-            onClick: () =>
-              openSubscriptionUpsell(
-                "canChooseRoleInOwnLobby",
-                "Выбор своей роли доступен с подписки «Стажер».",
-              ),
-          };
-        }
+        if (isSelf && !canChooseRoleInOwnLobby) return null;
         if (!isSelf && usePreferredRoles) return null;
-        if (!isSelf && !canLetPlayersChooseRoles) {
-          return {
-            label: "Роль закрыта",
-            locked: true,
-            hint: "Доступно с подписки «Практик».",
-            onClick: () =>
-              openSubscriptionUpsell(
-                "canLetPlayersChooseRoles",
-                "Управление выбором ролей игроков доступно с подписки «Практик».",
-              ),
-          };
-        }
+        if (!isSelf && !canLetPlayersChooseRoles) return null;
         return {
           label: "Выбрать роль",
           locked: false,
@@ -8649,18 +8673,7 @@ export default function App() {
         };
       }
       if (!isSelf) return null;
-      if (!canChooseRoleInOtherLobbies) {
-        return {
-          label: "Роль закрыта",
-          locked: true,
-          hint: "Доступно только в подписке «Арбитр».",
-          onClick: () =>
-            openSubscriptionUpsell(
-              "canChooseRoleInOtherLobbies",
-              "Выбор роли в чужом лобби доступен только в подписке «Арбитр».",
-            ),
-        };
-      }
+      if (!usePreferredRoles || !canChooseRoleInOtherLobbies) return null;
       return {
         label: "Выбрать роль",
         locked: false,
@@ -8678,7 +8691,9 @@ export default function App() {
         ? roleDialogTargetPlayer.id === myLobbyPlayer?.id
           ? canChooseRoleInOwnLobby
           : !usePreferredRoles && canLetPlayersChooseRoles
-        : roleDialogTargetPlayer.id === myLobbyPlayer?.id && canChooseRoleInOtherLobbies);
+        : roleDialogTargetPlayer.id === myLobbyPlayer?.id &&
+          usePreferredRoles &&
+          canChooseRoleInOtherLobbies);
     const canStartRoomNow = isQuickRoomMode
       ? activeLobbyPlayersCount >= 3 && activeLobbyPlayersCount <= roomMaxPlayers
       : activeLobbyPlayersCount === roomMaxPlayers;
@@ -8876,7 +8891,7 @@ export default function App() {
                   Настройки ведущего для текущего лобби.
                 </DialogDescription>
               </DialogHeader>
-              <div className="grid gap-3 md:grid-cols-2">
+              <div className="grid items-start gap-3 md:grid-cols-2">
                 <div className="rounded-2xl border border-zinc-800/90 bg-zinc-900/55 px-4 py-3">
                   <div className="flex items-center justify-between gap-3">
                     <div className="text-sm font-medium text-zinc-100">Я - Судья</div>
@@ -8891,11 +8906,6 @@ export default function App() {
                     </div>
                     <Switch checked={usePreferredRoles} onCheckedChange={togglePreferredRoles} />
                   </div>
-                  {!canLetPlayersChooseRoles && (
-                    <div className="mt-2 text-xs text-zinc-500">
-                      Доступно с подписки «Практик».
-                    </div>
-                  )}
                 </div>
                 <div className="rounded-2xl border border-zinc-800/90 bg-zinc-900/55 p-3 md:col-span-2">
                   <div className="text-xs font-semibold tracking-[0.2em] uppercase text-zinc-500">Режим</div>
@@ -8949,12 +8959,6 @@ export default function App() {
                             {Math.max(0, Number(pack.caseCount ?? 0) || 0)} дел
                           </span>
                         </div>
-                        {isPackLockedForTier(pack, myTier) && (
-                          <div className="mt-1 inline-flex items-center gap-1 rounded-full border border-zinc-600/80 bg-zinc-900/85 px-2 py-0.5 text-[10px] text-zinc-200">
-                            <Lock className="h-3 w-3" />
-                            С {getSubscriptionTierLabel(getRequiredTierForPack(pack))}
-                          </div>
-                        )}
                       </button>
                     ))}
                   </div>
@@ -9182,11 +9186,6 @@ export default function App() {
                       }}
                     />
                   </div>
-                  {!canCreatePrivateRooms && (
-                    <div className="mt-2 text-xs text-zinc-500">
-                      Доступно только в подписке «Арбитр».
-                    </div>
-                  )}
                   {room.visibility === "private" && (
                     <div className="relative mt-2">
                       <Input
