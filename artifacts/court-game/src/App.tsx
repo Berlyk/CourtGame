@@ -39,6 +39,9 @@ import {
   CalendarDays,
   Clock3,
   Medal,
+  BadgeCheck,
+  Diamond,
+  Flame,
   Mic2,
   BrainCircuit,
   Swords,
@@ -303,9 +306,9 @@ const BADGE_ICONS: Record<string, LucideIcon> = {
   rankStrategist: BrainCircuit,
   rankMaster: Swords,
   rankVerdict: Gem,
-  subTrainee: Medal,
-  subPractitioner: Crown,
-  subArbiter: Gem,
+  subTrainee: BadgeCheck,
+  subPractitioner: Diamond,
+  subArbiter: Flame,
 };
 
 const BADGE_THEME: Record<
@@ -417,19 +420,19 @@ const BADGE_THEME: Record<
     iconOnly: "text-red-200 drop-shadow-[0_0_8px_rgba(244,114,182,0.6)]",
   },
   subTrainee: {
-    chip: "border-zinc-500/70 bg-zinc-700/25 text-zinc-100",
-    icon: "bg-zinc-600/35 text-zinc-50",
-    iconOnly: "text-zinc-200",
+    chip: "border-cyan-400/70 bg-cyan-500/18 text-cyan-100 shadow-[0_0_14px_rgba(34,211,238,0.24)]",
+    icon: "bg-cyan-500/35 text-cyan-50 shadow-[0_0_10px_rgba(34,211,238,0.28)]",
+    iconOnly: "text-cyan-200 drop-shadow-[0_0_6px_rgba(103,232,249,0.55)]",
   },
   subPractitioner: {
-    chip: "border-red-500/70 bg-red-600/20 text-red-100 shadow-[0_0_14px_rgba(239,68,68,0.28)]",
-    icon: "bg-red-600/40 text-red-50",
-    iconOnly: "text-red-200",
+    chip: "border-fuchsia-400/70 bg-fuchsia-500/18 text-fuchsia-100 shadow-[0_0_16px_rgba(217,70,239,0.28)]",
+    icon: "bg-fuchsia-500/35 text-fuchsia-50 shadow-[0_0_12px_rgba(217,70,239,0.33)]",
+    iconOnly: "text-fuchsia-200 drop-shadow-[0_0_7px_rgba(245,208,254,0.52)]",
   },
   subArbiter: {
-    chip: "border-amber-500/70 bg-amber-600/20 text-amber-100 shadow-[0_0_16px_rgba(245,158,11,0.3)]",
-    icon: "bg-amber-600/40 text-amber-50",
-    iconOnly: "text-amber-200",
+    chip: "border-emerald-400/70 bg-emerald-500/16 text-emerald-100 shadow-[0_0_16px_rgba(52,211,153,0.28)]",
+    icon: "bg-emerald-500/35 text-emerald-50 shadow-[0_0_12px_rgba(52,211,153,0.34)]",
+    iconOnly: "text-emerald-200 drop-shadow-[0_0_7px_rgba(167,243,208,0.55)]",
   },
 };
 
@@ -2821,6 +2824,7 @@ export default function App() {
   const [shopDuration, setShopDuration] = useState<
     Extract<SubscriptionDuration, "1_month" | "1_year">
   >("1_month");
+  const [promoDialogOpen, setPromoDialogOpen] = useState(false);
   const [promoCodeInput, setPromoCodeInput] = useState("");
   const [promoCodeLoading, setPromoCodeLoading] = useState(false);
   const [promoCodeResult, setPromoCodeResult] = useState<{
@@ -3123,6 +3127,7 @@ export default function App() {
   );
   const navigateToShop = useCallback(() => {
     setUpsellModalOpen(false);
+    setPromoDialogOpen(false);
     setCreateMatchDialogOpen(false);
     setCreatePackCatalogOpen(false);
     setJoinPasswordDialogOpen(false);
@@ -3785,12 +3790,17 @@ export default function App() {
   }, [authToken, isAuthenticated, screen]);
 
   useEffect(() => {
-    if (myProfile?.selectedBadgeKey) {
-      setSelectedBadgeKey(myProfile.selectedBadgeKey);
+    const badges = myProfile?.badges ?? [];
+    const selectedFromProfile = myProfile?.selectedBadgeKey;
+    const selectedStillActive =
+      !!selectedFromProfile &&
+      badges.some((badge) => badge.key === selectedFromProfile && badge.active);
+    if (selectedStillActive && selectedFromProfile) {
+      setSelectedBadgeKey(selectedFromProfile);
       return;
     }
-    const firstActive = myProfile?.badges?.find((badge) => badge.active)?.key;
-    if (firstActive) setSelectedBadgeKey(firstActive);
+    const firstActive = badges.find((badge) => badge.active)?.key ?? "";
+    setSelectedBadgeKey(firstActive);
   }, [myProfile]);
 
   useEffect(() => {
@@ -5862,26 +5872,24 @@ export default function App() {
 
   const renderUpsellModal = () => (
     <Dialog open={upsellModalOpen} onOpenChange={setUpsellModalOpen}>
-      <DialogContent className="max-w-[460px] border-zinc-700 bg-[radial-gradient(120%_100%_at_50%_0%,rgba(239,68,68,0.16),transparent_52%),linear-gradient(160deg,rgba(10,10,14,0.98),rgba(16,16,22,0.98))] text-zinc-100 shadow-[0_24px_80px_rgba(0,0,0,0.68)]">
+      <DialogContent className="max-w-[470px] border-red-950/70 bg-[radial-gradient(130%_110%_at_0%_0%,rgba(239,68,68,0.22),transparent_50%),linear-gradient(160deg,rgba(12,10,11,0.98),rgba(10,10,12,0.98))] text-zinc-100 shadow-[0_24px_84px_rgba(0,0,0,0.72)]">
         <DialogHeader>
-          <div className="mb-1 inline-flex h-9 w-9 items-center justify-center rounded-full border border-red-500/45 bg-red-600/15 text-red-200">
+          <div className="mb-1 inline-flex h-10 w-10 items-center justify-center rounded-full border border-red-400/55 bg-red-600/20 text-red-100 shadow-[0_0_18px_rgba(239,68,68,0.2)]">
             <Lock className="h-4 w-4" />
           </div>
           <DialogTitle className="text-xl">{upsellTitle}</DialogTitle>
           <DialogDescription className="text-zinc-300">
             {upsellDescription}
           </DialogDescription>
+          <div className="mt-2 inline-flex w-fit items-center gap-2 rounded-full border border-red-400/45 bg-red-500/18 px-3 py-1 text-xs font-medium text-red-100">
+            <Crown className="h-3.5 w-3.5" />
+            План: {getSubscriptionTierLabel(upsellRequiredTier)}
+          </div>
         </DialogHeader>
-        <div className="rounded-xl border border-zinc-700 bg-zinc-900/85 px-3 py-3 text-sm text-zinc-300">
-          Требуется подписка:{" "}
-          <span className="font-semibold text-red-100">
-            {getSubscriptionTierLabel(upsellRequiredTier)}
-          </span>
-        </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2.5">
           <Button
             type="button"
-            className="h-10 flex-1 rounded-xl bg-red-600 text-white hover:bg-red-500"
+            className="h-11 flex-1 rounded-xl bg-red-600 text-white hover:bg-red-500"
             onClick={navigateToShop}
           >
             Перейти в магазин
@@ -5889,7 +5897,7 @@ export default function App() {
           <Button
             type="button"
             variant="outline"
-            className="h-10 flex-1 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+            className="h-11 flex-1 rounded-xl border-zinc-700 bg-zinc-900/85 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
             onClick={() => setUpsellModalOpen(false)}
           >
             Закрыть
@@ -6385,13 +6393,27 @@ export default function App() {
                     <div className="text-lg font-semibold">Ранг</div>
                     <div className="rounded-xl border border-zinc-800 bg-zinc-900/55 px-3 py-3">
                       {lockedRatingForProfile ? (
-                        <div className="space-y-2">
+                        <div className="space-y-3">
                           <div className="inline-flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-900 px-2.5 py-1 text-xs text-zinc-200">
                             <Lock className="h-3.5 w-3.5" />
                             Рейтинг заблокирован
                           </div>
-                          <div className="text-sm text-zinc-300">
-                            Рейтинг доступен с подписки «Стажер».
+                          <div className="text-sm text-zinc-300 leading-relaxed">
+                            Подключите «Стажер», чтобы открыть ранговую систему и прогрессию.
+                          </div>
+                          <div className="grid grid-cols-3 gap-2">
+                            <div className="rounded-lg border border-zinc-800 bg-zinc-950/70 px-2 py-2 text-center">
+                              <div className="text-[10px] uppercase tracking-[0.1em] text-zinc-500">Старт</div>
+                              <div className="mt-1 text-xs font-semibold text-zinc-200">Новичок</div>
+                            </div>
+                            <div className="rounded-lg border border-zinc-800 bg-zinc-950/70 px-2 py-2 text-center">
+                              <div className="text-[10px] uppercase tracking-[0.1em] text-zinc-500">Середина</div>
+                              <div className="mt-1 text-xs font-semibold text-zinc-200">Оратор</div>
+                            </div>
+                            <div className="rounded-lg border border-zinc-800 bg-zinc-950/70 px-2 py-2 text-center">
+                              <div className="text-[10px] uppercase tracking-[0.1em] text-zinc-500">Топ</div>
+                              <div className="mt-1 text-xs font-semibold text-zinc-200">Вердикт</div>
+                            </div>
                           </div>
                         </div>
                       ) : (
@@ -7960,7 +7982,9 @@ export default function App() {
               }}
             >
               <DialogContent
-                className="w-[calc(100vw-1rem)] sm:w-[calc(100vw-2rem)] max-w-2xl border-zinc-800 bg-zinc-950 text-zinc-100 p-4 sm:p-6 [&>button]:h-12 [&>button]:w-12 [&>button>svg]:h-7 [&>button>svg]:w-7 [&>button]:top-2 [&>button]:right-2"
+                className={`w-[calc(100vw-1rem)] sm:w-[calc(100vw-2rem)] ${
+                  createPackCatalogOpen ? "max-w-4xl" : "max-w-[700px]"
+                } max-h-[88vh] overflow-y-auto border-zinc-800 bg-zinc-950 text-zinc-100 p-4 sm:p-6 [&>button]:h-12 [&>button]:w-12 [&>button>svg]:h-7 [&>button>svg]:w-7 [&>button]:top-2 [&>button]:right-2`}
               >
                 <DialogHeader className="space-y-1">
                   <DialogTitle>Создать матч</DialogTitle>
@@ -8039,13 +8063,13 @@ export default function App() {
                               {visual.vibe}
                             </div>
                             {isLocked && (
-                              <div className="pointer-events-none absolute inset-0 rounded-2xl bg-zinc-950/78">
-                                <span className="absolute inset-0 flex items-center justify-center">
-                                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-zinc-400/70 bg-zinc-900/92 text-zinc-100 shadow-[0_0_20px_rgba(0,0,0,0.55)]">
-                                    <Lock className="h-4 w-4" />
-                                  </span>
+                              <>
+                                <div className="pointer-events-none absolute inset-0 rounded-2xl border border-zinc-600/65 bg-[linear-gradient(180deg,rgba(9,10,13,0.2),rgba(9,10,13,0.78))]" />
+                                <span className="pointer-events-none absolute left-2 top-2 inline-flex items-center gap-1 rounded-full border border-zinc-500/80 bg-zinc-950/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-zinc-200">
+                                  <Lock className="h-3 w-3" />
+                                  Закрыт
                                 </span>
-                              </div>
+                              </>
                             )}
                           </>
                         );
@@ -8062,7 +8086,7 @@ export default function App() {
                                   `Пак «${displayTitle}» доступен с подписки «${getSubscriptionTierLabel(requiredTier)}».`,
                                 )
                               }
-                              className={`relative overflow-hidden rounded-2xl border px-3 py-2 text-left ${cardClass}`}
+                              className={`relative overflow-hidden rounded-2xl border px-3 py-2 text-left transition-colors hover:border-zinc-500 ${cardClass}`}
                             >
                               {content}
                             </button>
@@ -8097,8 +8121,8 @@ export default function App() {
                       На {selectedCreateMode.maxPlayers} игроков
                     </div>
                   </div>
-                  <div className="grid gap-2.5 md:grid-cols-2">
-                    <div className="space-y-2 md:col-span-2">
+                  <div className="grid gap-2.5 lg:grid-cols-2">
+                    <div className="space-y-2 lg:col-span-2">
                       <label className="text-sm text-zinc-300">Название комнаты</label>
                       <Input
                         value={createRoomName}
@@ -8107,7 +8131,7 @@ export default function App() {
                         className="h-11 rounded-xl bg-zinc-900 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
                       />
                     </div>
-                    <div className="space-y-2 md:col-span-2">
+                    <div className="space-y-2 lg:col-span-2">
                       <label className="text-sm text-zinc-300">Ссылка на войс (опционально)</label>
                       <Input
                         value={createVoiceUrl}
@@ -8116,9 +8140,9 @@ export default function App() {
                         className="h-11 rounded-xl bg-zinc-900 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
                       />
                     </div>
-                    <div className="space-y-2 md:col-span-2">
+                    <div className="space-y-2 lg:col-span-2">
                       <label className="text-sm text-zinc-300">Режим матча</label>
-                      <div className="grid gap-2 md:grid-cols-2">
+                      <div className="grid gap-2 lg:grid-cols-2">
                         {ROOM_MODE_OPTIONS.map((mode) => (
                           <button
                             key={mode.key}
@@ -8143,7 +8167,7 @@ export default function App() {
                         ))}
                       </div>
                     </div>
-                    <div className="space-y-2 md:col-span-2">
+                    <div className="space-y-2 lg:col-span-2">
                       <label className="text-sm text-zinc-300">Пак дел</label>
                       <div className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-2.5">
                         {casePacks.length > 0 ? (
@@ -8183,7 +8207,7 @@ export default function App() {
                       </div>
                     </div>
                     {!createRoomPrivate ? (
-                      <div className="md:col-span-2 rounded-xl border border-zinc-800 bg-zinc-900/70 p-2.5">
+                      <div className="lg:col-span-2 rounded-xl border border-zinc-800 bg-zinc-900/70 p-2.5">
                         <div className="flex items-center justify-between gap-3">
                           <div>
                             <div className="text-sm font-medium text-zinc-100">
@@ -8212,7 +8236,7 @@ export default function App() {
                         </div>
                       </div>
                     ) : (
-                      <div className="space-y-2 md:col-span-2 rounded-xl border border-zinc-800 bg-zinc-900/70 p-2.5">
+                      <div className="space-y-2 lg:col-span-2 rounded-xl border border-zinc-800 bg-zinc-900/70 p-2.5">
                         <div className="flex items-center justify-between gap-3">
                           <div>
                             <div className="text-sm font-medium text-zinc-100">
@@ -8356,39 +8380,54 @@ export default function App() {
               <CardContent className="p-6 md:p-8">
                 <div className="relative rounded-3xl border border-zinc-700/80 bg-[radial-gradient(120%_120%_at_0%_0%,rgba(239,68,68,0.22),transparent_48%),radial-gradient(120%_120%_at_100%_100%,rgba(153,27,27,0.2),transparent_54%),linear-gradient(130deg,rgba(24,24,27,0.95),rgba(39,39,42,0.9))] px-5 py-6 md:px-7 md:py-8">
                   <div className="max-w-3xl">
-                    <div className="inline-flex items-center gap-2 rounded-full border border-red-500/50 bg-red-600/15 px-3 py-1 text-xs font-semibold text-red-100">
-                      <Crown className="h-3.5 w-3.5" />
-                      Подписки CourtGame
-                    </div>
-                    <h2 className="mt-4 text-2xl font-bold sm:text-3xl">Магазин подписок</h2>
+                    <h2 className="text-2xl font-bold sm:text-3xl">Магазин</h2>
                     <p className="mt-2 text-sm text-zinc-300 sm:text-base">
                       Откройте доступ к эксклюзивным функциям, пакам дел, рейтингу и статусным
                       возможностям профиля.
                     </p>
                   </div>
                 </div>
-                <div className="mt-4 inline-flex rounded-xl border border-zinc-700 bg-zinc-900 p-1">
-                  {SUBSCRIPTION_DURATION_UI_OPTIONS.map((option) => (
-                    <button
-                      key={`shop-duration-${option.key}`}
-                      type="button"
-                      onClick={() => setShopDuration(option.key)}
-                      className={`rounded-lg px-3 py-1.5 text-sm transition ${
-                        shopDuration === option.key
-                          ? "bg-red-600 text-white"
-                          : "text-zinc-300 hover:bg-zinc-800"
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
                 <h3 className="mt-6 text-center text-2xl font-semibold">Обновите свой план</h3>
+                <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
+                  <div className="inline-flex rounded-xl border border-zinc-700 bg-zinc-900 p-1">
+                    {SUBSCRIPTION_DURATION_UI_OPTIONS.map((option) => (
+                      <button
+                        key={`shop-duration-${option.key}`}
+                        type="button"
+                        onClick={() => setShopDuration(option.key)}
+                        className={`rounded-lg px-3 py-1.5 text-sm transition ${
+                          shopDuration === option.key
+                            ? "bg-red-600 text-white"
+                            : "text-zinc-300 hover:bg-zinc-800"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setPromoCodeResult(null);
+                      setPromoDialogOpen(true);
+                    }}
+                    className="h-10 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                  >
+                    Активировать промокод
+                  </Button>
+                </div>
                 <div className="mt-5 grid gap-4 xl:grid-cols-3">
                   {SUBSCRIPTION_PLANS.map((plan) => {
                     const isCurrent = myTier === plan.tier;
                     const displayPrice =
                       shopDuration === "1_year" ? plan.yearPriceRub : plan.monthPriceRub;
+                    const featureTone =
+                      plan.tier === "trainee"
+                        ? "border-zinc-600 bg-zinc-900/80 text-zinc-200"
+                        : plan.tier === "practitioner"
+                          ? "border-red-400/55 bg-red-600/18 text-red-100"
+                          : "border-emerald-400/55 bg-emerald-500/18 text-emerald-100";
                     return (
                       <div
                         key={`shop-plan-${plan.tier}`}
@@ -8398,18 +8437,20 @@ export default function App() {
                             : "border-zinc-700 bg-[linear-gradient(160deg,rgba(26,26,30,0.96),rgba(20,20,24,0.96))]"
                         }`}
                       >
-                        {plan.isPopular && (
-                          <div className="absolute right-4 top-4 inline-flex rounded-full border border-red-300/60 bg-red-600/25 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-red-100">
-                            Рекомендуется
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-zinc-600 bg-zinc-900/70 text-zinc-100">
+                            {plan.tier === "trainee" ? (
+                              <Shield className="h-4 w-4" />
+                            ) : plan.tier === "practitioner" ? (
+                              <Gem className="h-4 w-4" />
+                            ) : (
+                              <Crown className="h-4 w-4" />
+                            )}
                           </div>
-                        )}
-                        <div className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-zinc-600 bg-zinc-900/70 text-zinc-100">
-                          {plan.tier === "trainee" ? (
-                            <Shield className="h-4 w-4" />
-                          ) : plan.tier === "practitioner" ? (
-                            <Gem className="h-4 w-4" />
-                          ) : (
-                            <Crown className="h-4 w-4" />
+                          {plan.isPopular && (
+                            <div className="inline-flex h-8 items-center rounded-full border border-red-300/60 bg-red-600/25 px-2.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-red-100">
+                              Рекомендуется
+                            </div>
                           )}
                         </div>
                         <div className="mt-4 text-3xl font-bold text-zinc-100">{plan.title}</div>
@@ -8421,11 +8462,13 @@ export default function App() {
                           RUB / {shopDuration === "1_year" ? "год" : "месяц"}
                         </div>
                         <div className="mt-4 h-px w-full bg-zinc-700/60" />
-                        <div className="mt-4 space-y-2 text-sm text-zinc-200">
+                        <div className="mt-4 space-y-2.5 text-sm text-zinc-200">
                           {plan.features.map((feature) => (
                             <div key={`${plan.tier}-${feature}`} className="flex items-start gap-2.5">
-                              <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-zinc-600 bg-zinc-900/75">
-                                <Sparkles className="h-3 w-3 text-zinc-300" />
+                              <span
+                                className={`mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${featureTone}`}
+                              >
+                                <BadgeCheck className="h-3.5 w-3.5" />
                               </span>
                               <span>{feature}</span>
                             </div>
@@ -8455,14 +8498,18 @@ export default function App() {
                 </div>
               </CardContent>
             </Card>
-
-            <Card className="rounded-[28px] border-zinc-800 bg-zinc-900/95 text-zinc-100">
-              <CardContent className="p-6 md:p-8">
-                <h3 className="text-xl font-semibold">Промокод</h3>
-                <p className="mt-2 text-sm text-zinc-400">
-                  Введите код, чтобы активировать подписку или бонусный период.
-                </p>
-                <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
+            <Dialog open={promoDialogOpen} onOpenChange={setPromoDialogOpen}>
+              <DialogContent className="max-w-md border-zinc-800 bg-zinc-950 text-zinc-100">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-red-300" />
+                    Активация промокода
+                  </DialogTitle>
+                  <DialogDescription className="text-zinc-400">
+                    Введите код, чтобы активировать подписку или бонусный период.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-3">
                   <Input
                     value={promoCodeInput}
                     onChange={(event) => setPromoCodeInput(event.target.value.toUpperCase())}
@@ -8481,39 +8528,29 @@ export default function App() {
                       void applyPromoCode();
                     }}
                     disabled={promoCodeLoading}
-                    className="h-11 rounded-xl bg-red-600 px-5 text-white hover:bg-red-500 disabled:bg-zinc-700 disabled:text-zinc-300"
+                    className="h-11 w-full rounded-xl bg-red-600 text-white hover:bg-red-500 disabled:bg-zinc-700 disabled:text-zinc-300"
                   >
                     {promoCodeLoading ? "Проверяем" : "Активировать"}
                   </Button>
+                  {promoCodeResult && (
+                    <div
+                      className={`rounded-xl border px-3 py-2 text-sm ${
+                        promoCodeResult.kind === "success"
+                          ? "border-emerald-500/45 bg-emerald-600/10 text-emerald-200"
+                          : "border-red-500/45 bg-red-600/10 text-red-200"
+                      }`}
+                    >
+                      {promoCodeResult.text}
+                    </div>
+                  )}
+                  {!authToken && (
+                    <div className="text-xs text-zinc-500">
+                      Для активации промокода нужно войти в аккаунт.
+                    </div>
+                  )}
                 </div>
-                {promoCodeResult && (
-                  <div
-                    className={`mt-3 rounded-xl border px-3 py-2 text-sm ${
-                      promoCodeResult.kind === "success"
-                        ? "border-emerald-500/45 bg-emerald-600/10 text-emerald-200"
-                        : "border-red-500/45 bg-red-600/10 text-red-200"
-                    }`}
-                  >
-                    {promoCodeResult.text}
-                  </div>
-                )}
-                {!authToken && (
-                  <div className="mt-3 text-xs text-zinc-500">
-                    Для активации промокода нужно войти в аккаунт.
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card className="rounded-[28px] border-zinc-800 bg-zinc-900/95 text-zinc-100">
-              <CardContent className="p-6 md:p-8">
-                <h3 className="text-xl font-semibold">FAQ</h3>
-                <div className="mt-3 rounded-xl border border-zinc-800 bg-zinc-950/70 px-4 py-3 text-sm text-zinc-300">
-                  Подписки пока выдаются вручную администратором. Оплата и автовыдача появятся в
-                  следующих обновлениях.
-                </div>
-              </CardContent>
-            </Card>
+              </DialogContent>
+            </Dialog>
           </div>
         )}
         {homeTab === "development" && (
@@ -8883,7 +8920,7 @@ export default function App() {
         {hasRoomHostControl && (
           <Dialog open={roomManageOpen} onOpenChange={setRoomManageOpen}>
             <DialogContent
-              className="rounded-3xl border-zinc-800 bg-[radial-gradient(130%_120%_at_0%_0%,rgba(220,38,38,0.13),transparent_45%),linear-gradient(145deg,rgba(13,13,17,0.98),rgba(10,10,12,0.96))] text-zinc-100 sm:max-w-3xl max-h-[88vh] overflow-y-auto [scrollbar-width:thin] [scrollbar-color:rgba(82,82,91,0.28)_transparent] [&::-webkit-scrollbar]:w-[3px] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-600/40 [&::-webkit-scrollbar-thumb:hover]:bg-zinc-500/55"
+              className="rounded-3xl border-zinc-800 bg-[radial-gradient(130%_120%_at_0%_0%,rgba(220,38,38,0.13),transparent_45%),linear-gradient(145deg,rgba(13,13,17,0.98),rgba(10,10,12,0.96))] text-zinc-100 sm:max-w-2xl max-h-[88vh] overflow-y-auto [scrollbar-width:thin] [scrollbar-color:rgba(82,82,91,0.28)_transparent] [&::-webkit-scrollbar]:w-[3px] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-600/40 [&::-webkit-scrollbar-thumb:hover]:bg-zinc-500/55"
             >
               <DialogHeader>
                 <DialogTitle>Управление комнатой</DialogTitle>
@@ -8891,7 +8928,7 @@ export default function App() {
                   Настройки ведущего для текущего лобби.
                 </DialogDescription>
               </DialogHeader>
-              <div className="grid items-start gap-3 md:grid-cols-2">
+              <div className="grid items-start gap-3 xl:grid-cols-2">
                 <div className="rounded-2xl border border-zinc-800/90 bg-zinc-900/55 px-4 py-3">
                   <div className="flex items-center justify-between gap-3">
                     <div className="text-sm font-medium text-zinc-100">Я - Судья</div>
@@ -8907,9 +8944,9 @@ export default function App() {
                     <Switch checked={usePreferredRoles} onCheckedChange={togglePreferredRoles} />
                   </div>
                 </div>
-                <div className="rounded-2xl border border-zinc-800/90 bg-zinc-900/55 p-3 md:col-span-2">
+                <div className="rounded-2xl border border-zinc-800/90 bg-zinc-900/55 p-3 xl:col-span-2">
                   <div className="text-xs font-semibold tracking-[0.2em] uppercase text-zinc-500">Режим</div>
-                  <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-4">
+                  <div className="mt-2 grid grid-cols-2 gap-2 lg:grid-cols-4">
                     {ROOM_MODE_OPTIONS.map((mode) => (
                       <button
                         key={`manage-mode-${mode.key}`}
@@ -8927,43 +8964,54 @@ export default function App() {
                     ))}
                   </div>
                 </div>
-                <div className="rounded-2xl border border-zinc-800/90 bg-zinc-900/55 p-3 md:col-span-2">
+                <div className="rounded-2xl border border-zinc-800/90 bg-zinc-900/55 p-3 xl:col-span-2">
                   <div className="text-xs font-semibold tracking-[0.2em] uppercase text-zinc-500">Пак дел</div>
                   <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                    {casePacks.map((pack) => (
-                      <button
-                        key={`manage-pack-${pack.key}`}
-                        type="button"
-                        onClick={() => {
-                          if (isPackLockedForTier(pack, myTier)) {
-                            const requiredTier = getRequiredTierForPack(pack);
-                            openSubscriptionUpsell(
-                              requiredTier === "trainee"
-                                ? "canAccessPackSevere"
-                                : "canAccessAllPacks",
-                              `Пак «${getCasePackTitleDisplay(pack.title)}» доступен с подписки «${getSubscriptionTierLabel(requiredTier)}».`,
-                            );
-                            return;
-                          }
-                          updateRoomManagementSettings({ casePackKey: pack.key });
-                        }}
-                        className={`rounded-xl border px-3 py-2 text-left text-xs transition relative ${
-                          (room.casePackKey ?? "classic") === pack.key
-                            ? "border-red-500/80 bg-red-600/20 text-zinc-100 shadow-[0_0_0_1px_rgba(248,113,113,0.25),0_0_16px_rgba(239,68,68,0.18)]"
-                            : "border-zinc-700/90 bg-zinc-950/80 text-zinc-300 hover:border-zinc-600 hover:bg-zinc-900"
-                        } ${isPackLockedForTier(pack, myTier) ? "opacity-75" : ""}`}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-semibold">{getCasePackTitleDisplay(pack.title)}</span>
-                          <span className="rounded-full border border-zinc-600/80 bg-zinc-900/80 px-2 py-0.5 text-[10px] font-semibold text-zinc-300">
-                            {Math.max(0, Number(pack.caseCount ?? 0) || 0)} дел
-                          </span>
-                        </div>
-                      </button>
-                    ))}
+                    {casePacks.map((pack) => {
+                      const isLocked = isPackLockedForTier(pack, myTier);
+                      return (
+                        <button
+                          key={`manage-pack-${pack.key}`}
+                          type="button"
+                          onClick={() => {
+                            if (isLocked) {
+                              const requiredTier = getRequiredTierForPack(pack);
+                              openSubscriptionUpsell(
+                                requiredTier === "trainee"
+                                  ? "canAccessPackSevere"
+                                  : "canAccessAllPacks",
+                                `Пак «${getCasePackTitleDisplay(pack.title)}» доступен с подписки «${getSubscriptionTierLabel(requiredTier)}».`,
+                              );
+                              return;
+                            }
+                            updateRoomManagementSettings({ casePackKey: pack.key });
+                          }}
+                          className={`relative overflow-hidden rounded-xl border px-3 py-2 text-left text-xs transition ${
+                            isLocked
+                              ? "border-zinc-700/90 bg-zinc-950/70 text-zinc-500"
+                              : (room.casePackKey ?? "classic") === pack.key
+                                ? "border-red-500/80 bg-red-600/20 text-zinc-100 shadow-[0_0_0_1px_rgba(248,113,113,0.25),0_0_16px_rgba(239,68,68,0.18)]"
+                                : "border-zinc-700/90 bg-zinc-950/80 text-zinc-300 hover:border-zinc-600 hover:bg-zinc-900"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="inline-flex items-center gap-1.5 font-semibold">
+                              {isLocked && <Lock className="h-3.5 w-3.5 text-zinc-500" />}
+                              {getCasePackTitleDisplay(pack.title)}
+                            </span>
+                            <span className="rounded-full border border-zinc-600/80 bg-zinc-900/80 px-2 py-0.5 text-[10px] font-semibold text-zinc-300">
+                              {Math.max(0, Number(pack.caseCount ?? 0) || 0)} дел
+                            </span>
+                          </div>
+                          {isLocked && (
+                            <div className="pointer-events-none absolute inset-0 rounded-xl border border-zinc-600/55 bg-zinc-950/40" />
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
-                <div className="rounded-2xl border border-zinc-800/90 bg-zinc-900/55 p-3 md:col-span-2">
+                <div className="rounded-2xl border border-zinc-800/90 bg-zinc-900/55 p-3 xl:col-span-2">
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="rounded-xl border border-zinc-800 bg-zinc-950/55 px-3 py-2.5">
                       <div className="flex items-center justify-between gap-3">
@@ -9214,7 +9262,7 @@ export default function App() {
                     </div>
                   )}
                 </div>
-                <div className="rounded-2xl border border-zinc-800/90 bg-zinc-900/55 px-4 py-3 md:col-span-2">
+                <div className="rounded-2xl border border-zinc-800/90 bg-zinc-900/55 px-4 py-3 xl:col-span-2">
                   <div className="text-xs text-zinc-500">Передать хоста</div>
                   <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
                     <Select value={manageTransferHostId} onValueChange={setManageTransferHostId}>
