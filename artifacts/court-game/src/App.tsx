@@ -2836,6 +2836,7 @@ export default function App() {
   } | null>(null);
   const [copiedRoomCode, setCopiedRoomCode] = useState(false);
   const [startGameLoading, setStartGameLoading] = useState(false);
+  const [roomActionPending, setRoomActionPending] = useState<"create" | "join" | null>(null);
   const [hasSession, setHasSession] = useState(false);
   const [reconnectExpiresAt, setReconnectExpiresAt] = useState<number | null>(() => {
     const raw = localStorage.getItem("court_reconnect_expires_at");
@@ -2976,12 +2977,30 @@ export default function App() {
   const myProfileRef = useRef<PublicUserProfile | null>(null);
   const knownUserIdByPlayerIdRef = useRef<Record<string, string>>({});
   const influenceAnnouncementTimerRef = useRef<number | null>(null);
+  const roomActionTimeoutRef = useRef<number | null>(null);
   const lastAutoRejoinAttemptAtRef = useRef(0);
   const speechTimerStageRef = useRef<string>("");
   const socket = getSocket();
   const activeRoomCode = room?.code ?? game?.code ?? null;
   const sharedAvatar = avatar;
   const sharedBanner = banner;
+  const clearRoomActionPending = useCallback(() => {
+    setRoomActionPending(null);
+    if (roomActionTimeoutRef.current) {
+      window.clearTimeout(roomActionTimeoutRef.current);
+      roomActionTimeoutRef.current = null;
+    }
+  }, []);
+  const beginRoomActionPending = useCallback((type: "create" | "join") => {
+    if (roomActionTimeoutRef.current) {
+      window.clearTimeout(roomActionTimeoutRef.current);
+    }
+    setRoomActionPending(type);
+    roomActionTimeoutRef.current = window.setTimeout(() => {
+      setRoomActionPending(null);
+      roomActionTimeoutRef.current = null;
+    }, 12000);
+  }, []);
   const isAuthenticated = !!authUser && !!authToken;
   const isCreatorAdmin = (authUser?.login ?? "").trim().toLowerCase() === "berly";
   const rememberKnownUserIds = useCallback((players?: Array<{ id?: string; userId?: string }>) => {
@@ -3005,6 +3024,14 @@ export default function App() {
       ? freeCreatePack?.caseCount ?? 0
       : selectedCreatePack?.caseCount ?? 0,
   );
+  useEffect(() => {
+    return () => {
+      if (roomActionTimeoutRef.current) {
+        window.clearTimeout(roomActionTimeoutRef.current);
+        roomActionTimeoutRef.current = null;
+      }
+    };
+  }, []);
   const reconnectSecondsLeft =
     reconnectExpiresAt !== null
       ? Math.max(0, Math.ceil((reconnectExpiresAt - nowMs) / 1000))
@@ -3764,6 +3791,7 @@ export default function App() {
         sessionToken?: string;
         state: any;
       }) => {
+        clearRoomActionPending();
         setMyId(playerId);
         if (sessionToken) {
           setMySessionToken(sessionToken);
@@ -4168,6 +4196,7 @@ export default function App() {
     );
 
     socket.on("rejoin_failed", () => {
+      clearRoomActionPending();
       clearReconnectWindow();
       localStorage.removeItem("court_session");
       localStorage.removeItem("court_session_token");
@@ -4182,6 +4211,7 @@ export default function App() {
     });
 
     socket.on("kicked", () => {
+      clearRoomActionPending();
       clearReconnectWindow();
       localStorage.removeItem("court_session");
       localStorage.removeItem("court_session_token");
@@ -4214,6 +4244,7 @@ export default function App() {
     });
 
     socket.on("room_closed", () => {
+      clearRoomActionPending();
       const previousRank = myProfileRef.current?.rank;
       if (authToken) {
         localStorage.setItem(RANK_TOAST_PENDING_STORAGE_KEY, "1");
@@ -4322,6 +4353,7 @@ export default function App() {
     );
 
     socket.on("error", ({ message }: { message: string }) => {
+      clearRoomActionPending();
       setStartGameLoading(false);
       if (message.toLowerCase().includes("парол")) {
         setJoinPasswordDialogError(message);
@@ -4366,9 +4398,10 @@ export default function App() {
       socket.off("verdict_set");
       socket.off("error");
     };
-  }, [socket, avatar, authToken, clearReconnectWindow, sharedAvatar, startReconnectWindow, syncRankResultAfterMatch, rememberKnownUserIds]);
+  }, [socket, avatar, authToken, clearReconnectWindow, sharedAvatar, startReconnectWindow, syncRankResultAfterMatch, rememberKnownUserIds, clearRoomActionPending]);
 
   const createQuickRoom = useCallback(() => {
+    if (roomActionPending) return;
     const name = playerName.trim() || getOrCreateGuestName();
     localStorage.setItem("court_nickname", name);
     const payload: {
@@ -4391,10 +4424,12 @@ export default function App() {
     if (!authToken && sharedBanner) {
       payload.banner = sharedBanner;
     }
+    beginRoomActionPending("create");
     socket.emit("create_room", payload);
-  }, [socket, playerName, sharedAvatar, sharedBanner, authToken]);
+  }, [socket, playerName, sharedAvatar, sharedBanner, authToken, roomActionPending, beginRoomActionPending]);
 
   const createRoomFromPanel = useCallback(() => {
+    if (roomActionPending) return false;
     const name = playerName.trim() || getOrCreateGuestName();
     if (selectedCreatePackLocked) {
       setError("Этот пак временно недоступен.");
@@ -4441,6 +4476,7 @@ export default function App() {
     if (!authToken && sharedBanner) {
       payload.banner = sharedBanner;
     }
+    beginRoomActionPending("create");
     socket.emit("create_room", payload);
     return true;
   }, [
@@ -4456,9 +4492,12 @@ export default function App() {
     createRoomName,
     createVoiceUrl,
     createRoomPassword,
+    roomActionPending,
+    beginRoomActionPending,
   ]);
 
   const joinRoom = useCallback((options?: { code?: string; password?: string }) => {
+    if (roomActionPending) return;
     const targetCode = (options?.code ?? joinCode).trim().toUpperCase();
     if (!targetCode) return;
     const password = (options?.password ?? "").trim();
@@ -4483,8 +4522,9 @@ export default function App() {
     if (!authToken && sharedBanner) {
       payload.banner = sharedBanner;
     }
+    beginRoomActionPending("join");
     socket.emit("join_room", payload);
-  }, [socket, joinCode, playerName, sharedAvatar, sharedBanner, authToken]);
+  }, [socket, joinCode, playerName, sharedAvatar, sharedBanner, authToken, roomActionPending, beginRoomActionPending]);
 
   const reloadMyProfile = useCallback(async () => {
     if (!authToken) return;
@@ -7216,9 +7256,10 @@ export default function App() {
                             <motion.div className="px-1" whileHover={{ y: -1 }} whileTap={{ scale: 0.985 }}>
                               <Button
                                 onClick={createQuickRoom}
-                                className="w-full h-16 rounded-2xl text-4xl gap-2 bg-red-600 hover:bg-red-600 text-white border-0 text-[33px] font-bold tracking-tight shadow-[0_8px_28px_rgba(220,38,38,0.35)] transition-transform duration-200 hover:-translate-y-0.5"
+                                disabled={roomActionPending !== null}
+                                className="w-full h-16 rounded-2xl text-4xl gap-2 bg-red-600 hover:bg-red-600 disabled:bg-zinc-700 disabled:text-zinc-300 text-white border-0 text-[33px] font-bold tracking-tight shadow-[0_8px_28px_rgba(220,38,38,0.35)] transition-transform duration-200 hover:-translate-y-0.5"
                               >
-                                Создать игру
+                                {roomActionPending === "create" ? "Создание..." : "Создать игру"}
                               </Button>
                             </motion.div>
                             <Separator className="bg-zinc-800" />
@@ -7237,10 +7278,10 @@ export default function App() {
                               </div>
                               <Button
                                 onClick={joinByCodeFromQuickInput}
-                                disabled={!joinCode.trim()}
-                                className="h-12 min-w-[100px] rounded-xl bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0 text-lg transition-all duration-200 hover:-translate-y-0.5"
+                                disabled={!joinCode.trim() || roomActionPending !== null}
+                                className="h-12 min-w-[100px] rounded-xl bg-zinc-100 text-zinc-950 hover:bg-zinc-200 disabled:bg-zinc-700 disabled:text-zinc-300 border-0 text-lg transition-all duration-200 hover:-translate-y-0.5"
                               >
-                                Войти
+                                {roomActionPending === "join" ? "Входим..." : "Войти"}
                               </Button>
                             </div>
                             <motion.a
@@ -7335,6 +7376,7 @@ export default function App() {
                         <div className="flex w-full sm:w-auto items-center">
                           <Button
                             onClick={() => setCreateMatchDialogOpen(true)}
+                            disabled={roomActionPending !== null}
                             className="w-full sm:w-auto h-14 rounded-xl bg-red-600 hover:bg-red-600 text-white border-0 gap-2 px-9 text-lg font-semibold transition-all duration-200 hover:-translate-y-0.5 shadow-[0_0_0_1px_rgba(239,68,68,0.5),0_10px_28px_rgba(220,38,38,0.35)] hover:shadow-[0_0_0_1px_rgba(248,113,113,0.7),0_16px_36px_rgba(220,38,38,0.45)]"
                           >
                             <UserPlus className="w-4 h-4" />
@@ -7416,10 +7458,11 @@ export default function App() {
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0 w-full lg:w-auto">
                                   <Button
-                                    className="h-11 w-full lg:w-auto lg:min-w-[128px] rounded-xl bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0 text-base font-semibold"
+                                    disabled={roomActionPending !== null}
+                                    className="h-11 w-full lg:w-auto lg:min-w-[128px] rounded-xl bg-zinc-100 text-zinc-950 hover:bg-zinc-200 disabled:bg-zinc-700 disabled:text-zinc-300 border-0 text-base font-semibold"
                                     onClick={() => joinPublicMatch(match)}
                                   >
-                                    Войти
+                                    {roomActionPending === "join" ? "Входим..." : "Войти"}
                                   </Button>
                                 </div>
                               </div>
@@ -7712,26 +7755,13 @@ export default function App() {
                   </div>
                   <Button
                     onClick={() => {
-                      const created = createRoomFromPanel();
-                      if (!created) return;
-                      setCreateMatchDialogOpen(false);
-                      setCreateRoomName("");
-                      setCreateVoiceUrl("");
-                      setCreateRoomPassword("");
-                      setCreateRoomPrivate(false);
-                      setCreateRoomPasswordVisible(false);
-                      setCreateRoomMode("civil_3");
-                      setCreateRoomPackKey(
-                        PACK_PAYWALL_PREVIEW_ENABLED || selectedCreatePackLocked
-                          ? freeCreatePack?.key ?? "classic"
-                          : selectedCreatePack?.key ?? freeCreatePack?.key ?? "classic",
-                      );
-                      setCreatePackCatalogOpen(false);
+                      void createRoomFromPanel();
                     }}
+                    disabled={roomActionPending !== null}
                     className="w-full h-11 rounded-xl bg-red-600 hover:bg-red-500 text-white border-0 gap-2"
                   >
                     <UserPlus className="w-4 h-4" />
-                    Создать комнату
+                    {roomActionPending === "create" ? "Создание..." : "Создать комнату"}
                   </Button>
                 </div>
                 )}
@@ -7796,9 +7826,10 @@ export default function App() {
                   )}
                   <Button
                     onClick={joinPublicMatchWithPassword}
-                    className="w-full h-11 rounded-xl bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0"
+                    disabled={roomActionPending !== null}
+                    className="w-full h-11 rounded-xl bg-zinc-100 text-zinc-950 hover:bg-zinc-200 disabled:bg-zinc-700 disabled:text-zinc-300 border-0"
                   >
-                    Войти
+                    {roomActionPending === "join" ? "Входим..." : "Войти"}
                   </Button>
                 </div>
               </DialogContent>

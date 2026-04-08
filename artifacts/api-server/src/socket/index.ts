@@ -503,6 +503,7 @@ export function setupSocket(httpServer: HttpServer) {
     string,
     { roomCode: string; playerId: string; sessionToken: string }
   >();
+  const createRoomInFlight = new Set<string>();
   const reconnectCleanupTimers = new Map<string, ReturnType<typeof setTimeout>>();
   const verdictRoomCloseTimers = new Map<string, ReturnType<typeof setTimeout>>();
   const actionCooldowns = new Map<string, number>();
@@ -891,6 +892,24 @@ export function setupSocket(httpServer: HttpServer) {
         authToken?: string;
         options?: CreateRoomOptions;
       }) => {
+        if (createRoomInFlight.has(socket.id)) {
+          return;
+        }
+        const existingMapping = socketToRoom.get(socket.id);
+        if (existingMapping) {
+          const existingRoom = getRoom(existingMapping.roomCode);
+          if (existingRoom) {
+            socket.emit("room_joined", {
+              playerId: existingMapping.playerId,
+              sessionToken: existingMapping.sessionToken,
+              state: getRoomState(existingRoom, existingMapping.playerId),
+            });
+            return;
+          }
+          socketToRoom.delete(socket.id);
+        }
+        createRoomInFlight.add(socket.id);
+        try {
         const code = randomCode();
         const playerId = crypto.randomUUID();
         const sessionToken = crypto.randomUUID();
@@ -932,6 +951,9 @@ export function setupSocket(httpServer: HttpServer) {
       });
       emitPublicMatches(io);
       persistRoom(code);
+        } finally {
+          createRoomInFlight.delete(socket.id);
+        }
     });
 
     socket.on("join_room", async ({ code, playerName, avatar, banner, password, authToken }: { code: string; playerName: string; avatar?: string | null; banner?: string | null; password?: string; authToken?: string }) => {
