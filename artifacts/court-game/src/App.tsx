@@ -2978,6 +2978,7 @@ export default function App() {
   const knownUserIdByPlayerIdRef = useRef<Record<string, string>>({});
   const influenceAnnouncementTimerRef = useRef<number | null>(null);
   const roomActionTimeoutRef = useRef<number | null>(null);
+  const ignoreLateRoomJoinedRef = useRef(false);
   const lastAutoRejoinAttemptAtRef = useRef(0);
   const speechTimerStageRef = useRef<string>("");
   const socket = getSocket();
@@ -2995,6 +2996,7 @@ export default function App() {
     if (roomActionTimeoutRef.current) {
       window.clearTimeout(roomActionTimeoutRef.current);
     }
+    ignoreLateRoomJoinedRef.current = false;
     setRoomActionPending(type);
     roomActionTimeoutRef.current = window.setTimeout(() => {
       setRoomActionPending(null);
@@ -3294,6 +3296,7 @@ export default function App() {
       lastAutoRejoinAttemptAtRef.current = now;
 
       setHasSession(true);
+      ignoreLateRoomJoinedRef.current = false;
       const rejoinPayload: { code: string; sessionToken: string; avatar?: string; banner?: string } = {
         code: sessionCode,
         sessionToken: sessionToken.trim(),
@@ -3791,6 +3794,9 @@ export default function App() {
         sessionToken?: string;
         state: any;
       }) => {
+        if (ignoreLateRoomJoinedRef.current) {
+          return;
+        }
         clearRoomActionPending();
         setMyId(playerId);
         if (sessionToken) {
@@ -5207,6 +5213,8 @@ export default function App() {
       setHasSession(false);
       setMySessionToken(null);
     }
+    clearRoomActionPending();
+    ignoreLateRoomJoinedRef.current = true;
     socket.emit("leave_room", { preserveForRejoin: shouldPreserveReconnect });
     setScreen("home");
     setRoom(null);
@@ -5237,7 +5245,7 @@ export default function App() {
       }
       void syncRankResultAfterMatch(previousRank);
     }
-  }, [authToken, clearReconnectWindow, game, myId, room, socket, startReconnectWindow, syncRankResultAfterMatch]);
+  }, [authToken, clearReconnectWindow, game, myId, room, socket, startReconnectWindow, syncRankResultAfterMatch, clearRoomActionPending]);
 
   const finalExit = useCallback(() => {
     const previousRank = myProfileRef.current?.rank;
@@ -5253,6 +5261,8 @@ export default function App() {
       setHasSession(false);
       setMySessionToken(null);
     }
+    clearRoomActionPending();
+    ignoreLateRoomJoinedRef.current = true;
     socket.emit("leave_room", { preserveForRejoin: shouldPreserveReconnect });
     setScreen("home");
     setRoom(null);
@@ -5282,7 +5292,7 @@ export default function App() {
       }
       void syncRankResultAfterMatch(previousRank);
     }
-  }, [authToken, clearReconnectWindow, game, myId, room, socket, startReconnectWindow, syncRankResultAfterMatch]);
+  }, [authToken, clearReconnectWindow, game, myId, room, socket, startReconnectWindow, syncRankResultAfterMatch, clearRoomActionPending]);
 
   const compressImage = useCallback(
     (inputDataUrl: string, maxSide: number): Promise<string> =>
@@ -7257,9 +7267,9 @@ export default function App() {
                               <Button
                                 onClick={createQuickRoom}
                                 disabled={roomActionPending !== null}
-                                className="w-full h-16 rounded-2xl text-4xl gap-2 bg-red-600 hover:bg-red-600 disabled:bg-zinc-700 disabled:text-zinc-300 text-white border-0 text-[33px] font-bold tracking-tight shadow-[0_8px_28px_rgba(220,38,38,0.35)] transition-transform duration-200 hover:-translate-y-0.5"
+                                className="w-full h-16 rounded-2xl text-4xl gap-2 bg-red-600 hover:bg-red-600 disabled:bg-zinc-700 disabled:text-zinc-300 disabled:shadow-none text-white border-0 text-[33px] font-bold tracking-tight shadow-[0_8px_28px_rgba(220,38,38,0.35)] transition-transform duration-200 hover:-translate-y-0.5"
                               >
-                                {roomActionPending === "create" ? "Создание..." : "Создать игру"}
+                                {roomActionPending === "create" ? "Создание" : "Создать игру"}
                               </Button>
                             </motion.div>
                             <Separator className="bg-zinc-800" />
@@ -7281,7 +7291,7 @@ export default function App() {
                                 disabled={!joinCode.trim() || roomActionPending !== null}
                                 className="h-12 min-w-[100px] rounded-xl bg-zinc-100 text-zinc-950 hover:bg-zinc-200 disabled:bg-zinc-700 disabled:text-zinc-300 border-0 text-lg transition-all duration-200 hover:-translate-y-0.5"
                               >
-                                {roomActionPending === "join" ? "Входим..." : "Войти"}
+                                {roomActionPending === "join" ? "Входим" : "Войти"}
                               </Button>
                             </div>
                             <motion.a
@@ -7377,7 +7387,7 @@ export default function App() {
                           <Button
                             onClick={() => setCreateMatchDialogOpen(true)}
                             disabled={roomActionPending !== null}
-                            className="w-full sm:w-auto h-14 rounded-xl bg-red-600 hover:bg-red-600 text-white border-0 gap-2 px-9 text-lg font-semibold transition-all duration-200 hover:-translate-y-0.5 shadow-[0_0_0_1px_rgba(239,68,68,0.5),0_10px_28px_rgba(220,38,38,0.35)] hover:shadow-[0_0_0_1px_rgba(248,113,113,0.7),0_16px_36px_rgba(220,38,38,0.45)]"
+                            className="w-full sm:w-auto h-14 rounded-xl bg-red-600 hover:bg-red-600 disabled:bg-zinc-700 disabled:text-zinc-300 disabled:shadow-none text-white border-0 gap-2 px-9 text-lg font-semibold transition-all duration-200 hover:-translate-y-0.5 shadow-[0_0_0_1px_rgba(239,68,68,0.5),0_10px_28px_rgba(220,38,38,0.35)] hover:shadow-[0_0_0_1px_rgba(248,113,113,0.7),0_16px_36px_rgba(220,38,38,0.45)]"
                           >
                             <UserPlus className="w-4 h-4" />
                             Создать матч
@@ -7462,7 +7472,7 @@ export default function App() {
                                     className="h-11 w-full lg:w-auto lg:min-w-[128px] rounded-xl bg-zinc-100 text-zinc-950 hover:bg-zinc-200 disabled:bg-zinc-700 disabled:text-zinc-300 border-0 text-base font-semibold"
                                     onClick={() => joinPublicMatch(match)}
                                   >
-                                    {roomActionPending === "join" ? "Входим..." : "Войти"}
+                                    {roomActionPending === "join" ? "Входим" : "Войти"}
                                   </Button>
                                 </div>
                               </div>
@@ -7761,7 +7771,7 @@ export default function App() {
                     className="w-full h-11 rounded-xl bg-red-600 hover:bg-red-500 text-white border-0 gap-2"
                   >
                     <UserPlus className="w-4 h-4" />
-                    {roomActionPending === "create" ? "Создание..." : "Создать комнату"}
+                    {roomActionPending === "create" ? "Создание" : "Создать комнату"}
                   </Button>
                 </div>
                 )}
@@ -7829,7 +7839,7 @@ export default function App() {
                     disabled={roomActionPending !== null}
                     className="w-full h-11 rounded-xl bg-zinc-100 text-zinc-950 hover:bg-zinc-200 disabled:bg-zinc-700 disabled:text-zinc-300 border-0"
                   >
-                    {roomActionPending === "join" ? "Входим..." : "Войти"}
+                    {roomActionPending === "join" ? "Входим" : "Войти"}
                   </Button>
                 </div>
               </DialogContent>
