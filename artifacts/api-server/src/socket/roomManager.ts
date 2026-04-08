@@ -1089,13 +1089,15 @@ export function rejoinRoom(
   code: string,
   sessionToken: string,
   newSocketId: string,
-  avatar?: string | null
+  avatar?: string | null,
+  banner?: string | null,
 ): { room: Room; playerId: string; playerName: string } | null {
   const room = rooms.get(code);
   if (!room) return null;
   const normalizedToken = sessionToken.trim();
   if (!normalizedToken) return null;
   const normalizedAvatar = avatar || undefined;
+  const normalizedBanner = banner || undefined;
 
   if (room.game) {
     const player = room.game.players.find(
@@ -1107,12 +1109,18 @@ export function rejoinRoom(
       if (avatar !== undefined) {
         player.avatar = normalizedAvatar;
       }
+      if (banner !== undefined) {
+        player.banner = normalizedBanner;
+      }
       const lobbyPlayer = room.players.find(p => p.id === player.id);
       if (lobbyPlayer) {
         lobbyPlayer.socketId = newSocketId;
         lobbyPlayer.disconnectedUntil = undefined;
         if (avatar !== undefined) {
           lobbyPlayer.avatar = normalizedAvatar;
+        }
+        if (banner !== undefined) {
+          lobbyPlayer.banner = normalizedBanner;
         }
       }
       return { room, playerId: player.id, playerName: player.name };
@@ -1125,6 +1133,9 @@ export function rejoinRoom(
     player.disconnectedUntil = undefined;
     if (avatar !== undefined) {
       player.avatar = normalizedAvatar;
+    }
+    if (banner !== undefined) {
+      player.banner = normalizedBanner;
     }
     return { room, playerId: player.id, playerName: player.name };
   }

@@ -296,6 +296,7 @@ function mapGamePlayers(players: any[]) {
     name: p.name,
     isBot: !!p.isBot,
     avatar: p.avatar,
+    banner: p.banner,
     selectedBadgeKey: p.selectedBadgeKey ?? undefined,
     preferredRole:
       typeof p?.preferredRole === "string" ? p.preferredRole : null,
@@ -342,6 +343,7 @@ function mapLobbyPlayers(players: any[]) {
     name: p.name,
     isBot: !!p.isBot,
     avatar: p.avatar,
+    banner: p.banner,
     selectedBadgeKey: p.selectedBadgeKey ?? undefined,
     preferredRole:
       typeof p?.preferredRole === "string" ? p.preferredRole : null,
@@ -446,6 +448,7 @@ function getRoomState(room: any, playerId: string) {
       userId: myPlayer.userId ?? undefined,
       name: myPlayer.name,
       avatar: myPlayer.avatar,
+      banner: myPlayer.banner,
       roleKey: myPlayer.roleKey,
       roleTitle: myPlayer.roleTitle,
       goal: myPlayer.goal,
@@ -911,7 +914,7 @@ export function setupSocket(httpServer: HttpServer) {
           socketId: socket.id,
           sessionToken,
           avatar: avatar || authUser?.avatar || undefined,
-          banner: undefined,
+          banner: banner || authUser?.banner || undefined,
           selectedBadgeKey: authSelectedBadgeKey,
           preferredRole: (authUser?.preferredRole as AssignableRole | undefined) ?? null,
           lobbyAssignedRole: null,
@@ -1088,7 +1091,7 @@ export function setupSocket(httpServer: HttpServer) {
         socketId: socket.id,
         sessionToken,
         avatar: avatar || authUser?.avatar || undefined,
-        banner: undefined,
+        banner: banner || authUser?.banner || undefined,
         selectedBadgeKey: authSelectedBadgeKey,
         preferredRole: (authUser?.preferredRole as AssignableRole | undefined) ?? null,
         lobbyAssignedRole: null,
@@ -1159,13 +1162,13 @@ export function setupSocket(httpServer: HttpServer) {
       persistRoom(roomCode);
     });
 
-    socket.on("rejoin_room", ({ code, sessionToken, avatar }: { code: string; sessionToken: string; avatar?: string | null }) => {
+    socket.on("rejoin_room", ({ code, sessionToken, avatar, banner }: { code: string; sessionToken: string; avatar?: string | null; banner?: string | null }) => {
       const roomCode = normalizeRoomCode(code);
       if (!sessionToken?.trim()) {
         socket.emit("rejoin_failed", { message: "Недействительная сессия." });
         return;
       }
-      const result = rejoinRoom(roomCode, sessionToken, socket.id, avatar);
+      const result = rejoinRoom(roomCode, sessionToken, socket.id, avatar, banner);
 
       if (!result) {
         socket.emit("rejoin_failed", { message: "Комната не найдена или вас нет в ней." });

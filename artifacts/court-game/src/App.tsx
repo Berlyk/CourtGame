@@ -2981,6 +2981,7 @@ export default function App() {
   const socket = getSocket();
   const activeRoomCode = room?.code ?? game?.code ?? null;
   const sharedAvatar = avatar;
+  const sharedBanner = banner;
   const isAuthenticated = !!authUser && !!authToken;
   const isCreatorAdmin = (authUser?.login ?? "").trim().toLowerCase() === "berly";
   const rememberKnownUserIds = useCallback((players?: Array<{ id?: string; userId?: string }>) => {
@@ -3266,16 +3267,19 @@ export default function App() {
       lastAutoRejoinAttemptAtRef.current = now;
 
       setHasSession(true);
-      const rejoinPayload: { code: string; sessionToken: string; avatar?: string } = {
+      const rejoinPayload: { code: string; sessionToken: string; avatar?: string; banner?: string } = {
         code: sessionCode,
         sessionToken: sessionToken.trim(),
       };
       if (!authToken && sharedAvatar) {
         rejoinPayload.avatar = sharedAvatar;
       }
+      if (!authToken && sharedBanner) {
+        rejoinPayload.banner = sharedBanner;
+      }
       socket.emit("rejoin_room", rejoinPayload);
     },
-    [authToken, mySessionToken, sharedAvatar, socket],
+    [authToken, mySessionToken, sharedAvatar, sharedBanner, socket],
   );
 
   useEffect(() => {
@@ -3904,6 +3908,7 @@ export default function App() {
             return {
               ...nextPlayer,
               avatar: nextPlayer.avatar ?? prevPlayer?.avatar,
+              banner: nextPlayer.banner ?? prevPlayer?.banner,
             };
           });
           return {
@@ -3948,6 +3953,7 @@ export default function App() {
           return {
             ...nextPlayer,
             avatar: nextPlayer.avatar ?? prevPlayer?.avatar,
+            banner: nextPlayer.banner ?? prevPlayer?.banner,
           };
         });
 
@@ -3963,6 +3969,7 @@ export default function App() {
             ? {
                 ...prev.me,
                 avatar: updatedSelf.avatar ?? prev.me.avatar,
+                banner: updatedSelf.banner ?? prev.me.banner,
                 roleKey: updatedSelf.roleKey ?? prev.me.roleKey,
                 roleTitle: updatedSelf.roleTitle ?? prev.me.roleTitle,
               }
@@ -3998,6 +4005,7 @@ export default function App() {
                     ...prev.me,
                     name: updatedMe.name,
                     avatar: updatedMe.avatar,
+                    banner: updatedMe.banner,
                     roleKey: updatedMe.roleKey ?? prev.me.roleKey,
                     roleTitle: updatedMe.roleTitle ?? prev.me.roleTitle,
                   }
@@ -4380,8 +4388,11 @@ export default function App() {
     if (!authToken && sharedAvatar) {
       payload.avatar = sharedAvatar;
     }
+    if (!authToken && sharedBanner) {
+      payload.banner = sharedBanner;
+    }
     socket.emit("create_room", payload);
-  }, [socket, playerName, sharedAvatar, authToken]);
+  }, [socket, playerName, sharedAvatar, sharedBanner, authToken]);
 
   const createRoomFromPanel = useCallback(() => {
     const name = playerName.trim() || getOrCreateGuestName();
@@ -4427,12 +4438,16 @@ export default function App() {
     if (!authToken && sharedAvatar) {
       payload.avatar = sharedAvatar;
     }
+    if (!authToken && sharedBanner) {
+      payload.banner = sharedBanner;
+    }
     socket.emit("create_room", payload);
     return true;
   }, [
     socket,
     playerName,
     sharedAvatar,
+    sharedBanner,
     authToken,
     createRoomMode,
     createRoomPackKey,
@@ -4465,8 +4480,11 @@ export default function App() {
     if (!authToken && sharedAvatar) {
       payload.avatar = sharedAvatar;
     }
+    if (!authToken && sharedBanner) {
+      payload.banner = sharedBanner;
+    }
     socket.emit("join_room", payload);
-  }, [socket, joinCode, playerName, sharedAvatar, authToken]);
+  }, [socket, joinCode, playerName, sharedAvatar, sharedBanner, authToken]);
 
   const reloadMyProfile = useCallback(async () => {
     if (!authToken) return;
@@ -4549,6 +4567,9 @@ export default function App() {
         };
         if (Object.prototype.hasOwnProperty.call(profilePatch, "avatar")) {
           socketProfilePatch.avatar = profileAvatarDraft;
+        }
+        if (Object.prototype.hasOwnProperty.call(profilePatch, "banner")) {
+          socketProfilePatch.banner = profileBannerDraft;
         }
         socket.emit("update_profile", {
           ...socketProfilePatch,
@@ -4776,6 +4797,7 @@ export default function App() {
         sessionToken: mySessionToken,
         name: user.nickname,
         avatar: user.avatar ?? null,
+        banner: user.banner ?? null,
         preferredRole: user.preferredRole ?? null,
       });
     }
