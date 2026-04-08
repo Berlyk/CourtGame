@@ -435,6 +435,11 @@ async function ensureTables(): Promise<void> {
         ALTER TABLE auth_users
           ADD COLUMN IF NOT EXISTS preferred_role TEXT;
       `);
+      await pool.query(`
+        ALTER TABLE auth_users
+          ALTER COLUMN avatar TYPE TEXT,
+          ALTER COLUMN banner TYPE TEXT;
+      `);
 
       await pool.query(`
         CREATE TABLE IF NOT EXISTS auth_sessions (

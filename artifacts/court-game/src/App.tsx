@@ -162,6 +162,7 @@ const GUEST_NAME_PREFIX = "Гость-";
 const PROFILE_BIO_MAX = 150;
 const MAX_PROFILE_IMAGE_UPLOAD_BYTES = 6 * 1024 * 1024;
 const MAX_PROFILE_GIF_UPLOAD_BYTES = 3 * 1024 * 1024;
+const LOCAL_MEDIA_CACHE_MAX_CHARS = 350_000;
 const PACK_PAYWALL_PREVIEW_ENABLED = false;
 const PACK_PREVIEW_LOCKED_TITLES = new Set(["THE BOYS", "18+"]);
 
@@ -2202,7 +2203,65 @@ function localizeAuthError(message: string): string {
   if (normalized.includes("not found")) {
     return "Не найдено.";
   }
+  if (
+    normalized.includes("quota exceeded") ||
+    normalized.includes("quotaexceeded") ||
+    normalized.includes("storage quota")
+  ) {
+    return "Файл слишком большой для локального кэша браузера. Попробуйте GIF меньшего размера.";
+  }
+  if (
+    normalized.includes("value too long for type character varying") ||
+    normalized.includes("request entity too large")
+  ) {
+    return "Файл слишком большой. Выберите GIF меньшего размера.";
+  }
   return "Произошла ошибка. Попробуйте снова.";
+}
+
+function safeSetLocalStorageItem(key: string, value: string): boolean {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function safeRemoveLocalStorageItem(key: string): void {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // ignore
+  }
+}
+
+function persistMediaToLocalCache(key: string, value: string | null | undefined): void {
+  if (!value) {
+    safeRemoveLocalStorageItem(key);
+    return;
+  }
+  if (value.length > LOCAL_MEDIA_CACHE_MAX_CHARS) {
+    // Крупные dataURL оставляем только в БД/состоянии, не кладем в localStorage.
+    safeRemoveLocalStorageItem(key);
+    return;
+  }
+  safeSetLocalStorageItem(key, value);
+}
+
+function persistAuthUserToLocalCache(user: AuthUser): void {
+  const cachedUser: AuthUser = { ...user };
+  if (cachedUser.avatar && cachedUser.avatar.length > LOCAL_MEDIA_CACHE_MAX_CHARS) {
+    cachedUser.avatar = undefined;
+  }
+  if (cachedUser.banner && cachedUser.banner.length > LOCAL_MEDIA_CACHE_MAX_CHARS) {
+    cachedUser.banner = undefined;
+  }
+  const serialized = JSON.stringify(cachedUser);
+  if (!safeSetLocalStorageItem(AUTH_USER_STORAGE_KEY, serialized)) {
+    const minimalUser: AuthUser = { ...cachedUser, avatar: undefined, banner: undefined };
+    safeSetLocalStorageItem(AUTH_USER_STORAGE_KEY, JSON.stringify(minimalUser));
+  }
 }
 
 function isNicknameTakenError(message: string): boolean {
@@ -3442,17 +3501,17 @@ export default function App() {
       .then(({ user }) => {
         if (cancelled) return;
         setAuthUser(user);
-        localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(user));
+        persistAuthUserToLocalCache(user);
         setPlayerName(user.nickname);
         setProfileNicknameDraft(user.nickname);
-        localStorage.setItem("court_nickname", user.nickname);
+        safeSetLocalStorageItem("court_nickname", user.nickname);
         if (user.avatar) {
           setAvatar(user.avatar);
-          localStorage.setItem("court_avatar", user.avatar);
+          persistMediaToLocalCache("court_avatar", user.avatar);
         }
         if (user.banner) {
           setBanner(user.banner);
-          localStorage.setItem(BANNER_STORAGE_KEY, user.banner);
+          persistMediaToLocalCache(BANNER_STORAGE_KEY, user.banner);
         }
       })
       .catch(() => {
@@ -4439,31 +4498,30 @@ export default function App() {
         body: profilePatch,
       });
       setAuthUser(payload.user);
-      localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(payload.user));
+      persistAuthUserToLocalCache(payload.user);
       setPlayerName(normalizedName);
       setProfileNicknameDraft(normalizedName);
       setAvatar(profileAvatarDraft);
       setBanner(profileBannerDraft);
-      localStorage.setItem("court_nickname", normalizedName);
-      if (profileAvatarDraft) {
-        localStorage.setItem("court_avatar", profileAvatarDraft);
-      } else {
-        localStorage.removeItem("court_avatar");
-      }
-      if (profileBannerDraft) {
-        localStorage.setItem(BANNER_STORAGE_KEY, profileBannerDraft);
-      } else {
-        localStorage.removeItem(BANNER_STORAGE_KEY);
-      }
+      safeSetLocalStorageItem("court_nickname", normalizedName);
+      persistMediaToLocalCache("court_avatar", profileAvatarDraft);
+      persistMediaToLocalCache(BANNER_STORAGE_KEY, profileBannerDraft);
       if (activeRoomCode && mySessionToken) {
-        socket.emit("update_profile", {
+        const socketProfilePatch: Record<string, unknown> = {
           code: activeRoomCode,
           sessionToken: mySessionToken,
           name: normalizedName,
-          avatar: profileAvatarDraft,
-          banner: profileBannerDraft,
           selectedBadgeKey: selectedBadgeKey || null,
           preferredRole: preferredRoleDraft || null,
+        };
+        if (Object.prototype.hasOwnProperty.call(profilePatch, "avatar")) {
+          socketProfilePatch.avatar = profileAvatarDraft;
+        }
+        if (Object.prototype.hasOwnProperty.call(profilePatch, "banner")) {
+          socketProfilePatch.banner = profileBannerDraft;
+        }
+        socket.emit("update_profile", {
+          ...socketProfilePatch,
         });
       }
       await reloadMyProfile();
@@ -4544,7 +4602,7 @@ export default function App() {
         },
       });
       setAuthUser(payload.user);
-      localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(payload.user));
+      persistAuthUserToLocalCache(payload.user);
       setEmailChangeCurrentPassword("");
       setEmailChangeNext("");
       await reloadMyProfile();
@@ -4665,19 +4723,19 @@ export default function App() {
   const handleAuthSuccess = useCallback((user: AuthUser, token: string) => {
     setAuthUser(user);
     setAuthToken(token);
-    localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token);
-    localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(user));
-    localStorage.setItem("court_nickname", user.nickname);
+    safeSetLocalStorageItem(AUTH_TOKEN_STORAGE_KEY, token);
+    persistAuthUserToLocalCache(user);
+    safeSetLocalStorageItem("court_nickname", user.nickname);
     setPlayerName(user.nickname);
     setProfileNicknameDraft(user.nickname);
     setPreferredRoleDraft(user.preferredRole ?? "");
     if (user.avatar) {
       setAvatar(user.avatar);
-      localStorage.setItem("court_avatar", user.avatar);
+      persistMediaToLocalCache("court_avatar", user.avatar);
     }
     if (user.banner) {
       setBanner(user.banner);
-      localStorage.setItem(BANNER_STORAGE_KEY, user.banner);
+      persistMediaToLocalCache(BANNER_STORAGE_KEY, user.banner);
     }
     setAuthError("");
     setAuthDialogOpen(false);
