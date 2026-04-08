@@ -2981,7 +2981,6 @@ export default function App() {
   const socket = getSocket();
   const activeRoomCode = room?.code ?? game?.code ?? null;
   const sharedAvatar = avatar;
-  const sharedBanner = banner;
   const isAuthenticated = !!authUser && !!authToken;
   const isCreatorAdmin = (authUser?.login ?? "").trim().toLowerCase() === "berly";
   const rememberKnownUserIds = useCallback((players?: Array<{ id?: string; userId?: string }>) => {
@@ -3267,13 +3266,16 @@ export default function App() {
       lastAutoRejoinAttemptAtRef.current = now;
 
       setHasSession(true);
-      socket.emit("rejoin_room", {
+      const rejoinPayload: { code: string; sessionToken: string; avatar?: string } = {
         code: sessionCode,
         sessionToken: sessionToken.trim(),
-        avatar: sharedAvatar || undefined,
-      });
+      };
+      if (!authToken && sharedAvatar) {
+        rejoinPayload.avatar = sharedAvatar;
+      }
+      socket.emit("rejoin_room", rejoinPayload);
     },
-    [mySessionToken, sharedAvatar, socket],
+    [authToken, mySessionToken, sharedAvatar, socket],
   );
 
   useEffect(() => {
@@ -4361,17 +4363,25 @@ export default function App() {
   const createQuickRoom = useCallback(() => {
     const name = playerName.trim() || getOrCreateGuestName();
     localStorage.setItem("court_nickname", name);
-    socket.emit("create_room", {
+    const payload: {
+      playerName: string;
+      avatar?: string;
+      banner?: string;
+      authToken?: string;
+      options: { visibility: "public"; modeKey: "quick_flex" };
+    } = {
       playerName: name,
-      avatar: sharedAvatar || undefined,
-      banner: sharedBanner || undefined,
       authToken: authToken || undefined,
       options: {
         visibility: "public",
         modeKey: "quick_flex",
       },
-    });
-  }, [socket, playerName, sharedAvatar, sharedBanner, authToken]);
+    };
+    if (!authToken && sharedAvatar) {
+      payload.avatar = sharedAvatar;
+    }
+    socket.emit("create_room", payload);
+  }, [socket, playerName, sharedAvatar, authToken]);
 
   const createRoomFromPanel = useCallback(() => {
     const name = playerName.trim() || getOrCreateGuestName();
@@ -4386,10 +4396,21 @@ export default function App() {
       return false;
     }
     localStorage.setItem("court_nickname", name);
-    socket.emit("create_room", {
+    const payload: {
+      playerName: string;
+      avatar?: string;
+      banner?: string;
+      authToken?: string;
+      options: {
+        modeKey: RoomModeKey;
+        casePackKey: string;
+        visibility: "public" | "private";
+        roomName?: string;
+        venueUrl?: string;
+        password?: string;
+      };
+    } = {
       playerName: name,
-      avatar: sharedAvatar || undefined,
-      banner: sharedBanner || undefined,
       authToken: authToken || undefined,
       options: {
         modeKey: createRoomMode,
@@ -4402,14 +4423,17 @@ export default function App() {
             ? createRoomPassword.trim()
             : undefined,
       },
-    });
+    };
+    if (!authToken && sharedAvatar) {
+      payload.avatar = sharedAvatar;
+    }
+    socket.emit("create_room", payload);
     return true;
   }, [
     socket,
     playerName,
     sharedAvatar,
     authToken,
-    sharedBanner,
     createRoomMode,
     createRoomPackKey,
     selectedCreatePackLocked,
@@ -4425,15 +4449,24 @@ export default function App() {
     const password = (options?.password ?? "").trim();
     const name = playerName.trim() || getOrCreateGuestName();
     localStorage.setItem("court_nickname", name);
-    socket.emit("join_room", {
+    const payload: {
+      code: string;
+      playerName: string;
+      avatar?: string;
+      banner?: string;
+      authToken?: string;
+      password?: string;
+    } = {
       code: targetCode,
       playerName: name,
-      avatar: sharedAvatar || undefined,
-      banner: sharedBanner || undefined,
       authToken: authToken || undefined,
       password: password || undefined,
-    });
-  }, [socket, joinCode, playerName, sharedAvatar, sharedBanner, authToken]);
+    };
+    if (!authToken && sharedAvatar) {
+      payload.avatar = sharedAvatar;
+    }
+    socket.emit("join_room", payload);
+  }, [socket, joinCode, playerName, sharedAvatar, authToken]);
 
   const reloadMyProfile = useCallback(async () => {
     if (!authToken) return;
@@ -4516,9 +4549,6 @@ export default function App() {
         };
         if (Object.prototype.hasOwnProperty.call(profilePatch, "avatar")) {
           socketProfilePatch.avatar = profileAvatarDraft;
-        }
-        if (Object.prototype.hasOwnProperty.call(profilePatch, "banner")) {
-          socketProfilePatch.banner = profileBannerDraft;
         }
         socket.emit("update_profile", {
           ...socketProfilePatch,
@@ -4746,7 +4776,6 @@ export default function App() {
         sessionToken: mySessionToken,
         name: user.nickname,
         avatar: user.avatar ?? null,
-        banner: user.banner ?? null,
         preferredRole: user.preferredRole ?? null,
       });
     }
