@@ -6,6 +6,7 @@ import {
   changeEmailByToken,
   changePasswordByToken,
   deletePromoCodeByAdmin,
+  findUserByAdminQuery,
   getPublicUserProfileById,
   getProfileByToken,
   getUserByToken,
@@ -60,20 +61,157 @@ function resolveClientIp(req: Parameters<typeof authRouter.get>[1]): string {
   return String(req.ip ?? "").trim();
 }
 
-async function requireAdmin(req: Parameters<typeof authRouter.get>[1], res: Parameters<typeof authRouter.get>[2]) {
+const ADMIN_GUARD_WINDOW_MS = 15 * 60 * 1000;
+const ADMIN_GUARD_BLOCK_MS = 15 * 60 * 1000;
+const ADMIN_GUARD_MAX_FAILS = 10;
+const ADMIN_SESSION_TTL_MS = 10 * 60 * 1000;
+const adminGuardAttempts = new Map<
+  string,
+  { failedCount: number; windowStartMs: number; blockUntilMs: number }
+>();
+const adminSessions = new Map<
+  string,
+  { token: string; userId: string; ip: string; userAgent: string; expiresAtMs: number }
+>();
+
+function cleanupAdminState(nowMs: number) {
+  for (const [ip, entry] of adminGuardAttempts.entries()) {
+    if (entry.blockUntilMs > 0 && entry.blockUntilMs > nowMs) continue;
+    if (nowMs - entry.windowStartMs > ADMIN_GUARD_WINDOW_MS) {
+      adminGuardAttempts.delete(ip);
+    }
+  }
+  for (const [sessionId, entry] of adminSessions.entries()) {
+    if (entry.expiresAtMs <= nowMs) {
+      adminSessions.delete(sessionId);
+    }
+  }
+}
+
+function registerAdminFailure(ip: string, nowMs: number): number {
+  const normalizedIp = ip || "unknown";
+  const existing = adminGuardAttempts.get(normalizedIp);
+  if (!existing || nowMs - existing.windowStartMs > ADMIN_GUARD_WINDOW_MS) {
+    adminGuardAttempts.set(normalizedIp, {
+      failedCount: 1,
+      windowStartMs: nowMs,
+      blockUntilMs: 0,
+    });
+    return 1;
+  }
+  const nextFails = existing.failedCount + 1;
+  const nextBlock =
+    nextFails >= ADMIN_GUARD_MAX_FAILS ? nowMs + ADMIN_GUARD_BLOCK_MS : existing.blockUntilMs;
+  adminGuardAttempts.set(normalizedIp, {
+    failedCount: nextFails,
+    windowStartMs: existing.windowStartMs,
+    blockUntilMs: nextBlock,
+  });
+  return nextFails;
+}
+
+function clearAdminFailures(ip: string) {
+  adminGuardAttempts.delete(ip || "unknown");
+}
+
+function getAdminBlockRemainingMs(ip: string, nowMs: number): number {
+  const entry = adminGuardAttempts.get(ip || "unknown");
+  if (!entry) return 0;
+  if (entry.blockUntilMs <= nowMs) return 0;
+  return entry.blockUntilMs - nowMs;
+}
+
+function readAdminSession(headers: Record<string, unknown>): string {
+  const raw = headers["x-admin-session"];
+  if (typeof raw === "string") return raw.trim();
+  if (Array.isArray(raw)) return String(raw[0] ?? "").trim();
+  return "";
+}
+
+function resolveUserAgent(headers: Record<string, unknown>): string {
+  const raw = headers["user-agent"];
+  if (typeof raw === "string") return raw.trim();
+  if (Array.isArray(raw)) return String(raw[0] ?? "").trim();
+  return "";
+}
+
+function mintAdminSession(input: {
+  token: string;
+  userId: string;
+  ip: string;
+  userAgent: string;
+}): string {
+  const sessionId = crypto.randomUUID();
+  adminSessions.set(sessionId, {
+    token: input.token,
+    userId: input.userId,
+    ip: input.ip || "unknown",
+    userAgent: input.userAgent,
+    expiresAtMs: Date.now() + ADMIN_SESSION_TTL_MS,
+  });
+  return sessionId;
+}
+
+function validateAdminSession(input: {
+  sessionId: string;
+  token: string;
+  userId: string;
+  ip: string;
+  userAgent: string;
+}): boolean {
+  const entry = adminSessions.get(input.sessionId);
+  if (!entry) return false;
+  const nowMs = Date.now();
+  if (entry.expiresAtMs <= nowMs) {
+    adminSessions.delete(input.sessionId);
+    return false;
+  }
+  if (
+    entry.token !== input.token ||
+    entry.userId !== input.userId ||
+    entry.ip !== (input.ip || "unknown") ||
+    entry.userAgent !== input.userAgent
+  ) {
+    return false;
+  }
+  entry.expiresAtMs = nowMs + ADMIN_SESSION_TTL_MS;
+  adminSessions.set(input.sessionId, entry);
+  return true;
+}
+
+async function requireAdmin(
+  req: Parameters<typeof authRouter.get>[1],
+  res: Parameters<typeof authRouter.get>[2],
+  options?: { requireSession?: boolean },
+) {
+  const nowMs = Date.now();
+  cleanupAdminState(nowMs);
+  const clientIp = resolveClientIp(req) || "unknown";
+  const clientUserAgent = resolveUserAgent(req.headers as Record<string, unknown>);
+  const blockRemainingMs = getAdminBlockRemainingMs(clientIp, nowMs);
+  if (blockRemainingMs > 0) {
+    res
+      .status(429)
+      .json({ message: `Слишком много попыток. Повторите через ${Math.ceil(blockRemainingMs / 1000)} сек.` });
+    return null;
+  }
+
   const token = getRequestToken(req.headers as Record<string, unknown>);
   if (!token) {
+    registerAdminFailure(clientIp, nowMs);
     res.status(401).json({ message: "Не авторизован." });
     return null;
   }
   const adminUser = await getUserByToken(token);
   const adminLogin = String(process.env.ADMIN_PANEL_LOGIN ?? "berly").trim().toLowerCase();
   if (!adminUser || adminUser.login.trim().toLowerCase() !== adminLogin) {
+    registerAdminFailure(clientIp, nowMs);
     res.status(403).json({ message: "Недостаточно прав." });
     return null;
   }
   const requiredAdminUserId = String(process.env.ADMIN_USER_ID ?? "").trim();
   if (requiredAdminUserId && adminUser.id !== requiredAdminUserId) {
+    registerAdminFailure(clientIp, nowMs);
     res.status(403).json({ message: "Недостаточно прав." });
     return null;
   }
@@ -87,6 +225,7 @@ async function requireAdmin(req: Parameters<typeof authRouter.get>[1], res: Para
           ? String(providedRaw[0] ?? "").trim()
           : "";
     if (!provided || !secureCompare(provided, requiredKey)) {
+      registerAdminFailure(clientIp, nowMs);
       res.status(403).json({ message: "Неверный ключ админ-панели." });
       return null;
     }
@@ -96,13 +235,33 @@ async function requireAdmin(req: Parameters<typeof authRouter.get>[1], res: Para
     .map((ip) => ip.trim())
     .filter(Boolean);
   if (allowedIps.length > 0) {
-    const clientIp = resolveClientIp(req);
     if (!clientIp || !allowedIps.includes(clientIp)) {
+      registerAdminFailure(clientIp, nowMs);
       res.status(403).json({ message: "IP не разрешен для админ-панели." });
       return null;
     }
   }
-  return { token, adminUser };
+
+  if (options?.requireSession) {
+    const adminSession = readAdminSession(req.headers as Record<string, unknown>);
+    if (
+      !adminSession ||
+      !validateAdminSession({
+        sessionId: adminSession,
+        token,
+        userId: adminUser.id,
+        ip: clientIp,
+        userAgent: clientUserAgent,
+      })
+    ) {
+      registerAdminFailure(clientIp, nowMs);
+      res.status(403).json({ message: "Сессия админ-панели истекла. Подтвердите доступ снова." });
+      return null;
+    }
+  }
+
+  clearAdminFailures(clientIp);
+  return { token, adminUser, clientIp, clientUserAgent };
 }
 
 authRouter.post("/auth/register", async (req, res) => {
@@ -355,8 +514,22 @@ authRouter.patch("/auth/promo/apply", async (req, res) => {
   }
 });
 
-authRouter.patch("/auth/admin/subscription", async (req, res) => {
+authRouter.get("/auth/admin/access", async (req, res) => {
   const auth = await requireAdmin(req, res);
+  if (!auth) return;
+  const adminSession = mintAdminSession({
+    token: auth.token,
+    userId: auth.adminUser.id,
+    ip: auth.clientIp,
+    userAgent: auth.clientUserAgent,
+  });
+  return res
+    .status(200)
+    .json({ ok: true, admin: true, userId: auth.adminUser.id, adminSession });
+});
+
+authRouter.patch("/auth/admin/subscription", async (req, res) => {
+  const auth = await requireAdmin(req, res, { requireSession: true });
   if (!auth) return;
 
   const userId = String(req.body?.userId ?? "").trim();
@@ -401,19 +574,35 @@ authRouter.patch("/auth/admin/subscription", async (req, res) => {
 });
 
 authRouter.patch("/auth/admin/promo", async (req, res) => {
-  const auth = await requireAdmin(req, res);
+  const auth = await requireAdmin(req, res, { requireSession: true });
   if (!auth) return;
 
   const code = String(req.body?.code ?? "").trim();
+  const promoKindRaw = String(req.body?.promoKind ?? "subscription")
+    .trim()
+    .toLowerCase();
+  const promoKind = promoKindRaw === "badge" ? "badge" : "subscription";
+  const badgeKey =
+    req.body?.badgeKey === null || typeof req.body?.badgeKey === "string"
+      ? req.body.badgeKey
+      : undefined;
   const tier = String(req.body?.tier ?? "").trim();
-  if (!code || !tier) {
-    return res.status(400).json({ message: "Нужны code и tier." });
+  if (!code) {
+    return res.status(400).json({ message: "Нужен code." });
+  }
+  if (promoKind === "subscription" && !tier) {
+    return res.status(400).json({ message: "Для подписочного промокода нужен tier." });
+  }
+  if (promoKind === "badge" && !String(badgeKey ?? "").trim()) {
+    return res.status(400).json({ message: "Для промокода на бейдж нужен badgeKey." });
   }
 
   try {
     const promo = await upsertPromoCodeByAdmin({
       code,
-      tier,
+      promoKind,
+      badgeKey,
+      tier: promoKind === "subscription" ? tier : "free",
       duration:
         req.body?.duration === null || typeof req.body?.duration === "string"
           ? req.body.duration
@@ -449,7 +638,7 @@ authRouter.patch("/auth/admin/promo", async (req, res) => {
 });
 
 authRouter.get("/auth/admin/promo/list", async (req, res) => {
-  const auth = await requireAdmin(req, res);
+  const auth = await requireAdmin(req, res, { requireSession: true });
   if (!auth) return;
   try {
     const promos = await listPromoCodesByAdmin();
@@ -461,7 +650,7 @@ authRouter.get("/auth/admin/promo/list", async (req, res) => {
 });
 
 authRouter.patch("/auth/admin/promo/delete", async (req, res) => {
-  const auth = await requireAdmin(req, res);
+  const auth = await requireAdmin(req, res, { requireSession: true });
   if (!auth) return;
   const code = String(req.body?.code ?? "").trim();
   if (!code) {
@@ -475,6 +664,26 @@ authRouter.patch("/auth/admin/promo/delete", async (req, res) => {
     return res.status(200).json({ ok: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Не удалось удалить промокод.";
+    return res.status(400).json({ message });
+  }
+});
+
+authRouter.post("/auth/admin/user/find", async (req, res) => {
+  const auth = await requireAdmin(req, res, { requireSession: true });
+  if (!auth) return;
+  const query = String(req.body?.query ?? "").trim();
+  if (!query) {
+    return res.status(400).json({ message: "Введите login, email, nickname или userId." });
+  }
+  try {
+    const user = await findUserByAdminQuery(query);
+    if (!user) {
+      return res.status(404).json({ message: "Пользователь не найден." });
+    }
+    return res.status(200).json({ ok: true, user });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Не удалось выполнить поиск пользователя.";
     return res.status(400).json({ message });
   }
 });

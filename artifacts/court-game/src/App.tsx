@@ -189,6 +189,23 @@ const SUBSCRIPTION_DURATION_UI_OPTIONS: Array<{
   { key: "1_month", label: "1 месяц" },
   { key: "1_year", label: "1 год" },
 ];
+type AdminPromoKind = "subscription" | "badge";
+const ADMIN_PROMO_KIND_OPTIONS: Array<{ key: AdminPromoKind; label: string }> = [
+  { key: "subscription", label: "Подписка" },
+  { key: "badge", label: "Бейдж" },
+];
+const ADMIN_BADGE_PROMO_OPTIONS: Array<{ key: string; label: string }> = [
+  { key: "sub_trainee", label: "Бейдж «Стажер»" },
+  { key: "sub_practitioner", label: "Бейдж «Практик»" },
+  { key: "sub_arbiter", label: "Бейдж «Арбитр»" },
+  { key: "legend", label: "Бейдж «Легенда»" },
+  { key: "winner", label: "Бейдж «Победитель»" },
+  { key: "media", label: "Бейдж «Медиа»" },
+  { key: "host", label: "Бейдж «Ведущий»" },
+  { key: "innovator", label: "Бейдж «Новатор»" },
+  { key: "moderator", label: "Бейдж «Модератор»" },
+  { key: "admin", label: "Бейдж «Администратор»" },
+];
 
 const LEGAL_DOCS = {
   privacy: {
@@ -454,10 +471,10 @@ function normalizeSubscriptionFeatureText(feature: string): string {
     return "Выбор роли хоста в своем лобби";
   }
   if (normalized.includes("разрешение игрокам выбирать роли")) {
-    return "Игроки выбирают роли сами";
+    return "Выбор ролей игроками в лобби";
   }
   if (normalized.includes("подсветка комнаты")) {
-    return "Приоритет в списке и метка комнаты";
+    return "Выделение и приоритет комнаты";
   }
   return trimmed;
 }
@@ -1607,7 +1624,7 @@ function HelpCenter({
 
   useEffect(() => {
     if (!hasSearchQuery) {
-      setOpenCategoryValues([]);
+      setOpenCategoryValues(groupedTopics.map((group) => group.category));
       setOpenTopicValuesByCategory({});
       return;
     }
@@ -1919,6 +1936,8 @@ interface PublicUserProfile {
 
 interface AdminPromoCodeView {
   code: string;
+  promoKind: AdminPromoKind;
+  badgeKey: string | null;
   tier: SubscriptionTier;
   duration: SubscriptionDuration;
   source: string;
@@ -1929,6 +1948,21 @@ interface AdminPromoCodeView {
   expiresAt: string | null;
   createdAt: string | null;
   updatedAt: string | null;
+}
+
+interface AdminLookupUserView {
+  id: string;
+  login: string;
+  email: string;
+  nickname: string;
+  createdAt: number;
+  subscription: {
+    tier: SubscriptionTier | string;
+    duration: SubscriptionDuration | string;
+    isActive: boolean;
+    daysLeft: number | null;
+    isLifetime: boolean;
+  };
 }
 
 interface MyPlayer {
@@ -3066,15 +3100,29 @@ export default function App() {
     () => localStorage.getItem("court_admin_panel_key") ?? "",
   );
   const [adminPromoCodeDraft, setAdminPromoCodeDraft] = useState("");
+  const [adminPromoKind, setAdminPromoKind] = useState<AdminPromoKind>("subscription");
+  const [adminPromoBadgeKey, setAdminPromoBadgeKey] = useState("sub_trainee");
   const [adminPromoTier, setAdminPromoTier] = useState<SubscriptionTier>("trainee");
   const [adminPromoDuration, setAdminPromoDuration] = useState<SubscriptionDuration>("1_month");
   const [adminPromoMaxUses, setAdminPromoMaxUses] = useState("");
   const [adminPromoStartsAt, setAdminPromoStartsAt] = useState("");
   const [adminPromoExpiresAt, setAdminPromoExpiresAt] = useState("");
   const [adminPromoIsActive, setAdminPromoIsActive] = useState(true);
+  const [adminAccessGranted, setAdminAccessGranted] = useState(false);
+  const [adminAccessLoading, setAdminAccessLoading] = useState(false);
+  const [adminSessionToken, setAdminSessionToken] = useState<string | null>(null);
+  const [adminUserLookupQuery, setAdminUserLookupQuery] = useState("");
+  const [adminUserLookupLoading, setAdminUserLookupLoading] = useState(false);
+  const [adminUserLookupResult, setAdminUserLookupResult] = useState<AdminLookupUserView | null>(null);
+  const [adminSubscriptionUserId, setAdminSubscriptionUserId] = useState("");
+  const [adminSubscriptionTier, setAdminSubscriptionTier] = useState<SubscriptionTier>("trainee");
+  const [adminSubscriptionDuration, setAdminSubscriptionDuration] =
+    useState<SubscriptionDuration>("1_month");
+  const [adminSubscriptionLoading, setAdminSubscriptionLoading] = useState(false);
   const [adminPromos, setAdminPromos] = useState<AdminPromoCodeView[]>([]);
   const [adminPromoLoading, setAdminPromoLoading] = useState(false);
   const [adminPromoListLoading, setAdminPromoListLoading] = useState(false);
+  const [adminPromoActionCode, setAdminPromoActionCode] = useState<string | null>(null);
   const [adminPromoFeedback, setAdminPromoFeedback] = useState<{
     kind: "success" | "error";
     text: string;
@@ -3203,8 +3251,6 @@ export default function App() {
   const [manageRoomPassword, setManageRoomPassword] = useState("");
   const [manageRoomPasswordVisible, setManageRoomPasswordVisible] = useState(false);
   const [adminBotCount, setAdminBotCount] = useState(1);
-  const [adminPanelOpen, setAdminPanelOpen] = useState(false);
-  const [adminFabPos, setAdminFabPos] = useState<{ x: number; y: number }>({ x: 20, y: 20 });
   const [lobbyRoleDialogOpen, setLobbyRoleDialogOpen] = useState(false);
   const [lobbyRoleTargetPlayerId, setLobbyRoleTargetPlayerId] = useState<string | null>(null);
   const [joinPasswordDialogMatch, setJoinPasswordDialogMatch] = useState<PublicMatchInfo | null>(null);
@@ -3300,14 +3346,6 @@ export default function App() {
   const imageCropMaxOffsetX = Math.max(0, (imageCropDisplayWidth - imageCropViewport.width) / 2);
   const imageCropMaxOffsetY = Math.max(0, (imageCropDisplayHeight - imageCropViewport.height) / 2);
   const joinPasswordDialogOpenRef = useRef(false);
-  const adminFabDragRef = useRef<{
-    pointerId: number;
-    startX: number;
-    startY: number;
-    baseX: number;
-    baseY: number;
-    moved: boolean;
-  } | null>(null);
   const influenceViewRef = useRef<
     "main" | "chat" | "notes" | "verdict" | "warnings"
   >("main");
@@ -3344,10 +3382,21 @@ export default function App() {
   }, []);
   const isAuthenticated = !!authUser && !!authToken;
   const isCreatorAdmin = (authUser?.login ?? "").trim().toLowerCase() === "berly";
+  const canSeeAdminButton = isAuthenticated && isCreatorAdmin;
   const adminPanelKeyTrimmed = adminPanelKey.trim();
+  const adminSessionTokenTrimmed = adminSessionToken?.trim() ?? "";
   const adminRequestHeaders = useMemo(
-    () => (adminPanelKeyTrimmed ? { "x-admin-key": adminPanelKeyTrimmed } : undefined),
-    [adminPanelKeyTrimmed],
+    () => {
+      const headers: Record<string, string> = {};
+      if (adminPanelKeyTrimmed) {
+        headers["x-admin-key"] = adminPanelKeyTrimmed;
+      }
+      if (adminSessionTokenTrimmed) {
+        headers["x-admin-session"] = adminSessionTokenTrimmed;
+      }
+      return Object.keys(headers).length ? headers : undefined;
+    },
+    [adminPanelKeyTrimmed, adminSessionTokenTrimmed],
   );
   const rememberKnownUserIds = useCallback((players?: Array<{ id?: string; userId?: string }>) => {
     if (!Array.isArray(players)) return;
@@ -3551,8 +3600,52 @@ export default function App() {
       Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
     setAdminPromoCodeDraft(`${makePart(4)}-${makePart(4)}-${makePart(4)}`);
   }, []);
+  const checkAdminAccess = useCallback(async () => {
+    if (!authToken || !canSeeAdminButton) {
+      setAdminAccessGranted(false);
+      setAdminSessionToken(null);
+      setAdminUserLookupResult(null);
+      return;
+    }
+    setAdminAccessLoading(true);
+    try {
+      const payload = await authRequest<{
+        ok: true;
+        admin: true;
+        userId: string;
+        adminSession: string;
+      }>("/auth/admin/access", {
+        token: authToken,
+        headers: adminPanelKeyTrimmed ? { "x-admin-key": adminPanelKeyTrimmed } : undefined,
+      });
+      if (payload?.adminSession) {
+        setAdminSessionToken(payload.adminSession);
+        setAdminAccessGranted(true);
+      } else {
+        setAdminSessionToken(null);
+        setAdminAccessGranted(false);
+        setAdminUserLookupResult(null);
+      }
+    } catch {
+      setAdminSessionToken(null);
+      setAdminAccessGranted(false);
+      setAdminUserLookupResult(null);
+    } finally {
+      setAdminAccessLoading(false);
+    }
+  }, [authToken, canSeeAdminButton, adminPanelKeyTrimmed]);
+  const invalidateAdminSession = useCallback(() => {
+    setAdminAccessGranted(false);
+    setAdminSessionToken(null);
+  }, []);
+  const isAdminSessionError = useCallback((error: unknown) => {
+    return (
+      error instanceof Error &&
+      /сессия админ-панели истекла/i.test(error.message)
+    );
+  }, []);
   const loadAdminPromos = useCallback(async () => {
-    if (!authToken || !isCreatorAdmin) return;
+    if (!authToken || !isCreatorAdmin || !adminAccessGranted) return;
     setAdminPromoListLoading(true);
     setAdminPromoFeedback(null);
     try {
@@ -3565,6 +3658,9 @@ export default function App() {
       );
       setAdminPromos(Array.isArray(payload.promos) ? payload.promos : []);
     } catch (error) {
+      if (isAdminSessionError(error)) {
+        invalidateAdminSession();
+      }
       setAdminPromoFeedback({
         kind: "error",
         text:
@@ -3575,12 +3671,23 @@ export default function App() {
     } finally {
       setAdminPromoListLoading(false);
     }
-  }, [authToken, isCreatorAdmin, adminRequestHeaders]);
+  }, [
+    authToken,
+    isCreatorAdmin,
+    adminRequestHeaders,
+    adminAccessGranted,
+    invalidateAdminSession,
+    isAdminSessionError,
+  ]);
   const submitAdminPromo = useCallback(async () => {
-    if (!authToken || !isCreatorAdmin) return;
+    if (!authToken || !isCreatorAdmin || !adminAccessGranted) return;
     const code = adminPromoCodeDraft.trim().toUpperCase();
     if (!code) {
       setAdminPromoFeedback({ kind: "error", text: "Введите код промокода." });
+      return;
+    }
+    if (adminPromoKind === "badge" && !adminPromoBadgeKey.trim()) {
+      setAdminPromoFeedback({ kind: "error", text: "Выберите бейдж для промокода." });
       return;
     }
     if (adminPromoExpiresAt && adminPromoStartsAt && adminPromoExpiresAt < adminPromoStartsAt) {
@@ -3603,7 +3710,9 @@ export default function App() {
         headers: adminRequestHeaders,
         body: {
           code,
-          tier: adminPromoTier,
+          promoKind: adminPromoKind,
+          badgeKey: adminPromoKind === "badge" ? adminPromoBadgeKey.trim() : null,
+          tier: adminPromoKind === "subscription" ? adminPromoTier : "free",
           duration: adminPromoDuration,
           isActive: adminPromoIsActive,
           maxUses: parsedMaxUses,
@@ -3618,9 +3727,14 @@ export default function App() {
       setAdminPromoExpiresAt("");
       setAdminPromoTier("trainee");
       setAdminPromoDuration("1_month");
+      setAdminPromoKind("subscription");
+      setAdminPromoBadgeKey("sub_trainee");
       setAdminPromoIsActive(true);
       await loadAdminPromos();
     } catch (error) {
+      if (isAdminSessionError(error)) {
+        invalidateAdminSession();
+      }
       setAdminPromoFeedback({
         kind: "error",
         text:
@@ -3635,6 +3749,8 @@ export default function App() {
     authToken,
     isCreatorAdmin,
     adminPromoCodeDraft,
+    adminPromoKind,
+    adminPromoBadgeKey,
     adminPromoDuration,
     adminPromoExpiresAt,
     adminPromoIsActive,
@@ -3642,11 +3758,14 @@ export default function App() {
     adminPromoStartsAt,
     adminPromoTier,
     adminRequestHeaders,
+    adminAccessGranted,
     loadAdminPromos,
+    invalidateAdminSession,
+    isAdminSessionError,
   ]);
   const deleteAdminPromo = useCallback(
     async (code: string) => {
-      if (!authToken || !isCreatorAdmin || !code) return;
+      if (!authToken || !isCreatorAdmin || !adminAccessGranted || !code) return;
       setAdminPromoListLoading(true);
       setAdminPromoFeedback(null);
       try {
@@ -3659,6 +3778,9 @@ export default function App() {
         setAdminPromoFeedback({ kind: "success", text: `Промокод ${code} удалён.` });
         await loadAdminPromos();
       } catch (error) {
+        if (isAdminSessionError(error)) {
+          invalidateAdminSession();
+        }
         setAdminPromoFeedback({
           kind: "error",
           text:
@@ -3670,15 +3792,207 @@ export default function App() {
         setAdminPromoListLoading(false);
       }
     },
-    [authToken, isCreatorAdmin, adminRequestHeaders, loadAdminPromos],
+    [
+      authToken,
+      isCreatorAdmin,
+      adminRequestHeaders,
+      adminAccessGranted,
+      loadAdminPromos,
+      invalidateAdminSession,
+      isAdminSessionError,
+    ],
   );
+  const updateAdminPromo = useCallback(
+    async (
+      promo: AdminPromoCodeView,
+      patch: Partial<{
+        isActive: boolean;
+        maxUses: number | null;
+        startsAt: string | null;
+        expiresAt: string | null;
+      }>,
+    ) => {
+      if (!authToken || !isCreatorAdmin || !adminAccessGranted) return;
+      setAdminPromoActionCode(promo.code);
+      setAdminPromoFeedback(null);
+      try {
+        await authRequest<{ ok: true }>("/auth/admin/promo", {
+          method: "PATCH",
+          token: authToken,
+          headers: adminRequestHeaders,
+          body: {
+            code: promo.code,
+            promoKind: promo.promoKind,
+            badgeKey: promo.promoKind === "badge" ? promo.badgeKey : null,
+            tier: promo.promoKind === "subscription" ? promo.tier : "free",
+            duration: promo.duration,
+            isActive: patch.isActive ?? promo.isActive,
+            maxUses: patch.maxUses ?? promo.maxUses,
+            startsAt: patch.startsAt ?? promo.startsAt,
+            expiresAt: patch.expiresAt ?? promo.expiresAt,
+          },
+        });
+        setAdminPromoFeedback({
+          kind: "success",
+          text: `Промокод ${promo.code} обновлён.`,
+        });
+        await loadAdminPromos();
+      } catch (error) {
+        if (isAdminSessionError(error)) {
+          invalidateAdminSession();
+        }
+        setAdminPromoFeedback({
+          kind: "error",
+          text:
+            error instanceof Error
+              ? localizeAuthError(error.message)
+              : "Не удалось обновить промокод.",
+        });
+      } finally {
+        setAdminPromoActionCode(null);
+      }
+    },
+    [
+      authToken,
+      isCreatorAdmin,
+      adminAccessGranted,
+      adminRequestHeaders,
+      loadAdminPromos,
+      invalidateAdminSession,
+      isAdminSessionError,
+    ],
+  );
+  const submitAdminSubscription = useCallback(async () => {
+    if (!authToken || !isCreatorAdmin || !adminAccessGranted) return;
+    const userId = adminSubscriptionUserId.trim();
+    if (!userId) {
+      setAdminPromoFeedback({ kind: "error", text: "Введите userId для выдачи подписки." });
+      return;
+    }
+    setAdminSubscriptionLoading(true);
+    setAdminPromoFeedback(null);
+    try {
+      await authRequest<{ ok: true }>("/auth/admin/subscription", {
+        method: "PATCH",
+        token: authToken,
+        headers: adminRequestHeaders,
+        body: {
+          userId,
+          tier: adminSubscriptionTier,
+          duration: adminSubscriptionDuration,
+          source: "manual",
+        },
+      });
+      setAdminPromoFeedback({
+        kind: "success",
+        text: `Подписка выдана: ${getSubscriptionTierLabel(adminSubscriptionTier)} (${getSubscriptionDurationLabel(adminSubscriptionDuration)}).`,
+      });
+    } catch (error) {
+      if (isAdminSessionError(error)) {
+        invalidateAdminSession();
+      }
+      setAdminPromoFeedback({
+        kind: "error",
+        text:
+          error instanceof Error
+            ? localizeAuthError(error.message)
+            : "Не удалось выдать подписку.",
+      });
+    } finally {
+      setAdminSubscriptionLoading(false);
+    }
+  }, [
+    authToken,
+    isCreatorAdmin,
+    adminAccessGranted,
+    adminSubscriptionUserId,
+    adminSubscriptionTier,
+    adminSubscriptionDuration,
+    adminRequestHeaders,
+    invalidateAdminSession,
+    isAdminSessionError,
+  ]);
+  const findAdminUser = useCallback(async () => {
+    if (!authToken || !isCreatorAdmin || !adminAccessGranted) return;
+    const query = adminUserLookupQuery.trim();
+    if (!query) {
+      setAdminPromoFeedback({
+        kind: "error",
+        text: "Введите login, email, nickname или userId для поиска.",
+      });
+      return;
+    }
+    setAdminUserLookupLoading(true);
+    setAdminPromoFeedback(null);
+    try {
+      const payload = await authRequest<{ ok: true; user: AdminLookupUserView }>(
+        "/auth/admin/user/find",
+        {
+          method: "POST",
+          token: authToken,
+          headers: adminRequestHeaders,
+          body: { query },
+        },
+      );
+      setAdminUserLookupResult(payload.user);
+      setAdminSubscriptionUserId(payload.user.id);
+      setAdminPromoFeedback({
+        kind: "success",
+        text: `Найден пользователь: ${payload.user.nickname} (${payload.user.id}).`,
+      });
+    } catch (error) {
+      if (isAdminSessionError(error)) {
+        invalidateAdminSession();
+      }
+      setAdminUserLookupResult(null);
+      setAdminPromoFeedback({
+        kind: "error",
+        text:
+          error instanceof Error
+            ? localizeAuthError(error.message)
+            : "Не удалось найти пользователя.",
+      });
+    } finally {
+      setAdminUserLookupLoading(false);
+    }
+  }, [
+    authToken,
+    isCreatorAdmin,
+    adminAccessGranted,
+    adminUserLookupQuery,
+    adminRequestHeaders,
+    invalidateAdminSession,
+    isAdminSessionError,
+  ]);
   useEffect(() => {
     localStorage.setItem("court_admin_panel_key", adminPanelKey);
   }, [adminPanelKey]);
   useEffect(() => {
-    if (!adminToolsOpen || !isCreatorAdmin || !authToken) return;
+    if (!adminAccessGranted) return;
+    setAdminAccessGranted(false);
+    setAdminSessionToken(null);
+  }, [adminPanelKeyTrimmed]);
+  useEffect(() => {
+    setAdminSessionToken(null);
+    setAdminAccessGranted(false);
+  }, [authToken]);
+  useEffect(() => {
+    if (!canSeeAdminButton) {
+      setAdminAccessGranted(false);
+      setAdminSessionToken(null);
+      setAdminUserLookupResult(null);
+      return;
+    }
+    void checkAdminAccess();
+  }, [canSeeAdminButton, checkAdminAccess]);
+  useEffect(() => {
+    if (!adminToolsOpen || !isCreatorAdmin || !authToken || !adminAccessGranted) return;
     void loadAdminPromos();
-  }, [adminToolsOpen, isCreatorAdmin, authToken, loadAdminPromos]);
+  }, [adminToolsOpen, isCreatorAdmin, authToken, adminAccessGranted, loadAdminPromos]);
+  useEffect(() => {
+    if (!authUser?.id) return;
+    setAdminSubscriptionUserId((prev) => prev || authUser.id);
+  }, [authUser?.id]);
   useEffect(() => {
     if (canCreatePrivateRooms || !createRoomPrivate) return;
     setCreateRoomPrivate(false);
@@ -3718,56 +4032,17 @@ export default function App() {
   );
 
   useEffect(() => {
-    const fallbackY = Math.max(24, window.innerHeight - 96);
-    const storedX = Number(localStorage.getItem("court_admin_fab_x"));
-    const storedY = Number(localStorage.getItem("court_admin_fab_y"));
-    const x = Number.isFinite(storedX) ? storedX : 20;
-    const y = Number.isFinite(storedY) ? storedY : fallbackY;
-    setAdminFabPos({ x: Math.max(8, x), y: Math.max(8, y) });
-  }, []);
-
-  const beginAdminFabDrag = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
-    adminFabDragRef.current = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      baseX: adminFabPos.x,
-      baseY: adminFabPos.y,
-      moved: false,
-    };
-    (event.currentTarget as HTMLButtonElement).setPointerCapture(event.pointerId);
-  }, [adminFabPos.x, adminFabPos.y]);
-
-  const moveAdminFabDrag = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
-    const drag = adminFabDragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    const nextX = drag.baseX + (event.clientX - drag.startX);
-    const nextY = drag.baseY + (event.clientY - drag.startY);
-    if (Math.abs(event.clientX - drag.startX) > 3 || Math.abs(event.clientY - drag.startY) > 3) {
-      drag.moved = true;
-    }
-    const clampedX = Math.max(8, Math.min(window.innerWidth - 72, nextX));
-    const clampedY = Math.max(8, Math.min(window.innerHeight - 72, nextY));
-    setAdminFabPos({ x: clampedX, y: clampedY });
-  }, []);
-
-  const endAdminFabDrag = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
-    const drag = adminFabDragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    adminFabDragRef.current = null;
-    localStorage.setItem("court_admin_fab_x", String(adminFabPos.x));
-    localStorage.setItem("court_admin_fab_y", String(adminFabPos.y));
-    if (!drag.moved) {
-      setAdminPanelOpen((prev) => !prev);
-    }
-  }, [adminFabPos.x, adminFabPos.y]);
-
-  useEffect(() => {
     if (screen !== "room" && screen !== "game") {
-      setAdminPanelOpen(false);
       setLobbyRoleDialogOpen(false);
     }
   }, [screen]);
+  useEffect(() => {
+    setAdminToolsOpen(false);
+  }, [screen, homeTab]);
+  useEffect(() => {
+    if (!createMatchDialogOpen && !roomManageOpen && !observerListDialogOpen) return;
+    setAdminToolsOpen(false);
+  }, [createMatchDialogOpen, roomManageOpen, observerListDialogOpen]);
 
   useEffect(() => {
     if (!room) return;
@@ -5823,6 +6098,7 @@ export default function App() {
     socket.emit("admin_add_bots", {
       code: adminTargetRoomCode,
       authToken,
+      adminKey: adminPanelKeyTrimmed || undefined,
       count: Math.max(1, Math.min(6, adminBotCount)),
     });
   }, [
@@ -5835,6 +6111,7 @@ export default function App() {
     gameControlPlayerId,
     adminBotCount,
     adminTargetRoomCode,
+    adminPanelKeyTrimmed,
   ]);
 
   const controlAdminPlayer = useCallback((targetPlayerId: string) => {
@@ -5844,8 +6121,9 @@ export default function App() {
       code: adminTargetRoomCode,
       targetPlayerId,
       authToken,
+      adminKey: adminPanelKeyTrimmed || undefined,
     });
-  }, [socket, adminTargetRoomCode, authToken, isCreatorAdmin]);
+  }, [socket, adminTargetRoomCode, authToken, isCreatorAdmin, adminPanelKeyTrimmed]);
 
   const kickPlayerFromRoom = useCallback(
     (targetPlayerId: string) => {
@@ -6421,7 +6699,7 @@ export default function App() {
     </Dialog>
   );
   const renderAdminTools = () => {
-    if (!isAuthenticated || !isCreatorAdmin) return null;
+    if (!canSeeAdminButton) return null;
     const currentHostId = room?.hostId ?? game?.hostId ?? null;
     return (
       <>
@@ -6455,10 +6733,10 @@ export default function App() {
                     type="button"
                     variant="outline"
                     className="h-10 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
-                    onClick={() => void loadAdminPromos()}
-                    disabled={adminPromoListLoading}
+                    onClick={() => void checkAdminAccess()}
+                    disabled={adminAccessLoading}
                   >
-                    Обновить
+                    {adminAccessLoading ? "Проверяем" : "Проверить"}
                   </Button>
                   <Button
                     type="button"
@@ -6469,201 +6747,373 @@ export default function App() {
                     Очистить
                   </Button>
                 </div>
-              </div>
-              <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3">
-                <div className="text-xs uppercase tracking-[0.12em] text-zinc-500">Создать промокод</div>
-                <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
-                  <Input
-                    value={adminPromoCodeDraft}
-                    onChange={(event) => setAdminPromoCodeDraft(event.target.value.toUpperCase())}
-                    placeholder="Код промокода"
-                    className="h-10 rounded-xl border-zinc-700 bg-zinc-950 text-zinc-100 placeholder:text-zinc-500"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={generateAdminPromoCode}
-                    className="h-10 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
-                  >
-                    Сгенерировать
-                  </Button>
-                </div>
-                <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                  <Select
-                    value={adminPromoTier}
-                    onValueChange={(value) => setAdminPromoTier(normalizeSubscriptionTier(value))}
-                  >
-                    <SelectTrigger className="h-10 rounded-xl border-zinc-700 bg-zinc-950 text-zinc-100">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="border-zinc-800 bg-zinc-950 text-zinc-100">
-                      {(["trainee", "practitioner", "arbiter", "free"] as SubscriptionTier[]).map((tier) => (
-                        <SelectItem key={`admin-tier-${tier}`} value={tier}>
-                          {getSubscriptionTierLabel(tier)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Select
-                    value={adminPromoDuration}
-                    onValueChange={(value) =>
-                      setAdminPromoDuration(value as SubscriptionDuration)
-                    }
-                  >
-                    <SelectTrigger className="h-10 rounded-xl border-zinc-700 bg-zinc-950 text-zinc-100">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="border-zinc-800 bg-zinc-950 text-zinc-100">
-                      {(["1_day", "7_days", "1_month", "1_year", "forever"] as SubscriptionDuration[]).map((duration) => (
-                        <SelectItem key={`admin-duration-${duration}`} value={duration}>
-                          {getSubscriptionDurationLabel(duration)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    value={adminPromoMaxUses}
-                    onChange={(event) => setAdminPromoMaxUses(event.target.value)}
-                    placeholder="Лимит использований"
-                    className="h-10 rounded-xl border-zinc-700 bg-zinc-950 text-zinc-100 placeholder:text-zinc-500"
-                  />
-                  <div className="flex items-center justify-between rounded-xl border border-zinc-700 bg-zinc-950 px-3">
-                    <span className="text-xs text-zinc-400">Активен</span>
-                    <Switch checked={adminPromoIsActive} onCheckedChange={setAdminPromoIsActive} />
-                  </div>
-                </div>
-                <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                  <div className="space-y-1">
-                    <label className="text-xs text-zinc-500">Старт</label>
-                    <Input
-                      type="datetime-local"
-                      value={adminPromoStartsAt}
-                      onChange={(event) => setAdminPromoStartsAt(event.target.value)}
-                      className="h-10 rounded-xl border-zinc-700 bg-zinc-950 text-zinc-100"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs text-zinc-500">Срок годности</label>
-                    <Input
-                      type="datetime-local"
-                      value={adminPromoExpiresAt}
-                      onChange={(event) => setAdminPromoExpiresAt(event.target.value)}
-                      className="h-10 rounded-xl border-zinc-700 bg-zinc-950 text-zinc-100"
-                    />
-                  </div>
-                </div>
-                <Button
-                  type="button"
-                  onClick={() => void submitAdminPromo()}
-                  disabled={adminPromoLoading}
-                  className="mt-3 h-10 w-full rounded-xl bg-red-600 text-white hover:bg-red-500 disabled:bg-zinc-700 disabled:text-zinc-300"
+                <div
+                  className={`mt-2 rounded-xl border px-3 py-2 text-xs ${
+                    adminAccessGranted
+                      ? "border-emerald-500/45 bg-emerald-600/10 text-emerald-200"
+                      : "border-zinc-700 bg-zinc-950/80 text-zinc-400"
+                  }`}
                 >
-                  {adminPromoLoading ? "Сохраняем" : "Сохранить промокод"}
-                </Button>
-              </div>
-              <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="text-xs uppercase tracking-[0.12em] text-zinc-500">Активные промокоды</div>
-                  <div className="text-xs text-zinc-500">Всего: {adminPromos.length}</div>
+                  {adminAccessGranted
+                    ? "Доступ подтвержден. Расширенные действия активны."
+                    : "Доступ не подтвержден. Введите ключ и нажмите «Проверить»."}
                 </div>
-                {adminPromoFeedback && (
-                  <div
-                    className={`mt-2 rounded-lg border px-2.5 py-2 text-xs ${
-                      adminPromoFeedback.kind === "success"
-                        ? "border-emerald-500/45 bg-emerald-600/10 text-emerald-200"
-                        : "border-red-500/45 bg-red-600/10 text-red-200"
-                    }`}
-                  >
-                    {adminPromoFeedback.text}
-                  </div>
-                )}
-                <div className={`mt-2 space-y-2 max-h-60 overflow-y-auto pr-1 ${HIDE_SCROLLBAR_CLASS}`}>
-                  {adminPromoListLoading ? (
-                    <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 px-3 py-2 text-xs text-zinc-400">
-                      Загружаем список...
+              </div>
+              {adminAccessGranted && (
+                <>
+                  <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3">
+                    <div className="text-xs uppercase tracking-[0.12em] text-zinc-500">
+                      Поиск пользователя
                     </div>
-                  ) : adminPromos.length === 0 ? (
-                    <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 px-3 py-2 text-xs text-zinc-400">
-                      Промокоды пока не созданы.
-                    </div>
-                  ) : (
-                    adminPromos.map((promo) => (
-                      <div
-                        key={`admin-promo-${promo.code}`}
-                        className="rounded-xl border border-zinc-800 bg-zinc-950/70 px-3 py-2"
+                    <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
+                      <Input
+                        value={adminUserLookupQuery}
+                        onChange={(event) => setAdminUserLookupQuery(event.target.value)}
+                        placeholder="login / email / nickname / userId"
+                        className="h-10 rounded-xl border-zinc-700 bg-zinc-950 text-zinc-100 placeholder:text-zinc-500"
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            void findAdminUser();
+                          }
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        className="h-10 rounded-xl bg-zinc-100 text-zinc-950 hover:bg-zinc-200"
+                        onClick={() => void findAdminUser()}
+                        disabled={adminUserLookupLoading}
                       >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="text-sm font-semibold text-zinc-100">{promo.code}</div>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => void deleteAdminPromo(promo.code)}
-                            className="h-7 rounded-lg border-zinc-700 bg-zinc-900 px-2 text-xs text-zinc-200 hover:bg-zinc-800 hover:text-zinc-100"
-                          >
-                            Удалить
-                          </Button>
+                        {adminUserLookupLoading ? "Ищем" : "Найти"}
+                      </Button>
+                    </div>
+                    {adminUserLookupResult && (
+                      <div className="mt-2 rounded-xl border border-zinc-700 bg-zinc-950/80 px-3 py-2 text-xs text-zinc-300">
+                        <div>
+                          {adminUserLookupResult.nickname} · {adminUserLookupResult.login}
                         </div>
-                        <div className="mt-1 text-xs text-zinc-400">
-                          {getSubscriptionTierLabel(promo.tier)} • {getSubscriptionDurationLabel(promo.duration)} • использований: {promo.usedCount}
+                        <div className="text-zinc-500">{adminUserLookupResult.email}</div>
+                        <div className="mt-1 text-zinc-400">
+                          userId: {adminUserLookupResult.id}
                         </div>
-                        <div className="mt-1 text-xs text-zinc-500">
-                          Срок: {formatPromoDate(promo.startsAt)} — {formatPromoDate(promo.expiresAt)}
+                        <div className="mt-1 text-zinc-400">
+                          Подписка:{" "}
+                          {getSubscriptionTierLabel(
+                            normalizeSubscriptionTier(adminUserLookupResult.subscription?.tier),
+                          )}{" "}
+                          ·{" "}
+                          {getSubscriptionDurationLabel(
+                            normalizeSubscriptionDuration(
+                              adminUserLookupResult.subscription?.duration ?? "1_month",
+                            ),
+                          )}
                         </div>
                       </div>
-                    ))
-                  )}
-                </div>
-              </div>
-              {canManageAdminBots && adminTargetRoomCode && (
-                <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3">
-                  <div className="text-xs uppercase tracking-[0.12em] text-zinc-500">Боты</div>
-                  <div className={`mt-2 space-y-1 max-h-28 overflow-y-auto pr-1 ${HIDE_SCROLLBAR_CLASS}`}>
-                    {adminBotPlayers.length === 0 ? (
-                      <div className="rounded-lg border border-zinc-800 bg-zinc-950/70 px-3 py-2 text-xs text-zinc-400">
-                        Ботов пока нет.
-                      </div>
-                    ) : (
-                      adminBotPlayers.map((bot) => (
-                        <button
-                          key={`admin-bot-global-${bot.id}`}
-                          type="button"
-                          onClick={() => controlAdminPlayer(bot.id)}
-                          className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-1.5 text-left text-xs font-semibold text-zinc-100 transition hover:border-red-500/70 hover:bg-zinc-800"
-                        >
-                          Зайти за {bot.name}
-                        </button>
-                      ))
                     )}
                   </div>
-                  {currentHostId && myId !== currentHostId && (
-                    <button
-                      type="button"
-                      onClick={() => controlAdminPlayer(currentHostId)}
-                      className="mt-2 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-1.5 text-xs font-semibold text-zinc-200 transition hover:border-red-500/70 hover:bg-zinc-800"
-                    >
-                      Вернуться к ведущему
-                    </button>
-                  )}
-                  <div className="mt-2 flex items-center gap-2">
-                    <Input
-                      type="number"
-                      min={1}
-                      max={6}
-                      value={adminBotCount}
-                      onChange={(event) =>
-                        setAdminBotCount(Math.max(1, Math.min(6, Number(event.target.value) || 1)))
-                      }
-                      className="h-9 w-20 rounded-lg border-zinc-700 bg-zinc-900 text-zinc-100"
-                    />
+                  <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3">
+                    <div className="text-xs uppercase tracking-[0.12em] text-zinc-500">Выдать подписку</div>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                      <Input
+                        value={adminSubscriptionUserId}
+                        onChange={(event) => setAdminSubscriptionUserId(event.target.value)}
+                        placeholder="userId"
+                        className="h-10 rounded-xl border-zinc-700 bg-zinc-950 text-zinc-100 placeholder:text-zinc-500 lg:col-span-2"
+                      />
+                      <select
+                        value={adminSubscriptionTier}
+                        onChange={(event) =>
+                          setAdminSubscriptionTier(normalizeSubscriptionTier(event.target.value))
+                        }
+                        className="h-10 rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-red-500/40"
+                      >
+                        {(["trainee", "practitioner", "arbiter", "free"] as SubscriptionTier[]).map((tier) => (
+                          <option key={`admin-sub-tier-${tier}`} value={tier} className="bg-zinc-950 text-zinc-100">
+                            {getSubscriptionTierLabel(tier)}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={adminSubscriptionDuration}
+                        onChange={(event) => setAdminSubscriptionDuration(event.target.value as SubscriptionDuration)}
+                        className="h-10 rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-red-500/40"
+                      >
+                        {(["1_day", "7_days", "1_month", "1_year", "forever"] as SubscriptionDuration[]).map((duration) => (
+                          <option key={`admin-sub-duration-${duration}`} value={duration} className="bg-zinc-950 text-zinc-100">
+                            {getSubscriptionDurationLabel(duration)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                     <Button
                       type="button"
-                      onClick={addAdminBots}
-                      className="h-9 flex-1 rounded-lg bg-red-600 px-3 text-xs text-white hover:bg-red-500"
+                      onClick={() => void submitAdminSubscription()}
+                      disabled={adminSubscriptionLoading}
+                      className="mt-3 h-10 w-full rounded-xl bg-red-600 text-white hover:bg-red-500 disabled:bg-zinc-700 disabled:text-zinc-300"
                     >
-                      Добавить ботов
+                      {adminSubscriptionLoading ? "Выдаем" : "Выдать подписку"}
                     </Button>
                   </div>
-                </div>
+                  <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3">
+                    <div className="text-xs uppercase tracking-[0.12em] text-zinc-500">Создать промокод</div>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
+                      <Input
+                        value={adminPromoCodeDraft}
+                        onChange={(event) => setAdminPromoCodeDraft(event.target.value.toUpperCase())}
+                        placeholder="Код промокода"
+                        className="h-10 rounded-xl border-zinc-700 bg-zinc-950 text-zinc-100 placeholder:text-zinc-500"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={generateAdminPromoCode}
+                        className="h-10 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                      >
+                        Сгенерировать
+                      </Button>
+                    </div>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                      <select
+                        value={adminPromoKind}
+                        onChange={(event) => setAdminPromoKind(event.target.value as AdminPromoKind)}
+                        className="h-10 rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-red-500/40"
+                      >
+                        {ADMIN_PROMO_KIND_OPTIONS.map((option) => (
+                          <option key={`admin-promo-kind-${option.key}`} value={option.key} className="bg-zinc-950 text-zinc-100">
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      {adminPromoKind === "subscription" ? (
+                        <select
+                          value={adminPromoTier}
+                          onChange={(event) =>
+                            setAdminPromoTier(normalizeSubscriptionTier(event.target.value))
+                          }
+                          className="h-10 rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-red-500/40"
+                        >
+                          {(["trainee", "practitioner", "arbiter", "free"] as SubscriptionTier[]).map((tier) => (
+                            <option key={`admin-tier-${tier}`} value={tier} className="bg-zinc-950 text-zinc-100">
+                              {getSubscriptionTierLabel(tier)}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <select
+                          value={adminPromoBadgeKey}
+                          onChange={(event) => setAdminPromoBadgeKey(event.target.value)}
+                          className="h-10 rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-red-500/40"
+                        >
+                          {ADMIN_BADGE_PROMO_OPTIONS.map((badge) => (
+                            <option key={`admin-badge-${badge.key}`} value={badge.key} className="bg-zinc-950 text-zinc-100">
+                              {badge.label}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      <select
+                        value={adminPromoDuration}
+                        onChange={(event) => setAdminPromoDuration(event.target.value as SubscriptionDuration)}
+                        disabled={adminPromoKind !== "subscription"}
+                        className="h-10 rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-red-500/40 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {(["1_day", "7_days", "1_month", "1_year", "forever"] as SubscriptionDuration[]).map((duration) => (
+                          <option key={`admin-duration-${duration}`} value={duration} className="bg-zinc-950 text-zinc-100">
+                            {getSubscriptionDurationLabel(duration)}
+                          </option>
+                        ))}
+                      </select>
+                      <Input
+                        value={adminPromoMaxUses}
+                        onChange={(event) => setAdminPromoMaxUses(event.target.value)}
+                        placeholder="Лимит использований"
+                        className="h-10 rounded-xl border-zinc-700 bg-zinc-950 text-zinc-100 placeholder:text-zinc-500"
+                      />
+                    </div>
+                    <div className="mt-2 flex items-center justify-between rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2">
+                      <span className="text-xs text-zinc-400">Промокод активен</span>
+                      <Switch checked={adminPromoIsActive} onCheckedChange={setAdminPromoIsActive} />
+                    </div>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                      <div className="space-y-1">
+                        <label className="text-xs text-zinc-500">Старт</label>
+                        <Input
+                          type="datetime-local"
+                          value={adminPromoStartsAt}
+                          onChange={(event) => setAdminPromoStartsAt(event.target.value)}
+                          className="h-10 rounded-xl border-zinc-700 bg-zinc-950 text-zinc-100"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs text-zinc-500">Срок годности</label>
+                        <Input
+                          type="datetime-local"
+                          value={adminPromoExpiresAt}
+                          onChange={(event) => setAdminPromoExpiresAt(event.target.value)}
+                          className="h-10 rounded-xl border-zinc-700 bg-zinc-950 text-zinc-100"
+                        />
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={() => void submitAdminPromo()}
+                      disabled={adminPromoLoading}
+                      className="mt-3 h-10 w-full rounded-xl bg-red-600 text-white hover:bg-red-500 disabled:bg-zinc-700 disabled:text-zinc-300"
+                    >
+                      {adminPromoLoading ? "Сохраняем" : "Сохранить промокод"}
+                    </Button>
+                  </div>
+                  <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-xs uppercase tracking-[0.12em] text-zinc-500">Активные промокоды</div>
+                      <div className="text-xs text-zinc-500">Всего: {adminPromos.length}</div>
+                    </div>
+                    {adminPromoFeedback && (
+                      <div
+                        className={`mt-2 rounded-lg border px-2.5 py-2 text-xs ${
+                          adminPromoFeedback.kind === "success"
+                            ? "border-emerald-500/45 bg-emerald-600/10 text-emerald-200"
+                            : "border-red-500/45 bg-red-600/10 text-red-200"
+                        }`}
+                      >
+                        {adminPromoFeedback.text}
+                      </div>
+                    )}
+                    <div className={`mt-2 space-y-2 max-h-60 overflow-y-auto pr-1 ${HIDE_SCROLLBAR_CLASS}`}>
+                      {adminPromoListLoading ? (
+                        <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 px-3 py-2 text-xs text-zinc-400">
+                          Загружаем список...
+                        </div>
+                      ) : adminPromos.length === 0 ? (
+                        <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 px-3 py-2 text-xs text-zinc-400">
+                          Промокоды пока не созданы.
+                        </div>
+                      ) : (
+                        adminPromos.map((promo) => (
+                          <div
+                            key={`admin-promo-${promo.code}`}
+                            className="rounded-xl border border-zinc-800 bg-zinc-950/70 px-3 py-2"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <div className="text-sm font-semibold text-zinc-100">{promo.code}</div>
+                                <div className="mt-0.5 text-[11px] text-zinc-500">
+                                  {promo.isActive ? "Активен" : "Отключен"} · использований: {promo.usedCount}
+                                  {typeof promo.maxUses === "number" && promo.maxUses > 0
+                                    ? ` / ${promo.maxUses}`
+                                    : ""}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  onClick={() => {
+                                    navigator.clipboard
+                                      .writeText(promo.code)
+                                      .then(() =>
+                                        setAdminPromoFeedback({
+                                          kind: "success",
+                                          text: `Код ${promo.code} скопирован.`,
+                                        }),
+                                      )
+                                      .catch(() =>
+                                        setAdminPromoFeedback({
+                                          kind: "error",
+                                          text: "Не удалось скопировать код.",
+                                        }),
+                                      );
+                                  }}
+                                  className="h-7 rounded-lg border-zinc-700 bg-zinc-900 px-2 text-xs text-zinc-200 hover:bg-zinc-800 hover:text-zinc-100"
+                                >
+                                  Копия
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  disabled={adminPromoActionCode === promo.code}
+                                  onClick={() =>
+                                    void updateAdminPromo(promo, { isActive: !promo.isActive })
+                                  }
+                                  className="h-7 rounded-lg border-zinc-700 bg-zinc-900 px-2 text-xs text-zinc-200 hover:bg-zinc-800 hover:text-zinc-100 disabled:opacity-60"
+                                >
+                                  {promo.isActive ? "Откл" : "Вкл"}
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  onClick={() => void deleteAdminPromo(promo.code)}
+                                  className="h-7 rounded-lg border-zinc-700 bg-zinc-900 px-2 text-xs text-zinc-200 hover:bg-zinc-800 hover:text-zinc-100"
+                                >
+                                  Удалить
+                                </Button>
+                              </div>
+                            </div>
+                            <div className="mt-1 text-xs text-zinc-400">
+                              {promo.promoKind === "badge"
+                                ? `Бейдж: ${promo.badgeKey ?? "—"}`
+                                : `${getSubscriptionTierLabel(promo.tier)} • ${getSubscriptionDurationLabel(promo.duration)}`}
+                            </div>
+                            <div className="mt-1 text-xs text-zinc-500">
+                              Срок: {formatPromoDate(promo.startsAt)} — {formatPromoDate(promo.expiresAt)}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                  {canManageAdminBots && adminTargetRoomCode && (
+                    <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3">
+                      <div className="text-xs uppercase tracking-[0.12em] text-zinc-500">Боты</div>
+                      <div className={`mt-2 space-y-1 max-h-28 overflow-y-auto pr-1 ${HIDE_SCROLLBAR_CLASS}`}>
+                        {adminBotPlayers.length === 0 ? (
+                          <div className="rounded-lg border border-zinc-800 bg-zinc-950/70 px-3 py-2 text-xs text-zinc-400">
+                            Ботов пока нет.
+                          </div>
+                        ) : (
+                          adminBotPlayers.map((bot) => (
+                            <button
+                              key={`admin-bot-global-${bot.id}`}
+                              type="button"
+                              onClick={() => controlAdminPlayer(bot.id)}
+                              className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-1.5 text-left text-xs font-semibold text-zinc-100 transition hover:border-red-500/70 hover:bg-zinc-800"
+                            >
+                              Зайти за {bot.name}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                      {currentHostId && myId !== currentHostId && (
+                        <button
+                          type="button"
+                          onClick={() => controlAdminPlayer(currentHostId)}
+                          className="mt-2 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-1.5 text-xs font-semibold text-zinc-200 transition hover:border-red-500/70 hover:bg-zinc-800"
+                        >
+                          Вернуться к ведущему
+                        </button>
+                      )}
+                      <div className="mt-2 flex items-center gap-2">
+                        <Input
+                          type="number"
+                          min={1}
+                          max={6}
+                          value={adminBotCount}
+                          onChange={(event) =>
+                            setAdminBotCount(Math.max(1, Math.min(6, Number(event.target.value) || 1)))
+                          }
+                          className="h-9 w-20 rounded-lg border-zinc-700 bg-zinc-900 text-zinc-100"
+                        />
+                        <Button
+                          type="button"
+                          onClick={addAdminBots}
+                          className="h-9 flex-1 rounded-lg bg-red-600 px-3 text-xs text-white hover:bg-red-500"
+                        >
+                          Добавить ботов
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </DialogContent>
@@ -8721,7 +9171,7 @@ export default function App() {
               }}
             >
               <DialogContent
-                className={`w-[calc(100vw-1rem)] sm:w-[calc(100vw-2rem)] max-w-[720px] max-h-[88vh] overflow-y-auto border-zinc-800 bg-zinc-950 text-zinc-100 p-4 sm:p-6 ${HIDE_SCROLLBAR_CLASS} [scrollbar-width:thin] [scrollbar-color:rgba(82,82,91,0.35)_transparent] [&::-webkit-scrollbar]:w-[4px] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-600/45 [&::-webkit-scrollbar-thumb:hover]:bg-zinc-500/60 [&>button]:h-12 [&>button]:w-12 [&>button>svg]:h-7 [&>button>svg]:w-7 [&>button]:top-2 [&>button]:right-2`}
+                className={`top-[4vh] sm:top-[6vh] translate-y-0 w-[calc(100vw-1rem)] sm:w-[calc(100vw-2rem)] max-w-[720px] max-h-[88vh] overflow-y-auto border-zinc-800 bg-zinc-950 text-zinc-100 p-4 sm:p-6 ${HIDE_SCROLLBAR_CLASS} [scrollbar-width:thin] [scrollbar-color:rgba(82,82,91,0.35)_transparent] [&::-webkit-scrollbar]:w-[4px] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-600/45 [&::-webkit-scrollbar-thumb:hover]:bg-zinc-500/60 [&>button]:h-12 [&>button]:w-12 [&>button>svg]:h-7 [&>button>svg]:w-7 [&>button]:top-2 [&>button]:right-2`}
               >
                 {upsellModalOpen && createMatchDialogOpen && (
                   <div className="pointer-events-none absolute inset-0 z-20 rounded-2xl bg-black/45" />
@@ -9137,7 +9587,10 @@ export default function App() {
                       <button
                         key={`shop-duration-${option.key}`}
                         type="button"
-                        onClick={() => setShopDuration(option.key)}
+                        onClick={() => {
+                          if (shopDuration === option.key) return;
+                          setShopDuration(option.key);
+                        }}
                         className={`min-w-[88px] rounded-xl px-3 py-2 text-sm font-medium transition ${
                           shopDuration === option.key
                             ? "bg-[linear-gradient(135deg,rgba(239,68,68,1),rgba(220,38,38,1))] text-white shadow-[0_8px_16px_rgba(239,68,68,0.3)]"
@@ -9196,20 +9649,38 @@ export default function App() {
                         </div>
                         <div className="mt-4 text-3xl font-bold text-zinc-100">{plan.title}</div>
                         <div className="mt-1 text-sm text-zinc-400">{plan.shortLabel}</div>
-                        <div className="mt-4 text-4xl font-bold leading-none text-zinc-100">
-                          {displayPrice}
-                        </div>
-                        <div className="mt-1 text-sm text-zinc-400">
-                          RUB / {shopDuration === "1_year" ? "год" : "месяц"}
-                        </div>
-                        {shopDuration === "1_year" && yearlySave > 0 && (
-                          <div className="mt-2 flex items-center gap-2 text-xs">
-                            <span className="text-zinc-500 line-through">{yearlyBasePrice} RUB</span>
-                            <span className="inline-flex items-center rounded-full border border-red-500/45 bg-red-600/15 px-2 py-0.5 text-red-100">
-                              2 месяца бесплатно
-                            </span>
-                          </div>
-                        )}
+                        <AnimatePresence mode="wait" initial={false}>
+                          <motion.div
+                            key={`shop-price-${plan.tier}-${shopDuration}`}
+                            initial={{ opacity: 0, y: 6, filter: "blur(1.5px)" }}
+                            animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                            exit={{ opacity: 0, y: -6, filter: "blur(1.5px)" }}
+                            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                          >
+                            <div className="mt-4 text-4xl font-bold leading-none text-zinc-100">
+                              {displayPrice}
+                            </div>
+                            <div className="mt-1 text-sm text-zinc-400">
+                              RUB / {shopDuration === "1_year" ? "год" : "месяц"}
+                            </div>
+                            <AnimatePresence initial={false}>
+                              {shopDuration === "1_year" && yearlySave > 0 && (
+                                <motion.div
+                                  initial={{ opacity: 0, y: 4, height: 0 }}
+                                  animate={{ opacity: 1, y: 0, height: "auto" }}
+                                  exit={{ opacity: 0, y: -4, height: 0 }}
+                                  transition={{ duration: 0.22, ease: "easeOut" }}
+                                  className="mt-2 flex items-center gap-2 text-xs overflow-hidden"
+                                >
+                                  <span className="text-zinc-500 line-through">{yearlyBasePrice} RUB</span>
+                                  <span className="inline-flex items-center rounded-full border border-red-500/45 bg-red-600/15 px-2 py-0.5 text-red-100">
+                                    2 месяца бесплатно
+                                  </span>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </motion.div>
+                        </AnimatePresence>
                         <div className="mt-4 h-px w-full bg-zinc-700/60" />
                         <div className="mt-4 space-y-2.5 text-sm text-zinc-200">
                           {plan.features.map((feature) => (
@@ -9492,9 +9963,6 @@ export default function App() {
     });
     const myLobbyPlayer = room.players.find((player) => player.id === myId) ?? null;
     const hostTransferCandidates = room.players.filter((player) => player.id !== room.hostId);
-    const adminBotPlayers = room.players.filter(
-      (player) => player.isBot || /^бот-\d+$/i.test((player.name ?? "").trim()),
-    );
     const hasRoomHostControl = roomControlPlayerId === room.hostId;
     const roleDialogTargetPlayer =
       room.players.find((player) => player.id === lobbyRoleTargetPlayerId) ?? myLobbyPlayer;
@@ -9564,77 +10032,6 @@ export default function App() {
               {lobbyObservers.length}
             </Button>
           </div>
-        )}
-        {hasRoomHostControl && isCreatorAdmin && (
-          <>
-            <button
-              type="button"
-              onPointerDown={beginAdminFabDrag}
-              onPointerMove={moveAdminFabDrag}
-              onPointerUp={endAdminFabDrag}
-              className="fixed z-[80] flex h-12 w-12 items-center justify-center rounded-full border border-red-500/60 bg-zinc-900/95 text-red-300 shadow-[0_0_24px_rgba(239,68,68,0.32)] transition hover:text-red-200"
-              style={{ left: adminFabPos.x, top: adminFabPos.y }}
-              aria-label="Админ-инструменты"
-            >
-              <Wrench className="h-5 w-5" />
-            </button>
-            {adminPanelOpen && (
-              <div
-                className="fixed z-[79] w-[280px] rounded-2xl border border-zinc-700 bg-zinc-950/96 p-3 shadow-2xl shadow-black/70"
-                style={{
-                  left: Math.max(8, Math.min(window.innerWidth - 288, adminFabPos.x + 56)),
-                  top: Math.max(8, Math.min(window.innerHeight - 340, adminFabPos.y)),
-                }}
-              >
-                <div className="text-xs uppercase tracking-[0.12em] text-zinc-500">Админ</div>
-                <div className="mt-2 rounded-xl border border-zinc-800 bg-zinc-900/70 p-2">
-                  <div className="text-[11px] text-zinc-500">Боты в комнате</div>
-                  {adminBotPlayers.length === 0 ? (
-                    <div className="mt-1 text-xs text-zinc-400">Ботов пока нет.</div>
-                  ) : (
-                    <div className={`mt-1 max-h-28 space-y-1 overflow-y-auto pr-1 ${HIDE_SCROLLBAR_CLASS}`}>
-                      {adminBotPlayers.map((bot) => (
-                        <button
-                          key={`admin-bot-control-${bot.id}`}
-                          type="button"
-                          onClick={() => controlAdminPlayer(bot.id)}
-                          className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-1.5 text-left text-xs font-semibold text-zinc-100 transition hover:border-red-500/70 hover:bg-zinc-800"
-                        >
-                          Зайти за {bot.name}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {myId !== room.hostId && (
-                    <button
-                      type="button"
-                      onClick={() => controlAdminPlayer(room.hostId)}
-                      className="mt-2 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-1.5 text-xs font-semibold text-zinc-200 transition hover:border-red-500/70 hover:bg-zinc-800"
-                    >
-                      Вернуться к ведущему
-                    </button>
-                  )}
-                </div>
-                <div className="mt-2 flex items-center gap-2">
-                  <Input
-                    type="number"
-                    min={1}
-                    max={6}
-                    value={adminBotCount}
-                    onChange={(e) => setAdminBotCount(Math.max(1, Math.min(6, Number(e.target.value) || 1)))}
-                    className="h-9 w-20 rounded-lg border-zinc-700 bg-zinc-900 text-zinc-100"
-                  />
-                  <Button
-                    type="button"
-                    onClick={addAdminBots}
-                    className="h-9 flex-1 rounded-lg bg-red-600 px-3 text-xs text-white hover:bg-red-500"
-                  >
-                    Добавить ботов
-                  </Button>
-                </div>
-              </div>
-            )}
-          </>
         )}
         {canRenderRoleDialog && roleDialogTargetPlayer && (
           <Dialog
@@ -9725,7 +10122,7 @@ export default function App() {
         {hasRoomHostControl && (
           <Dialog open={roomManageOpen} onOpenChange={setRoomManageOpen}>
             <DialogContent
-              className="rounded-3xl border-zinc-800 bg-[radial-gradient(130%_120%_at_0%_0%,rgba(220,38,38,0.13),transparent_45%),linear-gradient(145deg,rgba(13,13,17,0.98),rgba(10,10,12,0.96))] text-zinc-100 sm:max-w-3xl max-h-[88vh] overflow-y-auto [scrollbar-width:thin] [scrollbar-color:rgba(82,82,91,0.28)_transparent] [&::-webkit-scrollbar]:w-[3px] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-600/40 [&::-webkit-scrollbar-thumb:hover]:bg-zinc-500/55"
+              className="top-[4vh] sm:top-[6vh] translate-y-0 rounded-3xl border-zinc-800 bg-[radial-gradient(130%_120%_at_0%_0%,rgba(220,38,38,0.13),transparent_45%),linear-gradient(145deg,rgba(13,13,17,0.98),rgba(10,10,12,0.96))] text-zinc-100 sm:max-w-3xl max-h-[88vh] overflow-y-auto [scrollbar-width:thin] [scrollbar-color:rgba(82,82,91,0.28)_transparent] [&::-webkit-scrollbar]:w-[3px] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-600/40 [&::-webkit-scrollbar-thumb:hover]:bg-zinc-500/55"
             >
               {upsellModalOpen && roomManageOpen && (
                 <div className="pointer-events-none absolute inset-0 z-20 rounded-3xl bg-black/45" />
@@ -10468,7 +10865,6 @@ export default function App() {
     const currentStage = gameStages[game.stageIndex] ?? gameStages[0];
     const stageProgress = ((game.stageIndex + 1) / gameStages.length) * 100;
     const isHost = myId === game.hostId;
-    const hasGameAdminAccess = gameControlPlayerId === game.hostId;
     const isJudge = game.me.roleKey === "judge";
     const isWitness = game.me.roleKey === "witness";
     const isSpectator = game.me.roleKey === "observer";
@@ -10566,79 +10962,6 @@ export default function App() {
               {gameObservers.length}
             </Button>
           </div>
-        )}
-        {hasGameAdminAccess && isCreatorAdmin && (
-          <>
-            <button
-              type="button"
-              onPointerDown={beginAdminFabDrag}
-              onPointerMove={moveAdminFabDrag}
-              onPointerUp={endAdminFabDrag}
-              className="fixed z-[80] flex h-12 w-12 items-center justify-center rounded-full border border-red-500/60 bg-zinc-900/95 text-red-300 shadow-[0_0_24px_rgba(239,68,68,0.32)] transition hover:text-red-200"
-              style={{ left: adminFabPos.x, top: adminFabPos.y }}
-              aria-label="Админ-инструменты"
-            >
-              <Wrench className="h-5 w-5" />
-            </button>
-            {adminPanelOpen && (
-              <div
-                className="fixed z-[79] w-[280px] rounded-2xl border border-zinc-700 bg-zinc-950/96 p-3 shadow-2xl shadow-black/70"
-                style={{
-                  left: Math.max(8, Math.min(window.innerWidth - 288, adminFabPos.x + 56)),
-                  top: Math.max(8, Math.min(window.innerHeight - 340, adminFabPos.y)),
-                }}
-              >
-                <div className="text-xs uppercase tracking-[0.12em] text-zinc-500">Админ</div>
-                <div className="mt-2 rounded-xl border border-zinc-800 bg-zinc-900/70 p-2">
-                  <div className="text-[11px] text-zinc-500">Боты в матче</div>
-                  {game.players.filter((player) => player.isBot || /^бот-\d+$/i.test((player.name ?? "").trim())).length === 0 ? (
-                    <div className="mt-1 text-xs text-zinc-400">Ботов пока нет.</div>
-                  ) : (
-                    <div className={`mt-1 max-h-28 space-y-1 overflow-y-auto pr-1 ${HIDE_SCROLLBAR_CLASS}`}>
-                      {game.players
-                        .filter((player) => player.isBot || /^бот-\d+$/i.test((player.name ?? "").trim()))
-                        .map((bot) => (
-                          <button
-                            key={`admin-game-bot-control-${bot.id}`}
-                            type="button"
-                            onClick={() => controlAdminPlayer(bot.id)}
-                            className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-1.5 text-left text-xs font-semibold text-zinc-100 transition hover:border-red-500/70 hover:bg-zinc-800"
-                          >
-                            Зайти за {bot.name}
-                          </button>
-                        ))}
-                    </div>
-                  )}
-                  {myId !== game.hostId && (
-                    <button
-                      type="button"
-                      onClick={() => controlAdminPlayer(game.hostId)}
-                      className="mt-2 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-1.5 text-xs font-semibold text-zinc-200 transition hover:border-red-500/70 hover:bg-zinc-800"
-                    >
-                      Вернуться к ведущему
-                    </button>
-                  )}
-                </div>
-                <div className="mt-2 flex items-center gap-2">
-                  <Input
-                    type="number"
-                    min={1}
-                    max={6}
-                    value={adminBotCount}
-                    onChange={(e) => setAdminBotCount(Math.max(1, Math.min(6, Number(e.target.value) || 1)))}
-                    className="h-9 w-20 rounded-lg border-zinc-700 bg-zinc-900 text-zinc-100"
-                  />
-                  <Button
-                    type="button"
-                    onClick={addAdminBots}
-                    className="h-9 flex-1 rounded-lg bg-red-600 px-3 text-xs text-white hover:bg-red-500"
-                  >
-                    Добавить ботов
-                  </Button>
-                </div>
-              </div>
-            )}
-          </>
         )}
         {game.venueUrl && (
           <div className="absolute right-4 top-4 z-20 sm:right-6 sm:top-6">

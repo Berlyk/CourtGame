@@ -95,6 +95,8 @@ export interface PromoApplyResult {
 
 export interface AdminPromoCodeView {
   code: string;
+  promoKind: "subscription" | "badge";
+  badgeKey: string | null;
   tier: SubscriptionTier;
   duration: SubscriptionDuration;
   source: SubscriptionSource;
@@ -105,6 +107,15 @@ export interface AdminPromoCodeView {
   expiresAt: string | null;
   createdAt: string | null;
   updatedAt: string | null;
+}
+
+export interface AdminUserLookupView {
+  id: string;
+  login: string;
+  email: string;
+  nickname: string;
+  createdAt: number;
+  subscription: UserSubscriptionView;
 }
 
 export interface UserMatchParticipantView {
@@ -239,6 +250,13 @@ const SUBSCRIPTION_BADGE_META: Record<
     description: "Выдается при активной подписке «Арбитр».",
   },
 };
+const BADGE_PROMO_ALLOWED_KEYS = new Set<string>([
+  "winner",
+  "legend",
+  ...Object.keys(MANUAL_BADGE_META),
+  ...Object.keys(ROLE_BADGE_META).map((key) => `role_${key}`),
+  ...Object.values(SUBSCRIPTION_BADGE_META).map((entry) => entry.key),
+]);
 
 const ROLE_TITLES: Record<string, string> = {
   plaintiff: "Истец",
@@ -625,6 +643,8 @@ async function ensureTables(): Promise<void> {
         CREATE TABLE IF NOT EXISTS auth_subscription_promocodes (
           code_normalized TEXT PRIMARY KEY,
           code_display TEXT NOT NULL,
+          promo_kind TEXT NOT NULL DEFAULT 'subscription',
+          badge_key TEXT,
           tier TEXT NOT NULL DEFAULT 'free',
           duration TEXT NOT NULL DEFAULT '1_month',
           source TEXT NOT NULL DEFAULT 'system',
@@ -637,6 +657,14 @@ async function ensureTables(): Promise<void> {
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
+      `);
+      await pool.query(`
+        ALTER TABLE auth_subscription_promocodes
+          ADD COLUMN IF NOT EXISTS promo_kind TEXT NOT NULL DEFAULT 'subscription';
+      `);
+      await pool.query(`
+        ALTER TABLE auth_subscription_promocodes
+          ADD COLUMN IF NOT EXISTS badge_key TEXT;
       `);
 
       await pool.query(`
@@ -1681,6 +1709,19 @@ function normalizePromoCode(value: string): string {
   return value.trim().toUpperCase().replace(/\s+/g, "");
 }
 
+function normalizePromoKind(value: string | null | undefined): "subscription" | "badge" {
+  const normalized = String(value ?? "subscription")
+    .trim()
+    .toLowerCase();
+  return normalized === "badge" ? "badge" : "subscription";
+}
+
+function normalizePromoBadgeKey(value: string | null | undefined): string | null {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) return null;
+  return BADGE_PROMO_ALLOWED_KEYS.has(normalized) ? normalized : null;
+}
+
 function promoDurationLabel(duration: SubscriptionDuration): string {
   switch (duration) {
     case "1_day":
@@ -1714,9 +1755,13 @@ export async function applyPromoCodeByToken(
   const client = await pool.connect();
   let tier: SubscriptionTier = "free";
   let duration: SubscriptionDuration = "1_month";
+  let appliedPromoKind: "subscription" | "badge" = "subscription";
+  let appliedPromoBadgeKey: string | null = null;
   try {
     await client.query("BEGIN");
     const promoResult = await client.query<{
+      promo_kind: string;
+      badge_key: string | null;
       tier: string;
       duration: string;
       source: string;
@@ -1728,6 +1773,8 @@ export async function applyPromoCodeByToken(
     }>(
       `
         SELECT
+          promo_kind,
+          badge_key,
           tier,
           duration,
           source,
@@ -1783,6 +1830,10 @@ export async function applyPromoCodeByToken(
     tier = normalizeSubscriptionTier(promo.tier);
     duration = normalizeSubscriptionDuration(promo.duration);
     const source = normalizeSubscriptionSource(promo.source);
+    const promoKind = normalizePromoKind(promo.promo_kind);
+    const promoBadgeKey = normalizePromoBadgeKey(promo.badge_key);
+    appliedPromoKind = promoKind;
+    appliedPromoBadgeKey = promoBadgeKey;
     const startAt = new Date();
     const durationMs = getDurationMs(duration);
     const isLifetime = tier !== "free" && duration === "forever";
@@ -1793,20 +1844,45 @@ export async function applyPromoCodeByToken(
           ? null
           : new Date(startAt.getTime() + durationMs);
 
-    await client.query(
-      `
-        UPDATE auth_users
-        SET
-          subscription_tier = $1,
-          subscription_start_at = $2,
-          subscription_end_at = $3,
-          subscription_is_lifetime = $4,
-          subscription_source = $5,
-          subscription_duration = $6
-        WHERE id = $7
-      `,
-      [tier, tier === "free" ? null : startAt, endAt, isLifetime, source, duration, user.id],
-    );
+    if (promoKind === "badge") {
+      if (!promoBadgeKey) {
+        throw new Error("Промокод поврежден: бейдж не найден.");
+      }
+      await client.query(
+        `
+          INSERT INTO auth_user_badges (user_id, badge_key, is_active, granted_at)
+          VALUES ($1, $2, TRUE, NOW())
+          ON CONFLICT (user_id, badge_key)
+          DO UPDATE SET
+            is_active = TRUE,
+            granted_at = NOW()
+        `,
+        [user.id, promoBadgeKey],
+      );
+      await client.query(
+        `
+          UPDATE auth_users
+          SET selected_badge_key = COALESCE(selected_badge_key, $1)
+          WHERE id = $2
+        `,
+        [promoBadgeKey, user.id],
+      );
+    } else {
+      await client.query(
+        `
+          UPDATE auth_users
+          SET
+            subscription_tier = $1,
+            subscription_start_at = $2,
+            subscription_end_at = $3,
+            subscription_is_lifetime = $4,
+            subscription_source = $5,
+            subscription_duration = $6
+          WHERE id = $7
+        `,
+        [tier, tier === "free" ? null : startAt, endAt, isLifetime, source, duration, user.id],
+      );
+    }
 
     await client.query(
       `
@@ -1836,9 +1912,13 @@ export async function applyPromoCodeByToken(
   const subscription = await getSubscriptionByUserId(user.id);
   return {
     message:
-      tier === "free"
-        ? "Промокод активирован."
-        : `Промокод активирован: ${subscription.label} (${promoDurationLabel(duration)}).`,
+      appliedPromoKind === "badge"
+        ? appliedPromoBadgeKey
+          ? `Промокод активирован: открыт бейдж «${appliedPromoBadgeKey}».`
+          : "Промокод на бейдж активирован."
+        : tier === "free"
+          ? "Промокод активирован."
+          : `Промокод активирован: ${subscription.label} (${promoDurationLabel(duration)}).`,
     subscription,
   };
 }
@@ -1846,6 +1926,8 @@ export async function applyPromoCodeByToken(
 export async function upsertPromoCodeByAdmin(input: {
   code: string;
   tier: string;
+  promoKind?: string | null;
+  badgeKey?: string | null;
   duration?: string | null;
   source?: string | null;
   isActive?: boolean;
@@ -1853,13 +1935,24 @@ export async function upsertPromoCodeByAdmin(input: {
   startsAt?: Date | string | number | null;
   expiresAt?: Date | string | number | null;
   createdByUserId?: string | null;
-}): Promise<{ code: string; tier: SubscriptionTier; duration: SubscriptionDuration }> {
+}): Promise<{
+  code: string;
+  promoKind: "subscription" | "badge";
+  badgeKey: string | null;
+  tier: SubscriptionTier;
+  duration: SubscriptionDuration;
+}> {
   await ensureTables();
   const normalizedCode = normalizePromoCode(input.code);
   if (!normalizedCode) {
     throw new Error("Укажите промокод.");
   }
+  const promoKind = normalizePromoKind(input.promoKind);
+  const badgeKey = normalizePromoBadgeKey(input.badgeKey);
   const tier = normalizeSubscriptionTier(input.tier);
+  if (promoKind === "badge" && !badgeKey) {
+    throw new Error("Выберите корректный бейдж для промокода.");
+  }
   const duration = normalizeSubscriptionDuration(input.duration ?? "1_month");
   const source = normalizeSubscriptionSource(input.source ?? "system");
   const maxUses =
@@ -1884,6 +1977,8 @@ export async function upsertPromoCodeByAdmin(input: {
       INSERT INTO auth_subscription_promocodes (
         code_normalized,
         code_display,
+        promo_kind,
+        badge_key,
         tier,
         duration,
         source,
@@ -1895,10 +1990,12 @@ export async function upsertPromoCodeByAdmin(input: {
         created_at,
         updated_at
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW(),NOW())
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW(),NOW())
       ON CONFLICT (code_normalized)
       DO UPDATE SET
         code_display = EXCLUDED.code_display,
+        promo_kind = EXCLUDED.promo_kind,
+        badge_key = EXCLUDED.badge_key,
         tier = EXCLUDED.tier,
         duration = EXCLUDED.duration,
         source = EXCLUDED.source,
@@ -1911,6 +2008,8 @@ export async function upsertPromoCodeByAdmin(input: {
     [
       normalizedCode,
       normalizedCode,
+      promoKind,
+      badgeKey,
       tier,
       duration,
       source,
@@ -1922,13 +2021,15 @@ export async function upsertPromoCodeByAdmin(input: {
     ],
   );
 
-  return { code: normalizedCode, tier, duration };
+  return { code: normalizedCode, promoKind, badgeKey, tier, duration };
 }
 
 export async function listPromoCodesByAdmin(): Promise<AdminPromoCodeView[]> {
   await ensureTables();
   const result = await pool.query<{
     code_display: string;
+    promo_kind: string;
+    badge_key: string | null;
     tier: string;
     duration: string;
     source: string;
@@ -1943,6 +2044,8 @@ export async function listPromoCodesByAdmin(): Promise<AdminPromoCodeView[]> {
     `
       SELECT
         code_display,
+        promo_kind,
+        badge_key,
         tier,
         duration,
         source,
@@ -1960,6 +2063,8 @@ export async function listPromoCodesByAdmin(): Promise<AdminPromoCodeView[]> {
 
   return result.rows.map((row) => ({
     code: String(row.code_display || "").trim().toUpperCase(),
+    promoKind: normalizePromoKind(row.promo_kind),
+    badgeKey: normalizePromoBadgeKey(row.badge_key),
     tier: normalizeSubscriptionTier(row.tier),
     duration: normalizeSubscriptionDuration(row.duration),
     source: normalizeSubscriptionSource(row.source),
@@ -1999,6 +2104,69 @@ export async function deletePromoCodeByAdmin(code: string): Promise<boolean> {
     [normalizedCode],
   );
   return (result.rowCount ?? 0) > 0;
+}
+
+export async function findUserByAdminQuery(query: string): Promise<AdminUserLookupView | null> {
+  await ensureTables();
+  const trimmed = String(query ?? "").trim();
+  if (!trimmed) {
+    throw new Error("Введите login, email, nickname или userId.");
+  }
+
+  const normalized = trimmed.toLowerCase();
+  const uuidLike =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      trimmed,
+    );
+
+  const result = await pool.query<{
+    id: string;
+    login: string;
+    email: string;
+    nickname: string;
+    created_at: Date;
+    subscription_tier: string | null;
+    subscription_start_at: Date | null;
+    subscription_end_at: Date | null;
+    subscription_is_lifetime: boolean | null;
+    subscription_source: string | null;
+    subscription_duration: string | null;
+  }>(
+    `
+      SELECT
+        id,
+        login,
+        email,
+        nickname,
+        created_at,
+        subscription_tier,
+        subscription_start_at,
+        subscription_end_at,
+        subscription_is_lifetime,
+        subscription_source,
+        subscription_duration
+      FROM auth_users
+      WHERE
+        ($1::boolean IS TRUE AND id = $2)
+        OR login_normalized = $3
+        OR email_normalized = $3
+        OR nickname_normalized = $3
+      ORDER BY created_at DESC
+      LIMIT 1
+    `,
+    [uuidLike, trimmed, normalized],
+  );
+
+  if (!result.rowCount) return null;
+  const row = result.rows[0];
+  return {
+    id: row.id,
+    login: row.login,
+    email: row.email,
+    nickname: row.nickname,
+    createdAt: row.created_at.getTime(),
+    subscription: resolveSubscriptionView(row),
+  };
 }
 
 export async function recordMatchOutcome(input: {

@@ -903,12 +903,53 @@ export function setupSocket(httpServer: HttpServer) {
     return socketInfo.playerId;
   };
 
-  const isCreatorAdmin = async (authToken?: string): Promise<boolean> => {
+  const secureCompare = (a: string, b: string): boolean => {
+    const left = Buffer.from(String(a), "utf8");
+    const right = Buffer.from(String(b), "utf8");
+    if (left.length !== right.length) return false;
+    return crypto.timingSafeEqual(left, right);
+  };
+
+  const resolveSocketIp = (headers: Record<string, unknown>, fallback?: string | null): string => {
+    const forwarded = headers["x-forwarded-for"];
+    if (typeof forwarded === "string" && forwarded.trim()) {
+      return forwarded.split(",")[0]?.trim() ?? "";
+    }
+    if (Array.isArray(forwarded) && forwarded.length > 0) {
+      return String(forwarded[0] ?? "").trim();
+    }
+    return String(fallback ?? "").trim();
+  };
+
+  const isCreatorAdmin = async (
+    authToken?: string,
+    adminKey?: string,
+    socketIp?: string,
+  ): Promise<boolean> => {
     const token = typeof authToken === "string" ? authToken.trim() : "";
     if (!token) return false;
     const user = await getUserByToken(token);
     if (!user) return false;
-    return user.login.trim().toLowerCase() === "berly";
+    const adminLogin = String(process.env.ADMIN_PANEL_LOGIN ?? "berly").trim().toLowerCase();
+    if (user.login.trim().toLowerCase() !== adminLogin) return false;
+    const requiredAdminUserId = String(process.env.ADMIN_USER_ID ?? "").trim();
+    if (requiredAdminUserId && user.id !== requiredAdminUserId) return false;
+    const requiredKey = String(process.env.ADMIN_PANEL_KEY ?? "").trim();
+    if (requiredKey) {
+      const providedKey = typeof adminKey === "string" ? adminKey.trim() : "";
+      if (!providedKey || !secureCompare(providedKey, requiredKey)) {
+        return false;
+      }
+    }
+    const allowedIps = String(process.env.ADMIN_ALLOWED_IPS ?? "")
+      .split(",")
+      .map((ip) => ip.trim())
+      .filter(Boolean);
+    if (allowedIps.length > 0) {
+      const currentIp = String(socketIp ?? "").trim();
+      if (!currentIp || !allowedIps.includes(currentIp)) return false;
+    }
+    return true;
   };
 
   setInterval(() => {
@@ -1695,10 +1736,12 @@ export function setupSocket(httpServer: HttpServer) {
         code,
         count,
         authToken,
+        adminKey,
       }: {
         code: string;
         count?: number;
         authToken?: string;
+        adminKey?: string;
       }) => {
         const roomCode = normalizeRoomCode(code);
         const room = getRoom(roomCode);
@@ -1708,7 +1751,11 @@ export function setupSocket(httpServer: HttpServer) {
           socket.emit("error", { message: "Добавлять ботов может только ведущий комнаты." });
           return;
         }
-        if (!(await isCreatorAdmin(authToken))) {
+        const socketIp = resolveSocketIp(
+          socket.handshake.headers as Record<string, unknown>,
+          socket.handshake.address,
+        );
+        if (!(await isCreatorAdmin(authToken, adminKey, socketIp))) {
           socket.emit("error", { message: "Нет доступа к админ-инструментам." });
           return;
         }
@@ -1731,10 +1778,12 @@ export function setupSocket(httpServer: HttpServer) {
         code,
         targetPlayerId,
         authToken,
+        adminKey,
       }: {
         code: string;
         targetPlayerId?: string;
         authToken?: string;
+        adminKey?: string;
       }) => {
         const roomCode = normalizeRoomCode(code);
         const room = getRoom(roomCode);
@@ -1745,7 +1794,11 @@ export function setupSocket(httpServer: HttpServer) {
           socket.emit("error", { message: "Недоступно вне текущей комнаты." });
           return;
         }
-        if (!(await isCreatorAdmin(authToken))) {
+        const socketIp = resolveSocketIp(
+          socket.handshake.headers as Record<string, unknown>,
+          socket.handshake.address,
+        );
+        if (!(await isCreatorAdmin(authToken, adminKey, socketIp))) {
           socket.emit("error", { message: "Нет доступа к админ-инструментам." });
           return;
         }
