@@ -1945,6 +1945,7 @@ interface AdminPromoCodeView {
   code: string;
   promoKind: AdminPromoKind;
   badgeKey: string | null;
+  badgeKeys?: string[];
   tier: SubscriptionTier;
   duration: SubscriptionDuration;
   source: string;
@@ -3136,14 +3137,17 @@ export default function App() {
   const [promoCodeResult, setPromoCodeResult] = useState<{
     kind: "success" | "error";
     text: string;
+    rewards?: Array<{ type: "subscription" | "badge"; label: string }>;
   } | null>(null);
   const [adminToolsOpen, setAdminToolsOpen] = useState(false);
   const [adminPanelKey, setAdminPanelKey] = useState(
     () => localStorage.getItem("court_admin_panel_key") ?? "",
   );
+  const [adminPanelKeyVisible, setAdminPanelKeyVisible] = useState(false);
   const [adminPromoCodeDraft, setAdminPromoCodeDraft] = useState("");
   const [adminPromoKind, setAdminPromoKind] = useState<AdminPromoKind>("subscription");
   const [adminPromoBadgeKey, setAdminPromoBadgeKey] = useState("sub_trainee");
+  const [adminPromoBadgeKeysDraft, setAdminPromoBadgeKeysDraft] = useState("");
   const [adminPromoTier, setAdminPromoTier] = useState<SubscriptionTier>("trainee");
   const [adminPromoDuration, setAdminPromoDuration] = useState<SubscriptionDuration>("1_month");
   const [adminPromoMaxUses, setAdminPromoMaxUses] = useState("");
@@ -3189,6 +3193,7 @@ export default function App() {
   const [upsellDescription, setUpsellDescription] = useState("");
   const [upsellRequiredTier, setUpsellRequiredTier] =
     useState<SubscriptionTier>("trainee");
+  const [profileSubscriptionHighlight, setProfileSubscriptionHighlight] = useState(0);
   const [devlogPage, setDevlogPage] = useState(1);
   const [playView, setPlayView] = useState<"quick" | "matches">("quick");
   const [mainHelpQuery, setMainHelpQuery] = useState("");
@@ -3451,7 +3456,7 @@ export default function App() {
   }, [activeBan, nowMs]);
   const isCreatorAdmin = (authUser?.login ?? "").trim().toLowerCase() === "berly";
   const isStaffAdmin = authUser?.adminRole === "administrator" || authUser?.adminRole === "moderator";
-  const canSeeAdminButton = isAuthenticated && (isCreatorAdmin || isStaffAdmin);
+  const canSeeAdminButton = isAuthenticated && !isUserBanned && (isCreatorAdmin || isStaffAdmin);
   const adminPanelKeyTrimmed = adminPanelKey.trim();
   const adminSessionTokenTrimmed = adminSessionToken?.trim() ?? "";
   const adminCanManagePromos = adminAccessRole === "owner";
@@ -3646,7 +3651,11 @@ export default function App() {
     setPromoCodeLoading(true);
     setPromoCodeResult(null);
     try {
-      const payload = await authRequest<{ ok: true; message: string }>("/auth/promo/apply", {
+      const payload = await authRequest<{
+        ok: true;
+        message: string;
+        rewards?: Array<{ type: "subscription" | "badge"; label: string }>;
+      }>("/auth/promo/apply", {
         method: "PATCH",
         token: authToken,
         body: { code },
@@ -3655,6 +3664,7 @@ export default function App() {
       setPromoCodeResult({
         kind: "success",
         text: payload.message || "Промокод активирован.",
+        rewards: Array.isArray(payload.rewards) ? payload.rewards : [],
       });
       const profilePayload = await authRequest<{ profile: PublicUserProfile }>("/auth/profile", {
         token: authToken,
@@ -3806,8 +3816,20 @@ export default function App() {
       setAdminPromoFeedback({ kind: "error", text: "Введите код промокода." });
       return;
     }
-    if (adminPromoKind === "badge" && !adminPromoBadgeKey.trim()) {
-      setAdminPromoFeedback({ kind: "error", text: "Выберите бейдж для промокода." });
+    const parsedBadgeKeys = Array.from(
+      new Set(
+        adminPromoBadgeKeysDraft
+          .split(",")
+          .map((value) => value.trim())
+          .filter(Boolean),
+      ),
+    );
+    const fallbackBadgeKey = adminPromoBadgeKey.trim();
+    if (fallbackBadgeKey && !parsedBadgeKeys.includes(fallbackBadgeKey)) {
+      parsedBadgeKeys.push(fallbackBadgeKey);
+    }
+    if (adminPromoKind === "badge" && parsedBadgeKeys.length === 0) {
+      setAdminPromoFeedback({ kind: "error", text: "Выберите хотя бы один бейдж для промокода." });
       return;
     }
     if (adminPromoExpiresAt && adminPromoStartsAt && adminPromoExpiresAt < adminPromoStartsAt) {
@@ -3828,12 +3850,13 @@ export default function App() {
         method: "PATCH",
         token: authToken,
         headers,
-        body: {
-          code,
-          promoKind: adminPromoKind,
-          badgeKey: adminPromoKind === "badge" ? adminPromoBadgeKey.trim() : null,
-          tier: adminPromoKind === "subscription" ? adminPromoTier : "free",
-          duration: adminPromoDuration,
+          body: {
+            code,
+            promoKind: adminPromoKind,
+            badgeKey: adminPromoKind === "badge" ? adminPromoBadgeKey.trim() : null,
+            badgeKeys: parsedBadgeKeys,
+            tier: adminPromoKind === "subscription" ? adminPromoTier : "free",
+            duration: adminPromoDuration,
           isActive: adminPromoIsActive,
           maxUses: parsedMaxUses,
           startsAt: adminPromoStartsAt ? new Date(adminPromoStartsAt).toISOString() : null,
@@ -3849,6 +3872,7 @@ export default function App() {
       setAdminPromoDuration("1_month");
       setAdminPromoKind("subscription");
       setAdminPromoBadgeKey("sub_trainee");
+      setAdminPromoBadgeKeysDraft("");
       setAdminPromoIsActive(true);
       await loadAdminPromos();
     } catch (error) {
@@ -3873,6 +3897,7 @@ export default function App() {
     adminPromoCodeDraft,
     adminPromoKind,
     adminPromoBadgeKey,
+    adminPromoBadgeKeysDraft,
     adminPromoDuration,
     adminPromoExpiresAt,
     adminPromoIsActive,
@@ -3954,6 +3979,7 @@ export default function App() {
             code: promo.code,
             promoKind: promo.promoKind,
             badgeKey: promo.promoKind === "badge" ? promo.badgeKey : null,
+            badgeKeys: promo.badgeKeys ?? (promo.badgeKey ? [promo.badgeKey] : []),
             tier: promo.promoKind === "subscription" ? promo.tier : "free",
             duration: promo.duration,
             isActive: patch.isActive ?? promo.isActive,
@@ -4054,7 +4080,11 @@ export default function App() {
       setAdminPromoFeedback({ kind: "error", text: "Доступ к админ-панели не подтвержден." });
       return;
     }
-    const query = adminUserLookupQuery.trim();
+    const query =
+      adminUserLookupQuery.trim() ||
+      adminSubscriptionUserId.trim() ||
+      adminBanUserId.trim() ||
+      adminStaffTargetUserId.trim();
     if (!query) {
       setAdminPromoFeedback({
         kind: "error",
@@ -4074,10 +4104,8 @@ export default function App() {
           body: { query },
         },
       );
+      setAdminUserLookupQuery(query);
       setAdminUserLookupResult(payload.user);
-      setAdminSubscriptionUserId(payload.user.id);
-      setAdminBanUserId(payload.user.id);
-      setAdminStaffTargetUserId(payload.user.id);
       setAdminModerationNickname(payload.user.nickname);
       if (payload.user.adminRole === "administrator" || payload.user.adminRole === "moderator") {
         setAdminStaffTargetRole(payload.user.adminRole);
@@ -4107,6 +4135,9 @@ export default function App() {
     adminCanModerateUsers,
     ensureAdminHeaders,
     adminUserLookupQuery,
+    adminSubscriptionUserId,
+    adminBanUserId,
+    adminStaffTargetUserId,
     invalidateAdminSession,
     isAdminSessionError,
   ]);
@@ -4493,6 +4524,12 @@ export default function App() {
     }
   }, [canSeeAdminButton]);
   useEffect(() => {
+    if (!adminToolsOpen) return;
+    setAdminSubscriptionUserId("");
+    setAdminBanUserId("");
+    setAdminStaffTargetUserId("");
+  }, [adminToolsOpen]);
+  useEffect(() => {
     if (
       !adminToolsOpen ||
       !authToken ||
@@ -4541,12 +4578,6 @@ export default function App() {
     }, 320);
     return () => window.clearTimeout(timer);
   }, [shopDuration]);
-  useEffect(() => {
-    if (!authUser?.id) return;
-    setAdminSubscriptionUserId((prev) => prev || authUser.id);
-    setAdminBanUserId((prev) => prev || authUser.id);
-    setAdminStaffTargetUserId((prev) => prev || authUser.id);
-  }, [authUser?.id]);
   useEffect(() => {
     if (canCreatePrivateRooms || !createRoomPrivate) return;
     setCreateRoomPrivate(false);
@@ -7264,23 +7295,27 @@ export default function App() {
           <DialogDescription className="text-zinc-300">
             {upsellDescription}
           </DialogDescription>
-          <div className="mt-2 inline-flex w-fit items-center gap-2 rounded-full border border-red-400/45 bg-red-500/18 px-3 py-1 text-xs font-medium text-red-100">
-            <Crown className="h-3.5 w-3.5" />
-            План: {getSubscriptionTierLabel(upsellRequiredTier)}
-          </div>
+          {upsellTitle !== "Оплата скоро" && (
+            <div className="mt-2 inline-flex w-fit items-center gap-2 rounded-full border border-red-400/45 bg-red-500/18 px-3 py-1 text-xs font-medium text-red-100">
+              <Crown className="h-3.5 w-3.5" />
+              План: {getSubscriptionTierLabel(upsellRequiredTier)}
+            </div>
+          )}
         </DialogHeader>
         <div className="flex gap-2.5">
-          <Button
-            type="button"
-            className="h-11 flex-1 rounded-xl bg-red-600 text-white hover:bg-red-500"
-            onClick={navigateToShop}
-          >
-            Перейти в магазин
-          </Button>
+          {upsellTitle !== "Оплата скоро" && (
+            <Button
+              type="button"
+              className="h-11 flex-1 rounded-xl bg-red-600 text-white hover:bg-red-500"
+              onClick={navigateToShop}
+            >
+              Перейти в магазин
+            </Button>
+          )}
           <Button
             type="button"
             variant="outline"
-            className="h-11 flex-1 rounded-xl border-zinc-700 bg-zinc-900/85 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+            className={`h-11 rounded-xl border-zinc-700 bg-zinc-900/85 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100 ${upsellTitle !== "Оплата скоро" ? "flex-1" : "w-full"}`}
             onClick={() => setUpsellModalOpen(false)}
           >
             Закрыть
@@ -7324,13 +7359,13 @@ export default function App() {
         <button
           type="button"
           onClick={() => setAdminToolsOpen(true)}
-          className="fixed bottom-5 left-5 z-[440] inline-flex h-10 items-center gap-2 rounded-xl border border-red-500/45 bg-zinc-950/92 px-3 text-xs font-semibold text-red-200 shadow-[0_12px_28px_rgba(0,0,0,0.5)] transition hover:border-red-400/70 hover:text-red-100"
+          className="fixed bottom-5 left-5 z-[140] inline-flex h-10 items-center gap-2 rounded-xl border border-red-500/45 bg-zinc-950/92 px-3 text-xs font-semibold text-red-200 shadow-[0_12px_28px_rgba(0,0,0,0.5)] transition hover:border-red-400/70 hover:text-red-100"
         >
           <Wrench className="h-3.5 w-3.5" />
           Админ
         </button>
         <Dialog open={adminToolsOpen} onOpenChange={setAdminToolsOpen}>
-          <DialogContent className={`z-[450] max-w-3xl border-zinc-800 bg-zinc-950 text-zinc-100 ${HIDE_SCROLLBAR_CLASS}`}>
+          <DialogContent className={`z-[150] max-w-3xl border-zinc-800 bg-zinc-950 text-zinc-100 ${HIDE_SCROLLBAR_CLASS}`}>
             <DialogHeader>
               <DialogTitle>Админ-панель</DialogTitle>
               <DialogDescription className="text-zinc-400">
@@ -7338,39 +7373,50 @@ export default function App() {
               </DialogDescription>
             </DialogHeader>
             <div className={`space-y-4 max-h-[75vh] overflow-y-auto pr-1 ${HIDE_SCROLLBAR_CLASS}`}>
-              <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3">
-                <div className="text-xs uppercase tracking-[0.12em] text-zinc-500">Защита</div>
-                <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
-                  <Input
-                    value={adminPanelKey}
-                    onChange={(event) => setAdminPanelKey(event.target.value)}
-                    placeholder="Ключ админ-панели"
-                    className="h-10 rounded-xl border-zinc-700 bg-zinc-950 text-zinc-100 placeholder:text-zinc-500"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-10 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
-                    onClick={() => void checkAdminAccess()}
-                    disabled={adminAccessLoading}
-                  >
-                    {adminAccessLoading ? "Проверяем" : "Проверить"}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-10 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
-                    onClick={() => setAdminPanelKey("")}
-                  >
-                    Очистить
-                  </Button>
-                </div>
-                {!adminAccessGranted && (
+              {!adminAccessGranted && (
+                <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3">
+                  <div className="text-xs uppercase tracking-[0.12em] text-zinc-500">Защита</div>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+                    <div className="relative">
+                      <Input
+                        type={adminPanelKeyVisible ? "text" : "password"}
+                        value={adminPanelKey}
+                        onChange={(event) => setAdminPanelKey(event.target.value)}
+                        placeholder="Ключ админ-панели"
+                        className="h-10 rounded-xl border-zinc-700 bg-zinc-950 pr-10 text-zinc-100 placeholder:text-zinc-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setAdminPanelKeyVisible((prev) => !prev)}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 transition hover:text-zinc-200"
+                        aria-label={adminPanelKeyVisible ? "Скрыть ключ" : "Показать ключ"}
+                      >
+                        {adminPanelKeyVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-10 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                      onClick={() => void checkAdminAccess()}
+                      disabled={adminAccessLoading}
+                    >
+                      {adminAccessLoading ? "Проверяем" : "Проверить"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-10 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                      onClick={() => setAdminPanelKey("")}
+                    >
+                      Очистить
+                    </Button>
+                  </div>
                   <div className="mt-2 rounded-xl border border-zinc-700 bg-zinc-950/80 px-3 py-2 text-xs text-zinc-400">
                     Доступ не подтвержден. Введите ключ и нажмите «Проверить».
                   </div>
-                )}
-              </div>
+                </div>
+              )}
               {adminAccessGranted && (
                 <>
                   <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3">
@@ -7418,17 +7464,6 @@ export default function App() {
                             : "—"}
                     </div>
                   </div>
-                  {adminPromoFeedback && (
-                    <div
-                      className={`rounded-2xl border px-3 py-2 text-xs ${
-                        adminPromoFeedback.kind === "success"
-                          ? "border-emerald-500/45 bg-emerald-600/10 text-emerald-200"
-                          : "border-red-500/45 bg-red-600/10 text-red-200"
-                      }`}
-                    >
-                      {adminPromoFeedback.text}
-                    </div>
-                  )}
                   {adminPanelSection === "users" && (
                   <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3">
                     <div className="text-xs uppercase tracking-[0.12em] text-zinc-500">
@@ -7536,7 +7571,7 @@ export default function App() {
                         onChange={(event) =>
                           setAdminSubscriptionTier(normalizeSubscriptionTier(event.target.value))
                         }
-                        className="h-10 rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-red-500/40"
+                        className="h-10 appearance-none rounded-xl border border-zinc-700 bg-zinc-950 px-3 pr-8 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-red-500/40"
                       >
                         {(["trainee", "practitioner", "arbiter", "free"] as SubscriptionTier[]).map((tier) => (
                           <option key={`admin-sub-tier-${tier}`} value={tier} className="bg-zinc-950 text-zinc-100">
@@ -7547,7 +7582,7 @@ export default function App() {
                       <select
                         value={adminSubscriptionDuration}
                         onChange={(event) => setAdminSubscriptionDuration(event.target.value as SubscriptionDuration)}
-                        className="h-10 rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-red-500/40"
+                        className="h-10 appearance-none rounded-xl border border-zinc-700 bg-zinc-950 px-3 pr-8 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-red-500/40"
                       >
                         {(["1_day", "7_days", "1_month", "1_year", "forever"] as SubscriptionDuration[]).map((duration) => (
                           <option key={`admin-sub-duration-${duration}`} value={duration} className="bg-zinc-950 text-zinc-100">
@@ -7641,7 +7676,7 @@ export default function App() {
                       <select
                         value={adminPromoKind}
                         onChange={(event) => setAdminPromoKind(event.target.value as AdminPromoKind)}
-                        className="h-10 rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-red-500/40"
+                        className="h-10 appearance-none rounded-xl border border-zinc-700 bg-zinc-950 px-3 pr-8 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-red-500/40"
                       >
                         {ADMIN_PROMO_KIND_OPTIONS.map((option) => (
                           <option key={`admin-promo-kind-${option.key}`} value={option.key} className="bg-zinc-950 text-zinc-100">
@@ -7655,7 +7690,7 @@ export default function App() {
                           onChange={(event) =>
                             setAdminPromoTier(normalizeSubscriptionTier(event.target.value))
                           }
-                          className="h-10 rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-red-500/40"
+                          className="h-10 appearance-none rounded-xl border border-zinc-700 bg-zinc-950 px-3 pr-8 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-red-500/40"
                         >
                           {(["trainee", "practitioner", "arbiter", "free"] as SubscriptionTier[]).map((tier) => (
                             <option key={`admin-tier-${tier}`} value={tier} className="bg-zinc-950 text-zinc-100">
@@ -7667,7 +7702,7 @@ export default function App() {
                         <select
                           value={adminPromoBadgeKey}
                           onChange={(event) => setAdminPromoBadgeKey(event.target.value)}
-                          className="h-10 rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-red-500/40"
+                          className="h-10 appearance-none rounded-xl border border-zinc-700 bg-zinc-950 px-3 pr-8 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-red-500/40"
                         >
                           {ADMIN_BADGE_PROMO_OPTIONS.map((badge) => (
                             <option key={`admin-badge-${badge.key}`} value={badge.key} className="bg-zinc-950 text-zinc-100">
@@ -7680,7 +7715,7 @@ export default function App() {
                         value={adminPromoDuration}
                         onChange={(event) => setAdminPromoDuration(event.target.value as SubscriptionDuration)}
                         disabled={adminPromoKind !== "subscription"}
-                        className="h-10 rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-red-500/40 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="h-10 appearance-none rounded-xl border border-zinc-700 bg-zinc-950 px-3 pr-8 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-red-500/40 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {(["1_day", "7_days", "1_month", "1_year", "forever"] as SubscriptionDuration[]).map((duration) => (
                           <option key={`admin-duration-${duration}`} value={duration} className="bg-zinc-950 text-zinc-100">
@@ -7695,6 +7730,12 @@ export default function App() {
                         className="h-10 rounded-xl border-zinc-700 bg-zinc-950 text-zinc-100 placeholder:text-zinc-500"
                       />
                     </div>
+                    <Input
+                      value={adminPromoBadgeKeysDraft}
+                      onChange={(event) => setAdminPromoBadgeKeysDraft(event.target.value)}
+                      placeholder="Бейджи (через запятую): sub_trainee,sub_practitioner"
+                      className="mt-2 h-10 rounded-xl border-zinc-700 bg-zinc-950 text-zinc-100 placeholder:text-zinc-500"
+                    />
                     <div className="mt-2 flex items-center justify-between rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2">
                       <span className="text-xs text-zinc-400">Промокод активен</span>
                       <Switch checked={adminPromoIsActive} onCheckedChange={setAdminPromoIsActive} />
@@ -7805,7 +7846,7 @@ export default function App() {
                             </div>
                             <div className="mt-1 text-xs text-zinc-400">
                               {promo.promoKind === "badge"
-                                ? `Бейдж: ${promo.badgeKey ?? "—"}`
+                                ? `Бейджи: ${(promo.badgeKeys?.length ? promo.badgeKeys : promo.badgeKey ? [promo.badgeKey] : ["—"]).join(", ")}`
                                 : `${getSubscriptionTierLabel(promo.tier)} • ${getSubscriptionDurationLabel(promo.duration)}`}
                             </div>
                             <div className="mt-1 text-xs text-zinc-500">
@@ -7882,7 +7923,7 @@ export default function App() {
                               event.target.value === "administrator" ? "administrator" : "moderator",
                             )
                           }
-                          className="h-10 rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-red-500/40"
+                          className="h-10 appearance-none rounded-xl border border-zinc-700 bg-zinc-950 px-3 pr-8 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-red-500/40"
                         >
                           <option value="moderator">Модератор</option>
                           <option value="administrator">Администратор</option>
@@ -7961,6 +8002,19 @@ export default function App() {
                 </>
               )}
             </div>
+            {adminPromoFeedback && (
+              <div className="pointer-events-none fixed bottom-6 left-1/2 z-[460] w-[min(92vw,560px)] -translate-x-1/2">
+                <div
+                  className={`rounded-xl border px-4 py-3 text-sm shadow-[0_14px_34px_rgba(0,0,0,0.45)] ${
+                    adminPromoFeedback.kind === "success"
+                      ? "border-emerald-500/45 bg-zinc-950/96 text-emerald-200"
+                      : "border-red-500/45 bg-zinc-950/96 text-red-200"
+                  }`}
+                >
+                  {adminPromoFeedback.text}
+                </div>
+              </div>
+            )}
           </DialogContent>
         </Dialog>
       </>
@@ -8001,9 +8055,11 @@ export default function App() {
     const totalMatches = profileData?.stats?.totalMatches ?? 0;
     const totalWins = profileData?.stats?.totalWins ?? 0;
     const totalWinRate = profileData?.stats?.totalWinRate ?? 0;
-    const profileSubscription = resolveSubscriptionView(profileData?.subscription);
-    const profileTier = normalizeSubscriptionTier(profileSubscription.tier);
-    const lockedRatingForProfile = !hasCapability(profileTier, "canUseRating");
+            const profileSubscription = resolveSubscriptionView(profileData?.subscription);
+            const profileTier = normalizeSubscriptionTier(profileSubscription.tier);
+            const profileSubscriptionPulse =
+              profileSubscriptionHighlight > 0 && nowMs - profileSubscriptionHighlight < 2800;
+            const lockedRatingForProfile = !hasCapability(profileTier, "canUseRating");
     const profileBannerLocked = !canUseProfileBanner;
     const currentRank = profileData?.rank;
     const currentRankVisualKey = rankKeyToBadgeVisualKey(currentRank?.key);
@@ -8396,25 +8452,33 @@ export default function App() {
                 </div>
 
                 <div className="self-start flex flex-col gap-4">
-                  <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4 md:p-5 space-y-3">
+                  <div
+                    className={`rounded-2xl border bg-zinc-950/70 p-4 md:p-5 space-y-3 transition-all ${
+                      profileSubscriptionPulse
+                        ? "border-red-400/65 shadow-[0_0_0_1px_rgba(239,68,68,0.35),0_0_30px_rgba(239,68,68,0.25)]"
+                        : "border-zinc-800"
+                    }`}
+                  >
                     <div className="text-lg font-semibold">Подписка</div>
                     <div
                       className={`rounded-xl border px-3 py-3 ${
                         profileTier === "free"
                           ? "border-zinc-800 bg-zinc-900/55"
-                          : "border-red-500/45 bg-red-950/20"
+                          : "border-red-500/45 bg-[linear-gradient(140deg,rgba(52,16,20,0.55),rgba(18,11,12,0.72))]"
                       }`}
                     >
                       <div className="text-sm text-zinc-500">Текущий статус</div>
-                      <div className="mt-1 flex items-center gap-2 text-base font-semibold text-zinc-100">
-                        <span>{SUBSCRIPTION_LABELS[profileTier]}</span>
+                      <div className="mt-1 flex items-center justify-between gap-3">
+                        <span className="text-xl font-semibold text-zinc-100">
+                          {SUBSCRIPTION_LABELS[profileTier]}
+                        </span>
                         {profileTier !== "free" && (
-                          <span className="inline-flex rounded-full border border-red-400/60 bg-red-600/20 px-2 py-0.5 text-[10px] uppercase tracking-wide text-red-100">
-                            {getSubscriptionTierLabel(profileTier)}
+                          <span className="inline-flex items-center rounded-full border border-red-400/55 bg-red-600/20 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-red-100">
+                            Активна
                           </span>
                         )}
                       </div>
-                      <div className="mt-1 text-xs text-zinc-400">
+                      <div className="mt-2 text-sm text-zinc-300">
                         {profileSubscription.isLifetime
                           ? "Навсегда"
                           : typeof profileSubscription.daysLeft === "number"
@@ -8423,13 +8487,15 @@ export default function App() {
                               ? "Ограниченный доступ"
                               : "Срок уточняется"}
                       </div>
-                      <Button
-                        type="button"
-                        className="mt-3 h-9 w-full rounded-xl bg-red-600 text-white hover:bg-red-500"
-                        onClick={navigateToShop}
-                      >
-                        Обновить план
-                      </Button>
+                      {profileTier !== "arbiter" && (
+                        <Button
+                          type="button"
+                          className="mt-3 h-9 w-full rounded-xl bg-red-600 text-white hover:bg-red-500"
+                          onClick={navigateToShop}
+                        >
+                          Обновить план
+                        </Button>
+                      )}
                     </div>
                   </div>
 
@@ -10544,6 +10610,12 @@ export default function App() {
                         <Button
                           type="button"
                           onClick={() => {
+                            if (isCurrent) {
+                              setScreen("profile");
+                              setHomeTab("play");
+                              setProfileSubscriptionHighlight(Date.now());
+                              return;
+                            }
                             setUpsellTitle("Оплата скоро");
                             setUpsellDescription(
                               "Оплата и автоматическая активация подписки будут доступны в ближайшем обновлении.",
@@ -10600,15 +10672,46 @@ export default function App() {
                     {promoCodeLoading ? "Проверяем" : "Активировать"}
                   </Button>
                   {promoCodeResult && (
-                    <div
-                      className={`rounded-xl border px-3 py-2 text-sm ${
-                        promoCodeResult.kind === "success"
-                          ? "border-emerald-500/45 bg-emerald-600/10 text-emerald-200"
-                          : "border-red-500/45 bg-red-600/10 text-red-200"
-                      }`}
-                    >
-                      {promoCodeResult.text}
-                    </div>
+                    <AnimatePresence mode="wait" initial={false}>
+                      <motion.div
+                        key={`promo-result-${promoCodeResult.kind}-${promoCodeResult.text}`}
+                        initial={{ opacity: 0, y: 10, scale: 0.98 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                        transition={{ duration: 0.22, ease: "easeOut" }}
+                        className={`rounded-xl border px-4 py-3 ${
+                          promoCodeResult.kind === "success"
+                            ? "border-emerald-500/45 bg-[linear-gradient(145deg,rgba(5,22,18,0.95),rgba(8,32,23,0.92))] text-emerald-200"
+                            : "border-red-500/45 bg-[linear-gradient(145deg,rgba(30,9,12,0.95),rgba(43,11,15,0.92))] text-red-200"
+                        }`}
+                      >
+                        <div className="text-sm font-semibold">{promoCodeResult.text}</div>
+                        {promoCodeResult.kind === "success" && promoCodeResult.rewards && promoCodeResult.rewards.length > 0 && (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {promoCodeResult.rewards.map((reward, idx) => (
+                              <motion.div
+                                key={`promo-reward-${reward.type}-${reward.label}-${idx}`}
+                                initial={{ opacity: 0, y: 8 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.2, delay: idx * 0.06 }}
+                                className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs ${
+                                  reward.type === "subscription"
+                                    ? "border-red-400/50 bg-red-600/15 text-red-100"
+                                    : "border-amber-400/55 bg-amber-500/15 text-amber-100"
+                                }`}
+                              >
+                                {reward.type === "subscription" ? (
+                                  <Crown className="h-3.5 w-3.5" />
+                                ) : (
+                                  <BadgeCheck className="h-3.5 w-3.5" />
+                                )}
+                                {reward.label}
+                              </motion.div>
+                            ))}
+                          </div>
+                        )}
+                      </motion.div>
+                    </AnimatePresence>
                   )}
                   {!authToken && (
                     <div className="text-xs text-zinc-500">
@@ -13095,3 +13198,4 @@ export default function App() {
     </div>
   );
 }
+

@@ -71,10 +71,6 @@ const ADMIN_GUARD_BLOCK_MS = 15 * 60 * 1000;
 const ADMIN_GUARD_MAX_FAILS = 10;
 const ADMIN_SESSION_TTL_MS = 10 * 60 * 1000;
 const ADMIN_OWNER_IP_WHITELIST = ["83.243.91.208"];
-const ALLOW_BANNED_ADMIN_PANEL =
-  String(process.env.ALLOW_BANNED_ADMIN_PANEL ?? "1")
-    .trim()
-    .toLowerCase() !== "0";
 const adminGuardAttempts = new Map<
   string,
   { failedCount: number; windowStartMs: number; blockUntilMs: number }
@@ -228,7 +224,7 @@ async function requireAdmin(
     res.status(403).json({ message: "Недостаточно прав." });
     return null;
   }
-  if (adminUser.ban?.isBanned && !ALLOW_BANNED_ADMIN_PANEL) {
+  if (adminUser.ban?.isBanned) {
     registerAdminFailure(clientIp, nowMs);
     res.status(403).json({ message: "Аккаунт заблокирован." });
     return null;
@@ -559,6 +555,7 @@ authRouter.patch("/auth/promo/apply", async (req, res) => {
       ok: true,
       message: result.message,
       subscription: result.subscription,
+      rewards: result.rewards,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Не удалось применить промокод.";
@@ -640,6 +637,7 @@ authRouter.patch("/auth/admin/promo", async (req, res) => {
     .trim()
     .toLowerCase();
   const promoKind = promoKindRaw === "badge" ? "badge" : "subscription";
+  const badgeKeys = Array.isArray(req.body?.badgeKeys) ? req.body.badgeKeys : undefined;
   const badgeKey =
     req.body?.badgeKey === null || typeof req.body?.badgeKey === "string"
       ? req.body.badgeKey
@@ -651,8 +649,8 @@ authRouter.patch("/auth/admin/promo", async (req, res) => {
   if (promoKind === "subscription" && !tier) {
     return res.status(400).json({ message: "Для подписочного промокода нужен tier." });
   }
-  if (promoKind === "badge" && !String(badgeKey ?? "").trim()) {
-    return res.status(400).json({ message: "Для промокода на бейдж нужен badgeKey." });
+  if (promoKind === "badge" && !String(badgeKey ?? "").trim() && !(badgeKeys && badgeKeys.length > 0)) {
+    return res.status(400).json({ message: "Для промокода на бейдж нужен хотя бы один badgeKey." });
   }
 
   try {
@@ -660,6 +658,7 @@ authRouter.patch("/auth/admin/promo", async (req, res) => {
       code,
       promoKind,
       badgeKey,
+      badgeKeys,
       tier: promoKind === "subscription" ? tier : "free",
       duration:
         req.body?.duration === null || typeof req.body?.duration === "string"
