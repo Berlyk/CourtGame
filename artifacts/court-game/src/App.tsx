@@ -200,41 +200,62 @@ const LEGAL_DOCS = {
       {
         title: "1. Какие данные мы собираем",
         paragraphs: [
-          "При регистрации и использовании аккаунта обрабатываются логин, email, никнейм, дата создания аккаунта, настройки профиля и данные сессии.",
-          "Во время игры обрабатываются технические данные комнаты: код, участники, роли, выбранные паки, события матча и сообщения, которые пользователь отправляет в игровых чатах.",
-          "Для подписочной системы обрабатываются статус подписки, период действия, источник выдачи, а также история активации промокодов.",
+          "При регистрации и использовании аккаунта обрабатываются логин, email, никнейм, дата создания аккаунта, настройки профиля, данные авторизации и сведения о сессиях.",
+          "Во время игры обрабатываются технические данные комнаты: код, участники, роли, выбранные паки, этапы матча, системные события и сообщения, отправленные пользователем в игровых чатах.",
+          "Для подписочной системы обрабатываются статус подписки, тариф, период действия, история платежей, история продлений, а также история активации промокодов.",
         ],
       },
       {
-        title: "2. Цели обработки",
+        title: "2. Технические данные устройства",
         paragraphs: [
-          "Данные используются для авторизации, работы лобби и матчей, восстановления сессий, отображения профиля, анти-спама и технической диагностики ошибок.",
-          "Подписочные данные используются только для определения доступных функций и корректного применения ограничений.",
+          "Для стабильной работы сервиса могут обрабатываться технические параметры подключения: IP-адрес, тип устройства, время запросов, диагностические коды ошибок и данные производительности.",
+          "Эти данные используются только для обеспечения безопасности, защиты от злоупотреблений и улучшения стабильности платформы.",
         ],
       },
       {
-        title: "3. Хранение и защита",
+        title: "3. Файлы cookie и локальное хранилище",
         paragraphs: [
-          "Данные хранятся на серверной стороне проекта в базе данных. Доступ к данным ограничен технической необходимостью.",
-          "Мы применяем организационные и технические меры, направленные на защиту данных от несанкционированного доступа, изменения или удаления.",
+          "Сайт может использовать технические cookie и локальное хранилище браузера для сохранения сессии, пользовательских настроек, состояния интерфейса и корректного восстановления подключения.",
+          "Отключение cookie или очистка локального хранилища может повлиять на доступность отдельных функций.",
         ],
       },
       {
-        title: "4. Передача данных третьим лицам",
+        title: "4. Цели обработки данных",
+        paragraphs: [
+          "Данные используются для авторизации, работы лобби и матчей, отображения профиля, работы подписок и платного функционала, анти-спама и технической диагностики ошибок.",
+          "Подписочные и платежные данные используются для корректного предоставления доступа к функциям, продления тарифа, применения ограничений и выполнения финансовых операций.",
+        ],
+      },
+      {
+        title: "5. Сроки хранения",
+        paragraphs: [
+          "Данные аккаунта и игровая статистика хранятся в течение срока использования сервиса пользователем и разумного периода после прекращения использования для выполнения обязательств и обеспечения безопасности.",
+          "Технические логи и журналы событий хранятся ограниченное время, необходимое для расследования инцидентов, предотвращения нарушений и поддержки стабильной работы.",
+        ],
+      },
+      {
+        title: "6. Передача данных третьим лицам",
         paragraphs: [
           "Данные не продаются и не передаются сторонним рекламным сетям.",
           "Передача может происходить только в рамках работы инфраструктуры проекта (хостинг/база данных) и только в объеме, необходимом для функционирования сервиса.",
         ],
       },
       {
-        title: "5. Права пользователя",
+        title: "7. Права пользователя",
         paragraphs: [
-          "Пользователь может запросить обновление или удаление данных аккаунта через администратора проекта.",
-          "Пользователь может прекратить использование сервиса в любой момент; при этом технические логи могут храниться ограниченный срок для безопасности и расследования инцидентов.",
+          "Пользователь может запросить уточнение, обновление или удаление данных аккаунта через администратора проекта.",
+          "Пользователь может прекратить использование сервиса в любой момент; при этом отдельные данные могут храниться в объеме, требуемом законодательством и политикой безопасности.",
         ],
       },
       {
-        title: "6. Изменения политики",
+        title: "8. Защита данных",
+        paragraphs: [
+          "Доступ к персональным данным ограничен по роли и технической необходимости.",
+          "Мы применяем организационные и технические меры для защиты данных от несанкционированного доступа, изменения, утраты или удаления.",
+        ],
+      },
+      {
+        title: "9. Изменения политики",
         paragraphs: [
           "Мы можем обновлять этот документ при изменении функционала или требований безопасности. Актуальная версия публикуется в интерфейсе сайта.",
         ],
@@ -272,21 +293,49 @@ const LEGAL_DOCS = {
         title: "4. Подписки и доступ к функциям",
         paragraphs: [
           "Доступ к отдельным функциям зависит от уровня подписки. Отсутствие подписки может ограничивать использование рейтинга, паков и дополнительных настроек.",
-          "На этапе тестирования подписка может назначаться вручную администратором. Оплата и автоматическая выдача могут быть добавлены позже отдельным обновлением.",
+          "После оплаты подписки доступ к функциям предоставляется в рамках выбранного тарифа и срока действия подписки.",
         ],
       },
       {
-        title: "5. Ограничение ответственности",
+        title: "5. Платежи, продление и возвраты",
+        paragraphs: [
+          "Условия оплаты, продления, отмены подписки и возвратов регулируются правилами платежного процесса и применимым законодательством.",
+          "Пользователь обязуется указывать корректные платежные данные и использовать только законные способы оплаты.",
+        ],
+      },
+      {
+        title: "6. Интеллектуальная собственность",
+        paragraphs: [
+          "Интерфейс, игровые материалы, логотипы, тексты и программный код защищены правом интеллектуальной собственности.",
+          "Копирование, распространение или коммерческое использование материалов сервиса без разрешения правообладателя запрещено.",
+        ],
+      },
+      {
+        title: "7. Ограничение ответственности",
         paragraphs: [
           "Администрация проекта не несет ответственность за косвенные убытки, перерывы доступа, а также последствия использования сервиса вне его прямого назначения.",
           "В случае технических сбоев мы прикладываем разумные усилия для восстановления корректной работы в кратчайшие сроки.",
         ],
       },
       {
-        title: "6. Модерация и санкции",
+        title: "8. Модерация и санкции",
         paragraphs: [
           "За нарушение правил могут применяться предупреждения, ограничение функций, временная или постоянная блокировка аккаунта.",
           "Решения по спорным ситуациям принимаются администрацией на основании доступных логов и технических данных.",
+        ],
+      },
+      {
+        title: "9. Изменение условий",
+        paragraphs: [
+          "Мы можем обновлять условия пользовательского соглашения при изменении функционала сервиса, юридических требований или бизнес-процессов.",
+          "Новая редакция вступает в силу с момента публикации в интерфейсе сайта, если иное не указано в тексте обновления.",
+        ],
+      },
+      {
+        title: "10. Применимое право",
+        paragraphs: [
+          "Споры, возникающие в связи с использованием сервиса, разрешаются в порядке, предусмотренном применимым законодательством.",
+          "Перед обращением в суд стороны стремятся урегулировать спор в досудебном порядке через обращение в поддержку проекта.",
         ],
       },
     ],
@@ -6023,6 +6072,16 @@ export default function App() {
     badgeRulesOpen ||
     authDialogOpen;
   const activeLegalDoc = legalDialogType ? LEGAL_DOCS[legalDialogType] : null;
+  const showLegalFooterOnHomeTabs =
+    homeTab === "play" || homeTab === "shop" || homeTab === "development" || homeTab === "help";
+  const hasBlockingHomeDialog =
+    createMatchDialogOpen ||
+    joinPasswordDialogOpen ||
+    observerListDialogOpen ||
+    roomManageOpen ||
+    promoDialogOpen ||
+    legalDialogType !== null;
+  const showLegalFooter = showLegalFooterOnHomeTabs && !hasBlockingHomeDialog;
 
   const renderUpsellModal = () => (
     <Dialog open={upsellModalOpen} onOpenChange={setUpsellModalOpen}>
@@ -7199,7 +7258,7 @@ export default function App() {
         initial="initial"
         animate="animate"
         exit="exit"
-        className="relative isolate h-screen bg-[#0b0b0f] text-zinc-100 p-4 sm:p-6 md:p-10 overflow-x-hidden overflow-y-scroll [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+        className="relative isolate flex min-h-screen flex-col bg-[#0b0b0f] text-zinc-100 p-4 sm:p-6 md:p-10 overflow-x-hidden"
       >
         <CourtAtmosphereBackground />
         <AnimatePresence>
@@ -8551,11 +8610,20 @@ export default function App() {
                     Промокод
                   </Button>
                 </div>
+                {shopDuration === "1_year" && (
+                  <div className="mt-2 text-center text-xs text-emerald-300">
+                    Годовой план выгоднее: оплата за 10 месяцев вместо 12.
+                  </div>
+                )}
                 <div className="mt-5 grid gap-4 xl:grid-cols-3">
                   {SUBSCRIPTION_PLANS.map((plan, planIndex) => {
                     const isCurrent = myTier === plan.tier;
                     const displayPrice =
                       shopDuration === "1_year" ? plan.yearPriceRub : plan.monthPriceRub;
+                    const yearlyBasePrice = plan.monthPriceRub * 12;
+                    const yearlySave = Math.max(0, yearlyBasePrice - plan.yearPriceRub);
+                    const yearlySavePercent =
+                      yearlyBasePrice > 0 ? Math.round((yearlySave / yearlyBasePrice) * 100) : 0;
                     const planBadgeKey = getSubscriptionPlanBadgeKey(plan.tier);
                     const planBadgeTheme = getBadgeTheme(planBadgeKey);
                     return (
@@ -8591,6 +8659,14 @@ export default function App() {
                         <div className="mt-1 text-sm text-zinc-400">
                           RUB / {shopDuration === "1_year" ? "год" : "месяц"}
                         </div>
+                        {shopDuration === "1_year" && yearlySave > 0 && (
+                          <div className="mt-2 flex items-center gap-2 text-xs">
+                            <span className="text-zinc-500 line-through">{yearlyBasePrice} RUB</span>
+                            <span className="inline-flex items-center rounded-full border border-emerald-400/45 bg-emerald-500/15 px-2 py-0.5 text-emerald-200">
+                              -{yearlySavePercent}% · 2 месяца в подарок
+                            </span>
+                          </div>
+                        )}
                         <div className="mt-4 h-px w-full bg-zinc-700/60" />
                         <div className="mt-4 space-y-2.5 text-sm text-zinc-200">
                           {plan.features.map((feature) => (
@@ -8609,7 +8685,7 @@ export default function App() {
                           onClick={() => {
                             setUpsellTitle("Оплата скоро");
                             setUpsellDescription(
-                              "Система оплаты появится позже. Сейчас подписки выдаются вручную.",
+                              "Оплата и автоматическая активация подписки будут доступны в ближайшем обновлении.",
                             );
                             setUpsellRequiredTier(plan.tier);
                             setUpsellModalOpen(true);
@@ -8784,33 +8860,35 @@ export default function App() {
             </Card>
           </div>
         )}
-        <div className="mx-auto mt-14 max-w-6xl pb-2 text-center text-[12px] text-zinc-500/90 sm:text-xs">
-          <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
-            <button
-              type="button"
-              onClick={() => setLegalDialogType("privacy")}
-              className="transition-colors hover:text-zinc-300"
-            >
-              Политика конфиденциальности
-            </button>
-            <span className="text-zinc-700">•</span>
-            <button
-              type="button"
-              onClick={() => setLegalDialogType("terms")}
-              className="transition-colors hover:text-zinc-300"
-            >
-              Пользовательское соглашение
-            </button>
+        {showLegalFooter && (
+          <div className="mx-auto mt-auto max-w-6xl pb-1 pt-10 text-center text-[11px] text-zinc-600 sm:text-xs">
+            <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+              <button
+                type="button"
+                onClick={() => setLegalDialogType("privacy")}
+                className="transition-colors hover:text-zinc-400"
+              >
+                Политика конфиденциальности
+              </button>
+              <span className="text-zinc-800">•</span>
+              <button
+                type="button"
+                onClick={() => setLegalDialogType("terms")}
+                className="transition-colors hover:text-zinc-400"
+              >
+                Пользовательское соглашение
+              </button>
+            </div>
+            <div className="mt-1 text-zinc-700">© 2026 CourtGame. Все права защищены.</div>
           </div>
-          <div className="mt-1 text-zinc-600">© 2026 CourtGame. Все права защищены.</div>
-        </div>
+        )}
         <Dialog
           open={legalDialogType !== null}
           onOpenChange={(open) => {
             if (!open) setLegalDialogType(null);
           }}
         >
-          <DialogContent className="max-w-3xl max-h-[86vh] overflow-y-auto border-zinc-800 bg-zinc-950 text-zinc-100">
+          <DialogContent className={`max-w-3xl max-h-[86vh] overflow-y-auto border-zinc-800 bg-zinc-950 text-zinc-100 ${HIDE_SCROLLBAR_CLASS} [scrollbar-width:thin] [scrollbar-color:rgba(82,82,91,0.45)_transparent] [&::-webkit-scrollbar]:w-[4px] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-600/55 [&::-webkit-scrollbar-thumb:hover]:bg-zinc-500/70`}>
             {activeLegalDoc && (
               <>
                 <DialogHeader>
