@@ -5,6 +5,7 @@ import {
   assignSubscriptionByUserId,
   changeEmailByToken,
   changePasswordByToken,
+  clearUserBanByAdmin,
   deletePromoCodeByAdmin,
   findUserByAdminQuery,
   getPublicUserProfileById,
@@ -14,6 +15,7 @@ import {
   loginAccount,
   logoutByToken,
   registerAccount,
+  setUserBanByAdmin,
   upsertPromoCodeByAdmin,
   updateProfileByToken,
 } from "../lib/authStore.js";
@@ -684,6 +686,49 @@ authRouter.post("/auth/admin/user/find", async (req, res) => {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Не удалось выполнить поиск пользователя.";
+    return res.status(400).json({ message });
+  }
+});
+
+authRouter.patch("/auth/admin/ban", async (req, res) => {
+  const auth = await requireAdmin(req, res, { requireSession: true });
+  if (!auth) return;
+  const userId = String(req.body?.userId ?? "").trim();
+  if (!userId) {
+    return res.status(400).json({ message: "Нужен userId." });
+  }
+  try {
+    if (Boolean(req.body?.clear)) {
+      const ban = await clearUserBanByAdmin(userId);
+      if (!ban) {
+        return res.status(404).json({ message: "Пользователь не найден." });
+      }
+      return res.status(200).json({ ok: true, ban });
+    }
+    const forever = Boolean(req.body?.forever);
+    const daysRaw = req.body?.days;
+    const days =
+      typeof daysRaw === "number"
+        ? daysRaw
+        : typeof daysRaw === "string" && daysRaw.trim()
+          ? Number(daysRaw)
+          : null;
+    const reason =
+      req.body?.reason === null || typeof req.body?.reason === "string"
+        ? req.body.reason
+        : undefined;
+    const ban = await setUserBanByAdmin({
+      userId,
+      forever,
+      days,
+      reason,
+    });
+    if (!ban) {
+      return res.status(404).json({ message: "Пользователь не найден." });
+    }
+    return res.status(200).json({ ok: true, ban });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Не удалось обновить блокировку.";
     return res.status(400).json({ message });
   }
 });

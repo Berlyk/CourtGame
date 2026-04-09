@@ -1027,6 +1027,12 @@ export function setupSocket(httpServer: HttpServer) {
             typeof authToken === "string" && authToken.trim()
               ? await getUserByToken(authToken.trim())
               : null;
+          if (typeof authToken === "string" && authToken.trim() && !authUser) {
+            socket.emit("error", {
+              message: "Сессия недействительна или аккаунт заблокирован. Войдите снова.",
+            });
+            return;
+          }
           const authPublicProfile = authUser?.id
             ? await getPublicUserProfileById(authUser.id).catch(() => null)
             : null;
@@ -1120,6 +1126,12 @@ export function setupSocket(httpServer: HttpServer) {
           typeof authToken === "string" && authToken.trim()
             ? await getUserByToken(authToken.trim())
             : null;
+        if (typeof authToken === "string" && authToken.trim() && !authUser) {
+          socket.emit("error", {
+            message: "Сессия недействительна или аккаунт заблокирован. Войдите снова.",
+          });
+          return;
+        }
         const authPublicProfile = authUser?.id
           ? await getPublicUserProfileById(authUser.id).catch(() => null)
           : null;

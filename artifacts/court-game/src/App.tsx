@@ -1956,6 +1956,12 @@ interface AdminLookupUserView {
   email: string;
   nickname: string;
   createdAt: number;
+  ban?: {
+    isBanned: boolean;
+    isPermanent: boolean;
+    bannedUntil: number | null;
+    reason?: string;
+  };
   subscription: {
     tier: SubscriptionTier | string;
     duration: SubscriptionDuration | string;
@@ -3119,6 +3125,11 @@ export default function App() {
   const [adminSubscriptionDuration, setAdminSubscriptionDuration] =
     useState<SubscriptionDuration>("1_month");
   const [adminSubscriptionLoading, setAdminSubscriptionLoading] = useState(false);
+  const [adminBanUserId, setAdminBanUserId] = useState("");
+  const [adminBanDays, setAdminBanDays] = useState("7");
+  const [adminBanForever, setAdminBanForever] = useState(false);
+  const [adminBanReason, setAdminBanReason] = useState("");
+  const [adminBanLoading, setAdminBanLoading] = useState(false);
   const [adminPromos, setAdminPromos] = useState<AdminPromoCodeView[]>([]);
   const [adminPromoLoading, setAdminPromoLoading] = useState(false);
   const [adminPromoListLoading, setAdminPromoListLoading] = useState(false);
@@ -3385,16 +3396,17 @@ export default function App() {
   const canSeeAdminButton = isAuthenticated && isCreatorAdmin;
   const adminPanelKeyTrimmed = adminPanelKey.trim();
   const adminSessionTokenTrimmed = adminSessionToken?.trim() ?? "";
-  const adminRequestHeaders = useMemo(
-    () => {
+  const buildAdminHeaders = useCallback(
+    (sessionTokenOverride?: string | null) => {
+      const resolvedSession = (sessionTokenOverride ?? adminSessionTokenTrimmed).trim();
       const headers: Record<string, string> = {};
       if (adminPanelKeyTrimmed) {
         headers["x-admin-key"] = adminPanelKeyTrimmed;
       }
-      if (adminSessionTokenTrimmed) {
-        headers["x-admin-session"] = adminSessionTokenTrimmed;
+      if (resolvedSession) {
+        headers["x-admin-session"] = resolvedSession;
       }
-      return Object.keys(headers).length ? headers : undefined;
+      return headers;
     },
     [adminPanelKeyTrimmed, adminSessionTokenTrimmed],
   );
@@ -3600,12 +3612,12 @@ export default function App() {
       Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
     setAdminPromoCodeDraft(`${makePart(4)}-${makePart(4)}-${makePart(4)}`);
   }, []);
-  const checkAdminAccess = useCallback(async () => {
+  const checkAdminAccess = useCallback(async (): Promise<string | null> => {
     if (!authToken || !canSeeAdminButton) {
       setAdminAccessGranted(false);
       setAdminSessionToken(null);
       setAdminUserLookupResult(null);
-      return;
+      return null;
     }
     setAdminAccessLoading(true);
     try {
@@ -3618,18 +3630,22 @@ export default function App() {
         token: authToken,
         headers: adminPanelKeyTrimmed ? { "x-admin-key": adminPanelKeyTrimmed } : undefined,
       });
-      if (payload?.adminSession) {
-        setAdminSessionToken(payload.adminSession);
+      const session = typeof payload?.adminSession === "string" ? payload.adminSession.trim() : "";
+      if (session) {
+        setAdminSessionToken(session);
         setAdminAccessGranted(true);
+        return session;
       } else {
         setAdminSessionToken(null);
         setAdminAccessGranted(false);
         setAdminUserLookupResult(null);
+        return null;
       }
     } catch {
       setAdminSessionToken(null);
       setAdminAccessGranted(false);
       setAdminUserLookupResult(null);
+      return null;
     } finally {
       setAdminAccessLoading(false);
     }
@@ -3644,8 +3660,29 @@ export default function App() {
       /сессия админ-панели истекла/i.test(error.message)
     );
   }, []);
+  const ensureAdminHeaders = useCallback(async (): Promise<Record<string, string> | null> => {
+    if (!authToken || !isCreatorAdmin) return null;
+    let session = adminSessionTokenTrimmed;
+    const refreshed = await checkAdminAccess();
+    if (refreshed) {
+      session = refreshed;
+    } else if (!session || !adminAccessGranted) {
+      return null;
+    }
+    const headers = buildAdminHeaders(session);
+    return Object.keys(headers).length ? headers : null;
+  }, [
+    authToken,
+    isCreatorAdmin,
+    adminSessionTokenTrimmed,
+    adminAccessGranted,
+    checkAdminAccess,
+    buildAdminHeaders,
+  ]);
   const loadAdminPromos = useCallback(async () => {
-    if (!authToken || !isCreatorAdmin || !adminAccessGranted) return;
+    if (!authToken || !isCreatorAdmin) return;
+    const headers = await ensureAdminHeaders();
+    if (!headers) return;
     setAdminPromoListLoading(true);
     setAdminPromoFeedback(null);
     try {
@@ -3653,7 +3690,7 @@ export default function App() {
         "/auth/admin/promo/list",
         {
           token: authToken,
-          headers: adminRequestHeaders,
+          headers,
         },
       );
       setAdminPromos(Array.isArray(payload.promos) ? payload.promos : []);
@@ -3674,13 +3711,17 @@ export default function App() {
   }, [
     authToken,
     isCreatorAdmin,
-    adminRequestHeaders,
-    adminAccessGranted,
+    ensureAdminHeaders,
     invalidateAdminSession,
     isAdminSessionError,
   ]);
   const submitAdminPromo = useCallback(async () => {
-    if (!authToken || !isCreatorAdmin || !adminAccessGranted) return;
+    if (!authToken || !isCreatorAdmin) return;
+    const headers = await ensureAdminHeaders();
+    if (!headers) {
+      setAdminPromoFeedback({ kind: "error", text: "Доступ к админ-панели не подтвержден." });
+      return;
+    }
     const code = adminPromoCodeDraft.trim().toUpperCase();
     if (!code) {
       setAdminPromoFeedback({ kind: "error", text: "Введите код промокода." });
@@ -3707,7 +3748,7 @@ export default function App() {
       await authRequest<{ ok: true }>("/auth/admin/promo", {
         method: "PATCH",
         token: authToken,
-        headers: adminRequestHeaders,
+        headers,
         body: {
           code,
           promoKind: adminPromoKind,
@@ -3748,6 +3789,7 @@ export default function App() {
   }, [
     authToken,
     isCreatorAdmin,
+    ensureAdminHeaders,
     adminPromoCodeDraft,
     adminPromoKind,
     adminPromoBadgeKey,
@@ -3757,22 +3799,25 @@ export default function App() {
     adminPromoMaxUses,
     adminPromoStartsAt,
     adminPromoTier,
-    adminRequestHeaders,
-    adminAccessGranted,
     loadAdminPromos,
     invalidateAdminSession,
     isAdminSessionError,
   ]);
   const deleteAdminPromo = useCallback(
     async (code: string) => {
-      if (!authToken || !isCreatorAdmin || !adminAccessGranted || !code) return;
+      if (!authToken || !isCreatorAdmin || !code) return;
+      const headers = await ensureAdminHeaders();
+      if (!headers) {
+        setAdminPromoFeedback({ kind: "error", text: "Доступ к админ-панели не подтвержден." });
+        return;
+      }
       setAdminPromoListLoading(true);
       setAdminPromoFeedback(null);
       try {
         await authRequest<{ ok: true }>("/auth/admin/promo/delete", {
           method: "PATCH",
           token: authToken,
-          headers: adminRequestHeaders,
+          headers,
           body: { code },
         });
         setAdminPromoFeedback({ kind: "success", text: `Промокод ${code} удалён.` });
@@ -3795,8 +3840,7 @@ export default function App() {
     [
       authToken,
       isCreatorAdmin,
-      adminRequestHeaders,
-      adminAccessGranted,
+      ensureAdminHeaders,
       loadAdminPromos,
       invalidateAdminSession,
       isAdminSessionError,
@@ -3812,14 +3856,19 @@ export default function App() {
         expiresAt: string | null;
       }>,
     ) => {
-      if (!authToken || !isCreatorAdmin || !adminAccessGranted) return;
+      if (!authToken || !isCreatorAdmin) return;
+      const headers = await ensureAdminHeaders();
+      if (!headers) {
+        setAdminPromoFeedback({ kind: "error", text: "Доступ к админ-панели не подтвержден." });
+        return;
+      }
       setAdminPromoActionCode(promo.code);
       setAdminPromoFeedback(null);
       try {
         await authRequest<{ ok: true }>("/auth/admin/promo", {
           method: "PATCH",
           token: authToken,
-          headers: adminRequestHeaders,
+          headers,
           body: {
             code: promo.code,
             promoKind: promo.promoKind,
@@ -3855,15 +3904,19 @@ export default function App() {
     [
       authToken,
       isCreatorAdmin,
-      adminAccessGranted,
-      adminRequestHeaders,
+      ensureAdminHeaders,
       loadAdminPromos,
       invalidateAdminSession,
       isAdminSessionError,
     ],
   );
   const submitAdminSubscription = useCallback(async () => {
-    if (!authToken || !isCreatorAdmin || !adminAccessGranted) return;
+    if (!authToken || !isCreatorAdmin) return;
+    const headers = await ensureAdminHeaders();
+    if (!headers) {
+      setAdminPromoFeedback({ kind: "error", text: "Доступ к админ-панели не подтвержден." });
+      return;
+    }
     const userId = adminSubscriptionUserId.trim();
     if (!userId) {
       setAdminPromoFeedback({ kind: "error", text: "Введите userId для выдачи подписки." });
@@ -3875,7 +3928,7 @@ export default function App() {
       await authRequest<{ ok: true }>("/auth/admin/subscription", {
         method: "PATCH",
         token: authToken,
-        headers: adminRequestHeaders,
+        headers,
         body: {
           userId,
           tier: adminSubscriptionTier,
@@ -3904,16 +3957,20 @@ export default function App() {
   }, [
     authToken,
     isCreatorAdmin,
-    adminAccessGranted,
+    ensureAdminHeaders,
     adminSubscriptionUserId,
     adminSubscriptionTier,
     adminSubscriptionDuration,
-    adminRequestHeaders,
     invalidateAdminSession,
     isAdminSessionError,
   ]);
   const findAdminUser = useCallback(async () => {
-    if (!authToken || !isCreatorAdmin || !adminAccessGranted) return;
+    if (!authToken || !isCreatorAdmin) return;
+    const headers = await ensureAdminHeaders();
+    if (!headers) {
+      setAdminPromoFeedback({ kind: "error", text: "Доступ к админ-панели не подтвержден." });
+      return;
+    }
     const query = adminUserLookupQuery.trim();
     if (!query) {
       setAdminPromoFeedback({
@@ -3930,12 +3987,13 @@ export default function App() {
         {
           method: "POST",
           token: authToken,
-          headers: adminRequestHeaders,
+          headers,
           body: { query },
         },
       );
       setAdminUserLookupResult(payload.user);
       setAdminSubscriptionUserId(payload.user.id);
+      setAdminBanUserId(payload.user.id);
       setAdminPromoFeedback({
         kind: "success",
         text: `Найден пользователь: ${payload.user.nickname} (${payload.user.id}).`,
@@ -3958,9 +4016,139 @@ export default function App() {
   }, [
     authToken,
     isCreatorAdmin,
-    adminAccessGranted,
+    ensureAdminHeaders,
     adminUserLookupQuery,
-    adminRequestHeaders,
+    invalidateAdminSession,
+    isAdminSessionError,
+  ]);
+  const submitAdminBan = useCallback(async () => {
+    if (!authToken || !isCreatorAdmin) return;
+    const headers = await ensureAdminHeaders();
+    if (!headers) {
+      setAdminPromoFeedback({ kind: "error", text: "Доступ к админ-панели не подтвержден." });
+      return;
+    }
+    const userId = adminBanUserId.trim();
+    if (!userId) {
+      setAdminPromoFeedback({ kind: "error", text: "Введите userId для блокировки." });
+      return;
+    }
+    const days = Math.floor(Number(adminBanDays));
+    if (!adminBanForever && (!Number.isFinite(days) || days <= 0)) {
+      setAdminPromoFeedback({ kind: "error", text: "Укажите число дней больше 0." });
+      return;
+    }
+    setAdminBanLoading(true);
+    setAdminPromoFeedback(null);
+    try {
+      const payload = await authRequest<{
+        ok: true;
+        ban: { isBanned: boolean; isPermanent: boolean; bannedUntil: number | null; reason?: string };
+      }>("/auth/admin/ban", {
+        method: "PATCH",
+        token: authToken,
+        headers,
+        body: {
+          userId,
+          forever: adminBanForever,
+          days: adminBanForever ? null : days,
+          reason: adminBanReason.trim() || null,
+        },
+      });
+      setAdminUserLookupResult((prev) =>
+        prev && prev.id === userId
+          ? {
+              ...prev,
+              ban: payload.ban,
+            }
+          : prev,
+      );
+      setAdminPromoFeedback({
+        kind: "success",
+        text: adminBanForever
+          ? "Пользователь заблокирован навсегда."
+          : `Пользователь заблокирован на ${days} дн.`,
+      });
+    } catch (error) {
+      if (isAdminSessionError(error)) {
+        invalidateAdminSession();
+      }
+      setAdminPromoFeedback({
+        kind: "error",
+        text:
+          error instanceof Error
+            ? localizeAuthError(error.message)
+            : "Не удалось выдать блокировку.",
+      });
+    } finally {
+      setAdminBanLoading(false);
+    }
+  }, [
+    authToken,
+    isCreatorAdmin,
+    ensureAdminHeaders,
+    adminBanUserId,
+    adminBanDays,
+    adminBanForever,
+    adminBanReason,
+    invalidateAdminSession,
+    isAdminSessionError,
+  ]);
+  const clearAdminBan = useCallback(async () => {
+    if (!authToken || !isCreatorAdmin) return;
+    const headers = await ensureAdminHeaders();
+    if (!headers) {
+      setAdminPromoFeedback({ kind: "error", text: "Доступ к админ-панели не подтвержден." });
+      return;
+    }
+    const userId = adminBanUserId.trim();
+    if (!userId) {
+      setAdminPromoFeedback({ kind: "error", text: "Введите userId пользователя." });
+      return;
+    }
+    setAdminBanLoading(true);
+    setAdminPromoFeedback(null);
+    try {
+      const payload = await authRequest<{
+        ok: true;
+        ban: { isBanned: boolean; isPermanent: boolean; bannedUntil: number | null; reason?: string };
+      }>("/auth/admin/ban", {
+        method: "PATCH",
+        token: authToken,
+        headers,
+        body: {
+          userId,
+          clear: true,
+        },
+      });
+      setAdminUserLookupResult((prev) =>
+        prev && prev.id === userId
+          ? {
+              ...prev,
+              ban: payload.ban,
+            }
+          : prev,
+      );
+      setAdminPromoFeedback({ kind: "success", text: "Блокировка снята." });
+    } catch (error) {
+      if (isAdminSessionError(error)) {
+        invalidateAdminSession();
+      }
+      setAdminPromoFeedback({
+        kind: "error",
+        text:
+          error instanceof Error
+            ? localizeAuthError(error.message)
+            : "Не удалось снять блокировку.",
+      });
+    } finally {
+      setAdminBanLoading(false);
+    }
+  }, [
+    authToken,
+    isCreatorAdmin,
+    ensureAdminHeaders,
+    adminBanUserId,
     invalidateAdminSession,
     isAdminSessionError,
   ]);
@@ -3990,8 +4178,13 @@ export default function App() {
     void loadAdminPromos();
   }, [adminToolsOpen, isCreatorAdmin, authToken, adminAccessGranted, loadAdminPromos]);
   useEffect(() => {
+    if (!adminToolsOpen) return;
+    setAdminPromoFeedback(null);
+  }, [adminToolsOpen]);
+  useEffect(() => {
     if (!authUser?.id) return;
     setAdminSubscriptionUserId((prev) => prev || authUser.id);
+    setAdminBanUserId((prev) => prev || authUser.id);
   }, [authUser?.id]);
   useEffect(() => {
     if (canCreatePrivateRooms || !createRoomPrivate) return;
@@ -6793,8 +6986,30 @@ export default function App() {
                           {adminUserLookupResult.nickname} · {adminUserLookupResult.login}
                         </div>
                         <div className="text-zinc-500">{adminUserLookupResult.email}</div>
-                        <div className="mt-1 text-zinc-400">
-                          userId: {adminUserLookupResult.id}
+                        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-zinc-400">
+                          <span>userId: {adminUserLookupResult.id}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard
+                                .writeText(adminUserLookupResult.id)
+                                .then(() =>
+                                  setAdminPromoFeedback({
+                                    kind: "success",
+                                    text: "userId скопирован.",
+                                  }),
+                                )
+                                .catch(() =>
+                                  setAdminPromoFeedback({
+                                    kind: "error",
+                                    text: "Не удалось скопировать userId.",
+                                  }),
+                                );
+                            }}
+                            className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-[11px] text-zinc-200 transition hover:bg-zinc-800"
+                          >
+                            Копировать
+                          </button>
                         </div>
                         <div className="mt-1 text-zinc-400">
                           Подписка:{" "}
@@ -6807,6 +7022,16 @@ export default function App() {
                               adminUserLookupResult.subscription?.duration ?? "1_month",
                             ),
                           )}
+                        </div>
+                        <div className="mt-1 text-zinc-400">
+                          Блокировка:{" "}
+                          {adminUserLookupResult.ban?.isBanned
+                            ? adminUserLookupResult.ban.isPermanent
+                              ? "Навсегда"
+                              : adminUserLookupResult.ban.bannedUntil
+                                ? `до ${new Date(adminUserLookupResult.ban.bannedUntil).toLocaleString("ru-RU")}`
+                                : "Активна"
+                            : "Нет"}
                         </div>
                       </div>
                     )}
@@ -6853,6 +7078,55 @@ export default function App() {
                     >
                       {adminSubscriptionLoading ? "Выдаем" : "Выдать подписку"}
                     </Button>
+                  </div>
+                  <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3">
+                    <div className="text-xs uppercase tracking-[0.12em] text-zinc-500">Блокировка пользователя</div>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                      <Input
+                        value={adminBanUserId}
+                        onChange={(event) => setAdminBanUserId(event.target.value)}
+                        placeholder="userId"
+                        className="h-10 rounded-xl border-zinc-700 bg-zinc-950 text-zinc-100 placeholder:text-zinc-500 lg:col-span-2"
+                      />
+                      <Input
+                        type="number"
+                        min={1}
+                        value={adminBanDays}
+                        onChange={(event) => setAdminBanDays(event.target.value)}
+                        placeholder="Дней"
+                        disabled={adminBanForever}
+                        className="h-10 rounded-xl border-zinc-700 bg-zinc-950 text-zinc-100 placeholder:text-zinc-500 disabled:cursor-not-allowed disabled:opacity-60"
+                      />
+                      <div className="flex items-center justify-between rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2">
+                        <span className="text-xs text-zinc-400">Навсегда</span>
+                        <Switch checked={adminBanForever} onCheckedChange={setAdminBanForever} />
+                      </div>
+                    </div>
+                    <Input
+                      value={adminBanReason}
+                      onChange={(event) => setAdminBanReason(event.target.value)}
+                      placeholder="Причина (опционально)"
+                      className="mt-2 h-10 rounded-xl border-zinc-700 bg-zinc-950 text-zinc-100 placeholder:text-zinc-500"
+                    />
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      <Button
+                        type="button"
+                        onClick={() => void submitAdminBan()}
+                        disabled={adminBanLoading}
+                        className="h-10 rounded-xl bg-red-600 text-white hover:bg-red-500 disabled:bg-zinc-700 disabled:text-zinc-300"
+                      >
+                        {adminBanLoading ? "Сохраняем" : "Забанить"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => void clearAdminBan()}
+                        disabled={adminBanLoading}
+                        className="h-10 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100 disabled:opacity-60"
+                      >
+                        Снять бан
+                      </Button>
+                    </div>
                   </div>
                   <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3">
                     <div className="text-xs uppercase tracking-[0.12em] text-zinc-500">Создать промокод</div>

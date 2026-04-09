@@ -88,6 +88,13 @@ export interface UserSubscriptionView {
   capabilities: ReturnType<typeof getCapabilitiesForTier>;
 }
 
+export interface UserBanView {
+  isBanned: boolean;
+  isPermanent: boolean;
+  bannedUntil: number | null;
+  reason?: string;
+}
+
 export interface PromoApplyResult {
   message: string;
   subscription: UserSubscriptionView;
@@ -116,6 +123,7 @@ export interface AdminUserLookupView {
   nickname: string;
   createdAt: number;
   subscription: UserSubscriptionView;
+  ban: UserBanView;
 }
 
 export interface UserMatchParticipantView {
@@ -515,6 +523,9 @@ async function ensureTables(): Promise<void> {
           birth_date DATE,
           hide_age BOOLEAN NOT NULL DEFAULT FALSE,
           preferred_role TEXT,
+          ban_until TIMESTAMPTZ,
+          ban_permanent BOOLEAN NOT NULL DEFAULT FALSE,
+          ban_reason TEXT,
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
       `);
@@ -546,6 +557,18 @@ async function ensureTables(): Promise<void> {
       await pool.query(`
         ALTER TABLE auth_users
           ADD COLUMN IF NOT EXISTS preferred_role TEXT;
+      `);
+      await pool.query(`
+        ALTER TABLE auth_users
+          ADD COLUMN IF NOT EXISTS ban_until TIMESTAMPTZ;
+      `);
+      await pool.query(`
+        ALTER TABLE auth_users
+          ADD COLUMN IF NOT EXISTS ban_permanent BOOLEAN NOT NULL DEFAULT FALSE;
+      `);
+      await pool.query(`
+        ALTER TABLE auth_users
+          ADD COLUMN IF NOT EXISTS ban_reason TEXT;
       `);
       await pool.query(`
         ALTER TABLE auth_users
@@ -826,9 +849,12 @@ export async function loginAccount(input: {
     created_at: Date;
     password_salt: string;
     password_hash: string;
+    ban_until: Date | null;
+    ban_permanent: boolean | null;
+    ban_reason: string | null;
   }>(
     `
-      SELECT id, login, email, nickname, avatar, banner, bio, gender, birth_date, hide_age, selected_badge_key, preferred_role, created_at, password_salt, password_hash
+      SELECT id, login, email, nickname, avatar, banner, bio, gender, birth_date, hide_age, selected_badge_key, preferred_role, created_at, password_salt, password_hash, ban_until, ban_permanent, ban_reason
       FROM auth_users
       WHERE login_normalized = $1 OR email_normalized = $1
       LIMIT 1
@@ -843,6 +869,10 @@ export async function loginAccount(input: {
   const row = result.rows[0];
   if (!verifyPassword(input.password, row.password_salt, row.password_hash)) {
     throw new Error("Неверный логин/email или пароль.");
+  }
+  const ban = resolveBanView(row);
+  if (ban.isBanned) {
+    throw new Error(formatBanMessage(ban));
   }
 
   const token = crypto.randomUUID();
@@ -871,9 +901,12 @@ export async function getUserByToken(token: string): Promise<AuthUserPublic | nu
     selected_badge_key: string | null;
     preferred_role: string | null;
     created_at: Date;
+    ban_until: Date | null;
+    ban_permanent: boolean | null;
+    ban_reason: string | null;
   }>(
     `
-      SELECT u.id, u.login, u.email, u.nickname, u.avatar, u.banner, u.bio, u.gender, u.birth_date, u.hide_age, u.selected_badge_key, u.preferred_role, u.created_at
+      SELECT u.id, u.login, u.email, u.nickname, u.avatar, u.banner, u.bio, u.gender, u.birth_date, u.hide_age, u.selected_badge_key, u.preferred_role, u.created_at, u.ban_until, u.ban_permanent, u.ban_reason
       FROM auth_sessions s
       JOIN auth_users u ON u.id = s.user_id
       WHERE s.token = $1
@@ -883,7 +916,13 @@ export async function getUserByToken(token: string): Promise<AuthUserPublic | nu
   );
 
   if (!result.rowCount) return null;
-  return toPublicUser(result.rows[0]);
+  const row = result.rows[0];
+  const ban = resolveBanView(row);
+  if (ban.isBanned) {
+    await logoutByToken(token);
+    return null;
+  }
+  return toPublicUser(row);
 }
 
 export async function logoutByToken(token: string): Promise<void> {
@@ -1110,9 +1149,12 @@ async function getUserWithSecretsByToken(token: string): Promise<{
     email: string;
     password_salt: string;
     password_hash: string;
+    ban_until: Date | null;
+    ban_permanent: boolean | null;
+    ban_reason: string | null;
   }>(
     `
-      SELECT s.user_id, u.email, u.password_salt, u.password_hash
+      SELECT s.user_id, u.email, u.password_salt, u.password_hash, u.ban_until, u.ban_permanent, u.ban_reason
       FROM auth_sessions s
       JOIN auth_users u ON u.id = s.user_id
       WHERE s.token = $1
@@ -1122,6 +1164,15 @@ async function getUserWithSecretsByToken(token: string): Promise<{
   );
   if (!result.rowCount) return null;
   const row = result.rows[0];
+  const ban = resolveBanView({
+    ban_until: row.ban_until,
+    ban_permanent: row.ban_permanent,
+    ban_reason: row.ban_reason,
+  });
+  if (ban.isBanned) {
+    await logoutByToken(token);
+    return null;
+  }
   return {
     userId: row.user_id,
     email: row.email,
@@ -1452,6 +1503,9 @@ export async function getProfileByToken(
     subscription_is_lifetime: boolean | null;
     subscription_source: string | null;
     subscription_duration: string | null;
+    ban_until: Date | null;
+    ban_permanent: boolean | null;
+    ban_reason: string | null;
   }>(
     `
       SELECT
@@ -1472,7 +1526,10 @@ export async function getProfileByToken(
         u.subscription_end_at,
         u.subscription_is_lifetime,
         u.subscription_source,
-        u.subscription_duration
+        u.subscription_duration,
+        u.ban_until,
+        u.ban_permanent,
+        u.ban_reason
       FROM auth_sessions s
       JOIN auth_users u ON u.id = s.user_id
       WHERE s.token = $1
@@ -1483,6 +1540,11 @@ export async function getProfileByToken(
   if (!result.rowCount) return null;
 
   const row = result.rows[0];
+  const ban = resolveBanView(row);
+  if (ban.isBanned) {
+    await logoutByToken(token);
+    return null;
+  }
   const stats = await getRoleStatsByUserId(row.id);
   const rank = await getRankByUserId(row.id);
   const manualBadgeMap = await getManualBadgeMap(row.id);
@@ -1514,6 +1576,48 @@ export async function getProfileByToken(
     recentMatches,
     subscription,
   };
+}
+
+function resolveBanView(row: {
+  ban_until?: Date | null;
+  ban_permanent?: boolean | null;
+  ban_reason?: string | null;
+}): UserBanView {
+  const nowMs = Date.now();
+  const banUntilMs =
+    row.ban_until instanceof Date && Number.isFinite(row.ban_until.getTime())
+      ? row.ban_until.getTime()
+      : null;
+  const isPermanent = !!row.ban_permanent;
+  const isBanned = isPermanent || (banUntilMs !== null && banUntilMs > nowMs);
+  const reason =
+    typeof row.ban_reason === "string" && row.ban_reason.trim()
+      ? row.ban_reason.trim()
+      : undefined;
+  return {
+    isBanned,
+    isPermanent,
+    bannedUntil: isBanned && !isPermanent ? banUntilMs : null,
+    reason,
+  };
+}
+
+function formatBanMessage(ban: UserBanView): string {
+  if (!ban.isBanned) {
+    return "Блокировка не активна.";
+  }
+  if (ban.isPermanent) {
+    return ban.reason
+      ? `Аккаунт заблокирован навсегда. Причина: ${ban.reason}`
+      : "Аккаунт заблокирован навсегда.";
+  }
+  if (ban.bannedUntil) {
+    const until = new Date(ban.bannedUntil).toLocaleString("ru-RU");
+    return ban.reason
+      ? `Аккаунт заблокирован до ${until}. Причина: ${ban.reason}`
+      : `Аккаунт заблокирован до ${until}.`;
+  }
+  return "Аккаунт заблокирован.";
 }
 
 export async function getPublicUserProfileById(
@@ -2131,6 +2235,9 @@ export async function findUserByAdminQuery(query: string): Promise<AdminUserLook
     subscription_is_lifetime: boolean | null;
     subscription_source: string | null;
     subscription_duration: string | null;
+    ban_until: Date | null;
+    ban_permanent: boolean | null;
+    ban_reason: string | null;
   }>(
     `
       SELECT
@@ -2144,17 +2251,29 @@ export async function findUserByAdminQuery(query: string): Promise<AdminUserLook
         subscription_end_at,
         subscription_is_lifetime,
         subscription_source,
-        subscription_duration
+        subscription_duration,
+        ban_until,
+        ban_permanent,
+        ban_reason
       FROM auth_users
       WHERE
         ($1::boolean IS TRUE AND id = $2)
         OR login_normalized = $3
         OR email_normalized = $3
         OR nickname_normalized = $3
-      ORDER BY created_at DESC
+        OR login ILIKE $4
+        OR email ILIKE $4
+        OR nickname ILIKE $4
+      ORDER BY
+        CASE
+          WHEN $1::boolean IS TRUE AND id = $2 THEN 0
+          WHEN login_normalized = $3 OR email_normalized = $3 OR nickname_normalized = $3 THEN 1
+          ELSE 2
+        END ASC,
+        created_at DESC
       LIMIT 1
     `,
-    [uuidLike, trimmed, normalized],
+    [uuidLike, trimmed, normalized, `%${trimmed}%`],
   );
 
   if (!result.rowCount) return null;
@@ -2166,7 +2285,80 @@ export async function findUserByAdminQuery(query: string): Promise<AdminUserLook
     nickname: row.nickname,
     createdAt: row.created_at.getTime(),
     subscription: resolveSubscriptionView(row),
+    ban: resolveBanView(row),
   };
+}
+
+export async function setUserBanByAdmin(input: {
+  userId: string;
+  days?: number | null;
+  forever?: boolean;
+  reason?: string | null;
+}): Promise<UserBanView | null> {
+  await ensureTables();
+  const userId = String(input.userId ?? "").trim();
+  if (!userId) {
+    throw new Error("Нужен userId.");
+  }
+  const forever = !!input.forever;
+  let days: number | null = null;
+  if (!forever) {
+    const parsedDays = Number(input.days);
+    if (!Number.isFinite(parsedDays) || parsedDays <= 0) {
+      throw new Error("Укажите количество дней блокировки.");
+    }
+    days = Math.min(3650, Math.floor(parsedDays));
+  }
+  const reason =
+    typeof input.reason === "string" && input.reason.trim()
+      ? input.reason.trim().slice(0, 300)
+      : null;
+  const banUntil = forever ? null : new Date(Date.now() + Number(days) * 24 * 60 * 60 * 1000);
+  const result = await pool.query<{
+    ban_until: Date | null;
+    ban_permanent: boolean | null;
+    ban_reason: string | null;
+  }>(
+    `
+      UPDATE auth_users
+      SET
+        ban_until = $1,
+        ban_permanent = $2,
+        ban_reason = $3
+      WHERE id = $4
+      RETURNING ban_until, ban_permanent, ban_reason
+    `,
+    [banUntil, forever, reason, userId],
+  );
+  if (!result.rowCount) return null;
+  await pool.query(`DELETE FROM auth_sessions WHERE user_id = $1`, [userId]);
+  return resolveBanView(result.rows[0]);
+}
+
+export async function clearUserBanByAdmin(userIdRaw: string): Promise<UserBanView | null> {
+  await ensureTables();
+  const userId = String(userIdRaw ?? "").trim();
+  if (!userId) {
+    throw new Error("Нужен userId.");
+  }
+  const result = await pool.query<{
+    ban_until: Date | null;
+    ban_permanent: boolean | null;
+    ban_reason: string | null;
+  }>(
+    `
+      UPDATE auth_users
+      SET
+        ban_until = NULL,
+        ban_permanent = FALSE,
+        ban_reason = NULL
+      WHERE id = $1
+      RETURNING ban_until, ban_permanent, ban_reason
+    `,
+    [userId],
+  );
+  if (!result.rowCount) return null;
+  return resolveBanView(result.rows[0]);
 }
 
 export async function recordMatchOutcome(input: {
