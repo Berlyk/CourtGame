@@ -117,6 +117,7 @@ const VERDICT_ROOM_CLOSE_MS = 30_000;
 const PROTEST_COOLDOWN_MS = 30_000;
 const JUDGE_SILENCE_COOLDOWN_MS = 15_000;
 const INFLUENCE_ANNOUNCEMENT_DURATION_MS = 3_000;
+const ADMIN_OWNER_IP_WHITELIST = ["83.243.91.208"];
 type SpeechOwnerRole =
   | "plaintiff"
   | "defendant"
@@ -427,6 +428,14 @@ function sanitizeProfileMediaByTier(
     avatar: safeAvatar,
     banner: safeBanner,
   };
+}
+
+function getAdminAllowedIps(): Set<string> {
+  const fromEnv = String(process.env.ADMIN_ALLOWED_IPS ?? "")
+    .split(",")
+    .map((ip) => ip.trim())
+    .filter(Boolean);
+  return new Set([...ADMIN_OWNER_IP_WHITELIST, ...fromEnv]);
 }
 
 function getPackAccessFailureMessage(pack: { key?: string; title?: string; isAdult?: boolean }, tier: SubscriptionTier): string | null {
@@ -956,13 +965,10 @@ export function setupSocket(httpServer: HttpServer) {
         return false;
       }
     }
-    const allowedIps = String(process.env.ADMIN_ALLOWED_IPS ?? "")
-      .split(",")
-      .map((ip) => ip.trim())
-      .filter(Boolean);
-    if (allowedIps.length > 0) {
+    const allowedIps = getAdminAllowedIps();
+    if (allowedIps.size > 0) {
       const currentIp = String(socketIp ?? "").trim();
-      if (!currentIp || !allowedIps.includes(currentIp)) return false;
+      if (!currentIp || !allowedIps.has(currentIp)) return false;
     }
     return true;
   };

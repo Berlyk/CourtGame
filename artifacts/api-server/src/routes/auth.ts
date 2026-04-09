@@ -70,6 +70,7 @@ const ADMIN_GUARD_WINDOW_MS = 15 * 60 * 1000;
 const ADMIN_GUARD_BLOCK_MS = 15 * 60 * 1000;
 const ADMIN_GUARD_MAX_FAILS = 10;
 const ADMIN_SESSION_TTL_MS = 10 * 60 * 1000;
+const ADMIN_OWNER_IP_WHITELIST = ["83.243.91.208"];
 const adminGuardAttempts = new Map<
   string,
   { failedCount: number; windowStartMs: number; blockUntilMs: number }
@@ -140,6 +141,14 @@ function resolveUserAgent(headers: Record<string, unknown>): string {
   if (typeof raw === "string") return raw.trim();
   if (Array.isArray(raw)) return String(raw[0] ?? "").trim();
   return "";
+}
+
+function getAdminAllowedIps(): Set<string> {
+  const fromEnv = String(process.env.ADMIN_ALLOWED_IPS ?? "")
+    .split(",")
+    .map((ip) => ip.trim())
+    .filter(Boolean);
+  return new Set([...ADMIN_OWNER_IP_WHITELIST, ...fromEnv]);
 }
 
 function mintAdminSession(input: {
@@ -256,12 +265,9 @@ async function requireAdmin(
       return null;
     }
   }
-  const allowedIps = String(process.env.ADMIN_ALLOWED_IPS ?? "")
-    .split(",")
-    .map((ip) => ip.trim())
-    .filter(Boolean);
-  if (allowedIps.length > 0) {
-    if (!clientIp || !allowedIps.includes(clientIp)) {
+  const allowedIps = getAdminAllowedIps();
+  if (allowedIps.size > 0) {
+    if (!clientIp || !allowedIps.has(clientIp)) {
       registerAdminFailure(clientIp, nowMs);
       res.status(403).json({ message: "IP не разрешен для админ-панели." });
       return null;
