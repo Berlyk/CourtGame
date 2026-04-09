@@ -765,9 +765,6 @@ authRouter.patch("/auth/admin/ban", async (req, res) => {
   if (!userId) {
     return res.status(400).json({ message: "Нужен userId." });
   }
-  if (userId === auth.adminUser.id) {
-    return res.status(400).json({ message: "Нельзя заблокировать самого себя." });
-  }
   try {
     if (Boolean(req.body?.clear)) {
       const ban = await clearUserBanByAdmin(userId);
@@ -775,6 +772,9 @@ authRouter.patch("/auth/admin/ban", async (req, res) => {
         return res.status(404).json({ message: "Пользователь не найден." });
       }
       return res.status(200).json({ ok: true, ban });
+    }
+    if (userId === auth.adminUser.id) {
+      return res.status(400).json({ message: "Нельзя заблокировать самого себя." });
     }
     const forever = Boolean(req.body?.forever);
     const daysRaw = req.body?.days;
