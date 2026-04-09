@@ -209,10 +209,15 @@ async function requireAdmin(
     res.status(401).json({ message: "Не авторизован." });
     return null;
   }
-  const adminUser = await getUserByToken(token);
+  const adminUser = await getUserByToken(token, clientIp);
   if (!adminUser) {
     registerAdminFailure(clientIp, nowMs);
     res.status(403).json({ message: "Недостаточно прав." });
+    return null;
+  }
+  if (adminUser.ban?.isBanned) {
+    registerAdminFailure(clientIp, nowMs);
+    res.status(403).json({ message: "Аккаунт заблокирован." });
     return null;
   }
   const adminLogin = String(process.env.ADMIN_PANEL_LOGIN ?? "berly").trim().toLowerCase();
@@ -327,6 +332,7 @@ authRouter.post("/auth/register", async (req, res) => {
       email,
       password,
       nickname: login,
+      clientIp: resolveClientIp(req),
     });
     return res.status(201).json({ user, token });
   } catch (error) {
@@ -343,7 +349,11 @@ authRouter.post("/auth/login", async (req, res) => {
       return res.status(400).json({ message: "Введите логин/email и пароль." });
     }
 
-    const { user, token } = await loginAccount({ loginOrEmail, password });
+    const { user, token } = await loginAccount({
+      loginOrEmail,
+      password,
+      clientIp: resolveClientIp(req),
+    });
     return res.status(200).json({ user, token });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Не удалось выполнить вход.";
@@ -356,7 +366,7 @@ authRouter.get("/auth/me", async (req, res) => {
   if (!token) {
     return res.status(401).json({ message: "Не авторизован." });
   }
-  const user = await getUserByToken(token);
+  const user = await getUserByToken(token, resolveClientIp(req));
   if (!user) {
     return res.status(401).json({ message: "Сессия недействительна." });
   }
@@ -368,7 +378,7 @@ authRouter.get("/auth/profile", async (req, res) => {
   if (!token) {
     return res.status(401).json({ message: "Не авторизован." });
   }
-  const profile = await getProfileByToken(token);
+  const profile = await getProfileByToken(token, resolveClientIp(req));
   if (!profile) {
     return res.status(401).json({ message: "Сессия недействительна." });
   }
@@ -744,6 +754,9 @@ authRouter.patch("/auth/admin/ban", async (req, res) => {
   const userId = String(req.body?.userId ?? "").trim();
   if (!userId) {
     return res.status(400).json({ message: "Нужен userId." });
+  }
+  if (userId === auth.adminUser.id) {
+    return res.status(400).json({ message: "Нельзя заблокировать самого себя." });
   }
   try {
     if (Boolean(req.body?.clear)) {

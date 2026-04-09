@@ -37,6 +37,7 @@ export interface AuthUserPublic {
   selectedBadgeKey?: string;
   preferredRole?: PreferredRole;
   adminRole?: AdminStaffRole | null;
+  ban?: UserBanView;
 }
 
 export interface UserRoleStats {
@@ -352,6 +353,13 @@ function verifyPassword(password: string, salt: string, hashHex: string): boolea
   return crypto.timingSafeEqual(calculated, expected);
 }
 
+function normalizeIpAddress(value: string | null | undefined): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  return trimmed.slice(0, 120);
+}
+
 function toPublicUser(row: {
   id: string;
   login: string;
@@ -366,8 +374,25 @@ function toPublicUser(row: {
   selected_badge_key?: string | null;
   preferred_role?: string | null;
   admin_role?: string | null;
+  ban_until?: Date | null;
+  ban_permanent?: boolean | null;
+  ban_reason?: string | null;
   created_at: Date;
-}): AuthUserPublic {
+}, banOverride?: UserBanView): AuthUserPublic {
+  const hasBanFields =
+    banOverride ||
+    row.ban_until !== undefined ||
+    row.ban_permanent !== undefined ||
+    row.ban_reason !== undefined;
+  const ban = banOverride
+    ? banOverride
+    : hasBanFields
+      ? resolveBanView({
+          ban_until: row.ban_until ?? null,
+          ban_permanent: row.ban_permanent ?? false,
+          ban_reason: row.ban_reason ?? null,
+        })
+      : undefined;
   return {
     id: row.id,
     login: row.login,
@@ -394,6 +419,7 @@ function toPublicUser(row: {
         ? row.preferred_role
         : undefined,
     adminRole: normalizeAdminStaffRole(row.admin_role),
+    ban,
   };
 }
 
@@ -623,13 +649,57 @@ async function ensureTables(): Promise<void> {
         CREATE TABLE IF NOT EXISTS auth_sessions (
           token UUID PRIMARY KEY,
           user_id UUID NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
+          ip_address TEXT,
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
       `);
 
       await pool.query(`
+        ALTER TABLE auth_sessions
+          ADD COLUMN IF NOT EXISTS ip_address TEXT;
+      `);
+
+      await pool.query(`
         CREATE INDEX IF NOT EXISTS auth_sessions_user_id_idx
         ON auth_sessions(user_id);
+      `);
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS auth_sessions_ip_idx
+        ON auth_sessions(ip_address);
+      `);
+
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS auth_user_ips (
+          user_id UUID NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
+          ip_address TEXT NOT NULL,
+          first_seen TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          last_seen TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          PRIMARY KEY (user_id, ip_address)
+        );
+      `);
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS auth_user_ips_ip_idx
+        ON auth_user_ips(ip_address);
+      `);
+
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS auth_ip_bans (
+          ip_address TEXT PRIMARY KEY,
+          source_user_id UUID REFERENCES auth_users(id) ON DELETE SET NULL,
+          ban_until TIMESTAMPTZ,
+          ban_permanent BOOLEAN NOT NULL DEFAULT FALSE,
+          ban_reason TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+      await pool.query(`
+        ALTER TABLE auth_ip_bans
+          ADD COLUMN IF NOT EXISTS source_user_id UUID REFERENCES auth_users(id) ON DELETE SET NULL;
+      `);
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS auth_ip_bans_source_user_idx
+        ON auth_ip_bans(source_user_id);
       `);
 
       await pool.query(`
@@ -733,8 +803,16 @@ export async function registerAccount(input: {
   email: string;
   password: string;
   nickname?: string;
+  clientIp?: string | null;
 }): Promise<{ user: AuthUserPublic; token: string }> {
   await cleanupSessions();
+  const clientIp = normalizeIpAddress(input.clientIp);
+  if (clientIp) {
+    const ipBan = await getIpBanViewByAddress(clientIp);
+    if (ipBan.isBanned) {
+      throw new Error(formatBanMessage(ipBan));
+    }
+  }
 
   const login = input.login.trim();
   const email = input.email.trim();
@@ -839,9 +917,10 @@ export async function registerAccount(input: {
 
   const token = crypto.randomUUID();
   await pool.query(
-    `INSERT INTO auth_sessions (token, user_id, created_at) VALUES ($1, $2, NOW())`,
-    [token, userId],
+    `INSERT INTO auth_sessions (token, user_id, ip_address, created_at) VALUES ($1, $2, $3, NOW())`,
+    [token, userId, clientIp],
   );
+  await touchUserIpRecord(userId, clientIp);
 
   return { user: toPublicUser(userResult.rows[0]), token };
 }
@@ -849,8 +928,10 @@ export async function registerAccount(input: {
 export async function loginAccount(input: {
   loginOrEmail: string;
   password: string;
+  clientIp?: string | null;
 }): Promise<{ user: AuthUserPublic; token: string }> {
   await cleanupSessions();
+  const clientIp = normalizeIpAddress(input.clientIp);
 
   const needle = input.loginOrEmail.trim().toLowerCase();
   const result = await pool.query<{
@@ -866,6 +947,7 @@ export async function loginAccount(input: {
     hide_age: boolean | null;
     selected_badge_key: string | null;
     preferred_role: string | null;
+    admin_role: string | null;
     created_at: Date;
     password_salt: string;
     password_hash: string;
@@ -890,22 +972,26 @@ export async function loginAccount(input: {
   if (!verifyPassword(input.password, row.password_salt, row.password_hash)) {
     throw new Error("Неверный логин/email или пароль.");
   }
-  const ban = resolveBanView(row);
-  if (ban.isBanned) {
-    throw new Error(formatBanMessage(ban));
-  }
+  const userBan = resolveBanView(row);
+  const ipBan = await getIpBanViewByAddress(clientIp);
+  const effectiveBan = mergeBanViews(userBan, ipBan);
 
   const token = crypto.randomUUID();
   await pool.query(
-    `INSERT INTO auth_sessions (token, user_id, created_at) VALUES ($1, $2, NOW())`,
-    [token, row.id],
+    `INSERT INTO auth_sessions (token, user_id, ip_address, created_at) VALUES ($1, $2, $3, NOW())`,
+    [token, row.id, clientIp],
   );
+  await touchUserIpRecord(row.id, clientIp);
 
-  return { user: toPublicUser(row), token };
+  return { user: toPublicUser(row, effectiveBan), token };
 }
 
-export async function getUserByToken(token: string): Promise<AuthUserPublic | null> {
+export async function getUserByToken(
+  token: string,
+  clientIpRaw?: string | null,
+): Promise<AuthUserPublic | null> {
   await cleanupSessions();
+  const clientIp = normalizeIpAddress(clientIpRaw);
 
   const result = await pool.query<{
     id: string;
@@ -938,12 +1024,11 @@ export async function getUserByToken(token: string): Promise<AuthUserPublic | nu
 
   if (!result.rowCount) return null;
   const row = result.rows[0];
-  const ban = resolveBanView(row);
-  if (ban.isBanned) {
-    await logoutByToken(token);
-    return null;
-  }
-  return toPublicUser(row);
+  await touchUserIpRecord(row.id, clientIp);
+  const userBan = resolveBanView(row);
+  const ipBan = await getIpBanViewByAddress(clientIp);
+  const effectiveBan = mergeBanViews(userBan, ipBan);
+  return toPublicUser(row, effectiveBan);
 }
 
 export async function logoutByToken(token: string): Promise<void> {
@@ -1191,7 +1276,6 @@ async function getUserWithSecretsByToken(token: string): Promise<{
     ban_reason: row.ban_reason,
   });
   if (ban.isBanned) {
-    await logoutByToken(token);
     return null;
   }
   return {
@@ -1503,8 +1587,10 @@ function buildBadgeList(input: {
 
 export async function getProfileByToken(
   token: string,
+  clientIpRaw?: string | null,
 ): Promise<AuthUserPublicProfile | null> {
   await cleanupSessions();
+  const clientIp = normalizeIpAddress(clientIpRaw);
   const result = await pool.query<{
     id: string;
     login: string;
@@ -1562,9 +1648,11 @@ export async function getProfileByToken(
   if (!result.rowCount) return null;
 
   const row = result.rows[0];
-  const ban = resolveBanView(row);
-  if (ban.isBanned) {
-    await logoutByToken(token);
+  await touchUserIpRecord(row.id, clientIp);
+  const userBan = resolveBanView(row);
+  const ipBan = await getIpBanViewByAddress(clientIp);
+  const effectiveBan = mergeBanViews(userBan, ipBan);
+  if (effectiveBan.isBanned) {
     return null;
   }
   const stats = await getRoleStatsByUserId(row.id);
@@ -1624,6 +1712,136 @@ function resolveBanView(row: {
   };
 }
 
+function mergeBanViews(userBan: UserBanView, ipBan: UserBanView): UserBanView {
+  if (!userBan.isBanned && !ipBan.isBanned) {
+    return {
+      isBanned: false,
+      isPermanent: false,
+      bannedUntil: null,
+      reason: undefined,
+    };
+  }
+  if (!userBan.isBanned) return ipBan;
+  if (!ipBan.isBanned) return userBan;
+
+  const isPermanent = userBan.isPermanent || ipBan.isPermanent;
+  const bannedUntil = isPermanent
+    ? null
+    : Math.max(userBan.bannedUntil ?? 0, ipBan.bannedUntil ?? 0) || null;
+  const reason = userBan.reason || ipBan.reason;
+  return {
+    isBanned: true,
+    isPermanent,
+    bannedUntil,
+    reason,
+  };
+}
+
+async function touchUserIpRecord(userIdRaw: string, ipRaw: string | null | undefined): Promise<void> {
+  const userId = String(userIdRaw ?? "").trim();
+  const ipAddress = normalizeIpAddress(ipRaw);
+  if (!userId || !ipAddress) return;
+  await pool.query(
+    `
+      INSERT INTO auth_user_ips (user_id, ip_address, first_seen, last_seen)
+      VALUES ($1, $2, NOW(), NOW())
+      ON CONFLICT (user_id, ip_address)
+      DO UPDATE SET last_seen = NOW()
+    `,
+    [userId, ipAddress],
+  );
+}
+
+async function getIpBanViewByAddress(ipRaw: string | null | undefined): Promise<UserBanView> {
+  const ipAddress = normalizeIpAddress(ipRaw);
+  if (!ipAddress) {
+    return {
+      isBanned: false,
+      isPermanent: false,
+      bannedUntil: null,
+      reason: undefined,
+    };
+  }
+  const result = await pool.query<{
+    ban_until: Date | null;
+    ban_permanent: boolean | null;
+    ban_reason: string | null;
+  }>(
+    `
+      SELECT ban_until, ban_permanent, ban_reason
+      FROM auth_ip_bans
+      WHERE ip_address = $1
+      LIMIT 1
+    `,
+    [ipAddress],
+  );
+  if (!result.rowCount) {
+    return {
+      isBanned: false,
+      isPermanent: false,
+      bannedUntil: null,
+      reason: undefined,
+    };
+  }
+  const row = result.rows[0];
+  const view = resolveBanView(row);
+  if (!view.isBanned && !row.ban_permanent && row.ban_until instanceof Date) {
+    await pool.query(`DELETE FROM auth_ip_bans WHERE ip_address = $1`, [ipAddress]);
+  }
+  return view;
+}
+
+async function syncUserIpBanRecords(userIdRaw: string, ban: UserBanView): Promise<void> {
+  const userId = String(userIdRaw ?? "").trim();
+  if (!userId) return;
+  if (!ban.isBanned) {
+    await pool.query(`DELETE FROM auth_ip_bans WHERE source_user_id = $1`, [userId]);
+    return;
+  }
+  const ipRows = await pool.query<{ ip_address: string }>(
+    `
+      SELECT ip_address
+      FROM (
+        SELECT ip_address
+        FROM auth_user_ips
+        WHERE user_id = $1
+        UNION
+        SELECT ip_address
+        FROM auth_sessions
+        WHERE user_id = $1 AND ip_address IS NOT NULL
+      ) AS ips
+    `,
+    [userId],
+  );
+  if (!ipRows.rowCount) return;
+  for (const row of ipRows.rows) {
+    const ipAddress = normalizeIpAddress(row.ip_address);
+    if (!ipAddress) continue;
+    await pool.query(
+      `
+        INSERT INTO auth_ip_bans (
+          ip_address,
+          source_user_id,
+          ban_until,
+          ban_permanent,
+          ban_reason,
+          created_at,
+          updated_at
+        )
+        VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+        ON CONFLICT (ip_address)
+        DO UPDATE SET
+          source_user_id = EXCLUDED.source_user_id,
+          ban_until = EXCLUDED.ban_until,
+          ban_permanent = EXCLUDED.ban_permanent,
+          ban_reason = EXCLUDED.ban_reason,
+          updated_at = NOW()
+      `,
+      [ipAddress, userId, ban.bannedUntil ? new Date(ban.bannedUntil) : null, ban.isPermanent, ban.reason ?? null],
+    );
+  }
+}
+
 function formatBanMessage(ban: UserBanView): string {
   if (!ban.isBanned) {
     return "Блокировка не активна.";
@@ -1640,6 +1858,47 @@ function formatBanMessage(ban: UserBanView): string {
       : `Аккаунт заблокирован до ${until}.`;
   }
   return "Аккаунт заблокирован.";
+}
+
+export function getBanMessageForClient(ban: UserBanView): string {
+  return formatBanMessage(ban);
+}
+
+export async function getEffectiveBanByUserAndIp(input: {
+  userId?: string | null;
+  ip?: string | null;
+}): Promise<UserBanView> {
+  await ensureTables();
+  const userId = String(input.userId ?? "").trim();
+  const ip = normalizeIpAddress(input.ip);
+
+  let userBan: UserBanView = {
+    isBanned: false,
+    isPermanent: false,
+    bannedUntil: null,
+    reason: undefined,
+  };
+  if (userId) {
+    const userResult = await pool.query<{
+      ban_until: Date | null;
+      ban_permanent: boolean | null;
+      ban_reason: string | null;
+    }>(
+      `
+        SELECT ban_until, ban_permanent, ban_reason
+        FROM auth_users
+        WHERE id = $1
+        LIMIT 1
+      `,
+      [userId],
+    );
+    if (userResult.rowCount) {
+      userBan = resolveBanView(userResult.rows[0]);
+    }
+  }
+
+  const ipBan = await getIpBanViewByAddress(ip);
+  return mergeBanViews(userBan, ipBan);
 }
 
 export async function getPublicUserProfileById(
@@ -2357,8 +2616,9 @@ export async function setUserBanByAdmin(input: {
     [banUntil, forever, reason, userId],
   );
   if (!result.rowCount) return null;
-  await pool.query(`DELETE FROM auth_sessions WHERE user_id = $1`, [userId]);
-  return resolveBanView(result.rows[0]);
+  const ban = resolveBanView(result.rows[0]);
+  await syncUserIpBanRecords(userId, ban);
+  return ban;
 }
 
 export async function clearUserBanByAdmin(userIdRaw: string): Promise<UserBanView | null> {
@@ -2384,7 +2644,9 @@ export async function clearUserBanByAdmin(userIdRaw: string): Promise<UserBanVie
     [userId],
   );
   if (!result.rowCount) return null;
-  return resolveBanView(result.rows[0]);
+  const ban = resolveBanView(result.rows[0]);
+  await syncUserIpBanRecords(userId, ban);
+  return ban;
 }
 
 async function setManualBadgeActive(input: {

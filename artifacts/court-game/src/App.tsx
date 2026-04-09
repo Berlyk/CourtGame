@@ -1850,6 +1850,12 @@ interface AuthUser {
   selectedBadgeKey?: string;
   preferredRole?: AssignableRole;
   adminRole?: "administrator" | "moderator" | null;
+  ban?: {
+    isBanned: boolean;
+    isPermanent: boolean;
+    bannedUntil: number | null;
+    reason?: string;
+  };
 }
 
 interface CasePackInfo {
@@ -2602,6 +2608,30 @@ function persistAuthUserToLocalCache(user: AuthUser): void {
     const minimalUser: AuthUser = { ...cachedUser, avatar: undefined, banner: undefined };
     safeSetLocalStorageItem(AUTH_USER_STORAGE_KEY, JSON.stringify(minimalUser));
   }
+}
+
+function isBanStateActive(
+  ban: AuthUser["ban"] | null | undefined,
+  nowMs: number,
+): ban is NonNullable<AuthUser["ban"]> {
+  if (!ban?.isBanned) return false;
+  if (ban.isPermanent) return true;
+  if (typeof ban.bannedUntil !== "number") return false;
+  return ban.bannedUntil > nowMs;
+}
+
+function formatBanTimeLeft(msLeft: number): string {
+  const totalSeconds = Math.max(0, Math.floor(msLeft / 1000));
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (days > 0) {
+    return `${days}д ${String(hours).padStart(2, "0")}ч ${String(minutes).padStart(2, "0")}м`;
+  }
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(
+    seconds,
+  ).padStart(2, "0")}`;
 }
 
 function isNicknameTakenError(message: string): boolean {
@@ -3409,6 +3439,16 @@ export default function App() {
     }, 12000);
   }, []);
   const isAuthenticated = !!authUser && !!authToken;
+  const activeBan = useMemo(() => {
+    const ban = authUser?.ban;
+    if (!ban) return null;
+    return isBanStateActive(ban, nowMs) ? ban : null;
+  }, [authUser?.ban, nowMs]);
+  const isUserBanned = !!activeBan;
+  const banTimeLeftLabel = useMemo(() => {
+    if (!activeBan || activeBan.isPermanent || typeof activeBan.bannedUntil !== "number") return null;
+    return formatBanTimeLeft(activeBan.bannedUntil - nowMs);
+  }, [activeBan, nowMs]);
   const isCreatorAdmin = (authUser?.login ?? "").trim().toLowerCase() === "berly";
   const isStaffAdmin = authUser?.adminRole === "administrator" || authUser?.adminRole === "moderator";
   const canSeeAdminButton = isAuthenticated && (isCreatorAdmin || isStaffAdmin);
@@ -5035,6 +5075,23 @@ export default function App() {
   }, [authUser]);
 
   useEffect(() => {
+    if (!isUserBanned) return;
+    if (screen !== "home") {
+      setScreen("home");
+    }
+    setCreateMatchDialogOpen(false);
+    setCreatePackCatalogOpen(false);
+    setRoomManageOpen(false);
+    setJoinPasswordDialogOpen(false);
+    setJoinPasswordDialogMatch(null);
+    setJoinPasswordInput("");
+    setJoinPasswordDialogError("");
+    setProfileMenuOpen(false);
+    setAuthDialogOpen(false);
+    setContextHelpOpen(false);
+  }, [isUserBanned, screen]);
+
+  useEffect(() => {
     if (screen !== "profile") return;
     setProfileAvatarDraft(avatar);
     setProfileBannerDraft(banner);
@@ -5679,7 +5736,7 @@ export default function App() {
       setScreen("home");
     });
 
-    socket.on("kicked", () => {
+    socket.on("kicked", (payload?: { message?: string }) => {
       clearRoomActionPending();
       clearReconnectWindow();
       localStorage.removeItem("court_session");
@@ -5707,7 +5764,9 @@ export default function App() {
       setProfileMenuOpen(false);
       setScreen("home");
       setKickedAlert(
-        "Вы были кикнуты из комнаты.",
+        typeof payload?.message === "string" && payload.message.trim()
+          ? payload.message.trim()
+          : "Вы были кикнуты из комнаты.",
       );
       setTimeout(() => setKickedAlert(""), 5000);
     });
@@ -5870,6 +5929,7 @@ export default function App() {
   }, [socket, avatar, authToken, clearReconnectWindow, sharedAvatar, startReconnectWindow, syncRankResultAfterMatch, rememberKnownUserIds, clearRoomActionPending, myTier]);
 
   const createQuickRoom = useCallback(() => {
+    if (isUserBanned) return;
     if (roomActionPending) return;
     const name = playerName.trim() || getOrCreateGuestName();
     localStorage.setItem("court_nickname", name);
@@ -5895,9 +5955,10 @@ export default function App() {
     }
     beginRoomActionPending("create");
     socket.emit("create_room", payload);
-  }, [socket, playerName, sharedAvatar, sharedBanner, authToken, roomActionPending, beginRoomActionPending]);
+  }, [socket, playerName, sharedAvatar, sharedBanner, authToken, roomActionPending, beginRoomActionPending, isUserBanned]);
 
   const createRoomFromPanel = useCallback(() => {
+    if (isUserBanned) return false;
     if (roomActionPending) return false;
     const name = playerName.trim() || getOrCreateGuestName();
     if (selectedCreatePackLocked) {
@@ -5978,9 +6039,11 @@ export default function App() {
     beginRoomActionPending,
     openSubscriptionUpsell,
     canCreatePrivateRooms,
+    isUserBanned,
   ]);
 
   const joinRoom = useCallback((options?: { code?: string; password?: string }) => {
+    if (isUserBanned) return;
     if (roomActionPending) return;
     const targetCode = (options?.code ?? joinCode).trim().toUpperCase();
     if (!targetCode) return;
@@ -6008,7 +6071,7 @@ export default function App() {
     }
     beginRoomActionPending("join");
     socket.emit("join_room", payload);
-  }, [socket, joinCode, playerName, sharedAvatar, sharedBanner, authToken, roomActionPending, beginRoomActionPending]);
+  }, [socket, joinCode, playerName, sharedAvatar, sharedBanner, authToken, roomActionPending, beginRoomActionPending, isUserBanned]);
 
   const reloadMyProfile = useCallback(async () => {
     if (!authToken) return;
@@ -6315,9 +6378,10 @@ export default function App() {
   }, [joinPasswordDialogMatch, joinPasswordInput, joinRoom]);
 
   const openProfileScreen = useCallback(() => {
+    if (isUserBanned) return;
     setProfileMenuOpen(false);
     setScreen("profile");
-  }, []);
+  }, [isUserBanned]);
 
   const handlePlayerNameChange = useCallback((value: string) => {
     setProfileNicknameDraft(value.slice(0, 20));
@@ -6422,6 +6486,7 @@ export default function App() {
   ]);
 
   const logoutAccount = useCallback(() => {
+    if (isUserBanned) return;
     if (authToken) {
       authRequest("/auth/logout", {
         method: "POST",
@@ -6443,9 +6508,10 @@ export default function App() {
     localStorage.removeItem(BANNER_STORAGE_KEY);
     setProfileMenuOpen(false);
     setScreen("home");
-  }, [authToken]);
+  }, [authToken, isUserBanned]);
 
   const reconnect = useCallback(() => {
+    if (isUserBanned) return;
     if (
       !reconnectPersistent &&
       reconnectExpiresAt !== null &&
@@ -6461,6 +6527,7 @@ export default function App() {
   }, [
     attemptSessionRejoin,
     clearReconnectWindow,
+    isUserBanned,
     reconnectExpiresAt,
     reconnectPersistent,
   ]);
@@ -7222,6 +7289,33 @@ export default function App() {
       </DialogContent>
     </Dialog>
   );
+  const renderBanOverlay = () => {
+    if (!activeBan) return null;
+    return (
+      <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/80 px-4">
+        <div className="w-full max-w-xl rounded-2xl border border-red-500/35 bg-zinc-950/95 p-5 text-zinc-100 shadow-[0_30px_80px_rgba(0,0,0,0.72)]">
+          <div className="inline-flex items-center gap-2 rounded-full border border-red-400/45 bg-red-500/15 px-3 py-1 text-xs font-semibold text-red-100">
+            <Lock className="h-3.5 w-3.5" />
+            Вы заблокированы
+          </div>
+          <div className="mt-3 text-2xl font-bold">Доступ ограничен</div>
+          <div className="mt-2 text-sm text-zinc-300">
+            {activeBan.reason?.trim()
+              ? `Причина: ${activeBan.reason.trim()}`
+              : "Причина: нарушение правил проекта."}
+          </div>
+          <div className="mt-2 rounded-xl border border-zinc-800 bg-zinc-900/70 px-3 py-2 text-sm text-zinc-200">
+            {activeBan.isPermanent
+              ? "Срок: навсегда."
+              : `Осталось: ${banTimeLeftLabel ?? "00:00:00"}`}
+          </div>
+          <div className="mt-3 text-xs text-zinc-500">
+            Пока блокировка активна, действия и переходы недоступны.
+          </div>
+        </div>
+      </div>
+    );
+  };
   const renderAdminTools = () => {
     if (!canSeeAdminButton) return null;
     const currentHostId = room?.hostId ?? game?.hostId ?? null;
@@ -7524,6 +7618,7 @@ export default function App() {
                   </div>
                   )}
                   {adminPanelSection === "promos" && adminCanManagePromos && (
+                  <>
                   <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3">
                     <div className="text-xs uppercase tracking-[0.12em] text-zinc-500">Создать промокод</div>
                     <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
@@ -7721,6 +7816,7 @@ export default function App() {
                       )}
                     </div>
                   </div>
+                  </>
                   )}
                   {adminPanelSection === "staff" && adminCanModerateUsers && (
                     <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3 space-y-3">
@@ -8994,6 +9090,7 @@ export default function App() {
         {renderPublicProfileDialog()}
         {renderAdminTools()}
         {renderUpsellModal()}
+        {renderBanOverlay()}
         <ScreenTransitionLoader open={globalBlockingLoading} />
       </motion.div>
     );
@@ -10682,6 +10779,7 @@ export default function App() {
         {renderPublicProfileDialog()}
         {renderAdminTools()}
         {renderUpsellModal()}
+        {renderBanOverlay()}
         <ScreenTransitionLoader open={globalBlockingLoading} />
       </motion.div>
     );
@@ -11604,6 +11702,7 @@ export default function App() {
         </Dialog>
         {renderAdminTools()}
         {renderUpsellModal()}
+        {renderBanOverlay()}
         <ScreenTransitionLoader open={globalBlockingLoading} />
       </motion.div>
     );
@@ -12978,6 +13077,7 @@ export default function App() {
         </Dialog>
         {renderAdminTools()}
         {renderUpsellModal()}
+        {renderBanOverlay()}
         <ScreenTransitionLoader open={globalBlockingLoading} />
       </motion.div>
     );
@@ -12995,4 +13095,3 @@ export default function App() {
     </div>
   );
 }
-

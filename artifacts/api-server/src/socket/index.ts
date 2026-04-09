@@ -40,6 +40,8 @@ import {
   type CreateRoomOptions,
 } from "./roomManager.js";
 import {
+  getBanMessageForClient,
+  getEffectiveBanByUserAndIp,
   getPublicUserProfileById,
   getSubscriptionByUserId,
   getUserByToken,
@@ -572,6 +574,8 @@ export function setupSocket(httpServer: HttpServer) {
     string,
     { roomCode: string; playerId: string; sessionToken: string }
   >();
+  const socketIpById = new Map<string, string>();
+  const forcedNoRejoinDisconnect = new Set<string>();
   const createRoomInFlight = new Set<string>();
   const reconnectCleanupTimers = new Map<string, ReturnType<typeof setTimeout>>();
   const verdictRoomCloseTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -921,6 +925,16 @@ export function setupSocket(httpServer: HttpServer) {
     return String(fallback ?? "").trim();
   };
 
+  const resolveRealtimeBan = async (input: {
+    userId?: string | null;
+    socketIp?: string | null;
+  }) => {
+    return getEffectiveBanByUserAndIp({
+      userId: input.userId ?? null,
+      ip: input.socketIp ?? null,
+    });
+  };
+
   const isCreatorAdmin = async (
     authToken?: string,
     adminKey?: string,
@@ -928,8 +942,9 @@ export function setupSocket(httpServer: HttpServer) {
   ): Promise<boolean> => {
     const token = typeof authToken === "string" ? authToken.trim() : "";
     if (!token) return false;
-    const user = await getUserByToken(token);
+    const user = await getUserByToken(token, socketIp ?? null);
     if (!user) return false;
+    if (user.ban?.isBanned) return false;
     const adminLogin = String(process.env.ADMIN_PANEL_LOGIN ?? "berly").trim().toLowerCase();
     if (user.login.trim().toLowerCase() !== adminLogin) return false;
     const requiredAdminUserId = String(process.env.ADMIN_USER_ID ?? "").trim();
@@ -962,7 +977,47 @@ export function setupSocket(httpServer: HttpServer) {
     }
   }, 60_000);
 
+  const disconnectBannedSockets = async () => {
+    for (const [socketId, info] of socketToRoom.entries()) {
+      const socketRef = io.sockets.sockets.get(socketId);
+      if (!socketRef) {
+        socketIpById.delete(socketId);
+        continue;
+      }
+      const room = getRoom(info.roomCode);
+      if (!room) continue;
+      const lobbyPlayer = room.players.find((player: any) => player.id === info.playerId);
+      const gamePlayer = room.game?.players.find((player: any) => player.id === info.playerId);
+      const currentPlayer = lobbyPlayer ?? gamePlayer;
+      if (!currentPlayer) continue;
+
+      const socketIp = socketIpById.get(socketId) ?? "";
+      const effectiveBan = await resolveRealtimeBan({
+        userId: currentPlayer.userId ?? null,
+        socketIp,
+      });
+      if (!effectiveBan.isBanned) continue;
+
+      forcedNoRejoinDisconnect.add(socketId);
+      socketRef.emit("kicked", {
+        message: getBanMessageForClient(effectiveBan),
+      });
+      socketRef.disconnect(true);
+    }
+  };
+
+  setInterval(() => {
+    void disconnectBannedSockets().catch((error) => {
+      console.error("disconnectBannedSockets failed", error);
+    });
+  }, 5_000);
+
   io.on("connection", (socket) => {
+    const socketIp = resolveSocketIp(
+      socket.handshake.headers as Record<string, unknown>,
+      socket.handshake.address,
+    );
+    socketIpById.set(socket.id, socketIp);
     const emitCasePacksToSocket = async () => {
       try {
         const packs = await listCasePacks();
@@ -1025,12 +1080,20 @@ export function setupSocket(httpServer: HttpServer) {
           const sessionToken = crypto.randomUUID();
           const authUser =
             typeof authToken === "string" && authToken.trim()
-              ? await getUserByToken(authToken.trim())
+              ? await getUserByToken(authToken.trim(), socketIp)
               : null;
           if (typeof authToken === "string" && authToken.trim() && !authUser) {
             socket.emit("error", {
               message: "Сессия недействительна или аккаунт заблокирован. Войдите снова.",
             });
+            return;
+          }
+          const ban = await resolveRealtimeBan({
+            userId: authUser?.id ?? null,
+            socketIp,
+          });
+          if (ban.isBanned) {
+            socket.emit("error", { message: getBanMessageForClient(ban) });
             return;
           }
           const authPublicProfile = authUser?.id
@@ -1124,12 +1187,20 @@ export function setupSocket(httpServer: HttpServer) {
         const trimmedName = (playerName || "").trim();
         const authUser =
           typeof authToken === "string" && authToken.trim()
-            ? await getUserByToken(authToken.trim())
+            ? await getUserByToken(authToken.trim(), socketIp)
             : null;
         if (typeof authToken === "string" && authToken.trim() && !authUser) {
           socket.emit("error", {
             message: "Сессия недействительна или аккаунт заблокирован. Войдите снова.",
           });
+          return;
+        }
+        const ban = await resolveRealtimeBan({
+          userId: authUser?.id ?? null,
+          socketIp,
+        });
+        if (ban.isBanned) {
+          socket.emit("error", { message: getBanMessageForClient(ban) });
           return;
         }
         const authPublicProfile = authUser?.id
@@ -1369,45 +1440,61 @@ export function setupSocket(httpServer: HttpServer) {
       }
     });
 
-    socket.on("rejoin_room", ({ code, sessionToken, avatar, banner }: { code: string; sessionToken: string; avatar?: string | null; banner?: string | null }) => {
-      const roomCode = normalizeRoomCode(code);
-      if (!sessionToken?.trim()) {
-        socket.emit("rejoin_failed", { message: "Недействительная сессия." });
-        return;
-      }
-      const result = rejoinRoom(roomCode, sessionToken, socket.id, avatar, banner);
+    socket.on("rejoin_room", async ({ code, sessionToken, avatar, banner }: { code: string; sessionToken: string; avatar?: string | null; banner?: string | null }) => {
+      try {
+        const roomCode = normalizeRoomCode(code);
+        if (!sessionToken?.trim()) {
+          socket.emit("rejoin_failed", { message: "Недействительная сессия." });
+          return;
+        }
+        const result = rejoinRoom(roomCode, sessionToken, socket.id, avatar, banner);
 
-      if (!result) {
-        socket.emit("rejoin_failed", { message: "Комната не найдена или вас нет в ней." });
-        return;
-      }
+        if (!result) {
+          socket.emit("rejoin_failed", { message: "Комната не найдена или вас нет в ней." });
+          return;
+        }
 
-      const { room, playerId } = result;
-      clearReconnectCleanup(roomCode, playerId);
-      socketToRoom.set(socket.id, { roomCode, playerId, sessionToken });
-      socket.join(roomCode);
+        const { room, playerId } = result;
+        const currentPlayer =
+          room.players.find((player: any) => player.id === playerId) ??
+          room.game?.players.find((player: any) => player.id === playerId);
+        const ban = await resolveRealtimeBan({
+          userId: currentPlayer?.userId ?? null,
+          socketIp,
+        });
+        if (ban.isBanned) {
+          socket.emit("rejoin_failed", { message: getBanMessageForClient(ban) });
+          return;
+        }
+        clearReconnectCleanup(roomCode, playerId);
+        socketToRoom.set(socket.id, { roomCode, playerId, sessionToken });
+        socket.join(roomCode);
 
-      socket.emit("room_joined", {
-        playerId,
-        sessionToken,
-        state: getRoomState(room, playerId)
-      });
-      if (room.game) {
-        emitLawyerChatStateToSocket(socket.id, roomCode, playerId);
-      }
-
-      if (room.game) {
-        socket.to(roomCode).emit("player_rejoined", {
+        socket.emit("room_joined", {
           playerId,
-          playerName: result.playerName.trim()
+          sessionToken,
+          state: getRoomState(room, playerId)
         });
-        io.to(roomCode).emit("game_players_updated", {
-          players: mapGamePlayers(room.game.players),
-        });
-      } else {
-        io.to(roomCode).emit("room_updated", buildRoomUpdatePayload(room));
+        if (room.game) {
+          emitLawyerChatStateToSocket(socket.id, roomCode, playerId);
+        }
+
+        if (room.game) {
+          socket.to(roomCode).emit("player_rejoined", {
+            playerId,
+            playerName: result.playerName.trim()
+          });
+          io.to(roomCode).emit("game_players_updated", {
+            players: mapGamePlayers(room.game.players),
+          });
+        } else {
+          io.to(roomCode).emit("room_updated", buildRoomUpdatePayload(room));
+        }
+        emitPublicMatches(io);
+      } catch (error) {
+        console.error("rejoin_room failed", error);
+        socket.emit("rejoin_failed", { message: "Не удалось восстановить подключение." });
       }
-      emitPublicMatches(io);
     });
 
     socket.on("start_game", async ({ code, sessionToken }: { code: string; sessionToken?: string }) => {
@@ -1429,6 +1516,16 @@ export function setupSocket(httpServer: HttpServer) {
         return;
       }
       const actor = room.players.find((player: any) => player.id === actorId);
+      const actorBan = await resolveRealtimeBan({
+        userId: actor?.userId ?? null,
+        socketIp,
+      });
+      if (actorBan.isBanned) {
+        forcedNoRejoinDisconnect.add(socket.id);
+        socket.emit("kicked", { message: getBanMessageForClient(actorBan) });
+        socket.disconnect(true);
+        return;
+      }
       const actorTier = actor?.userId
         ? (await getSubscriptionByUserId(actor.userId)).tier
         : "free";
@@ -2881,7 +2978,9 @@ export function setupSocket(httpServer: HttpServer) {
     });
 
     socket.on("disconnect", () => {
-      handleLeave(socket.id, true);
+      const preserveForRejoin = !forcedNoRejoinDisconnect.delete(socket.id);
+      handleLeave(socket.id, preserveForRejoin);
+      socketIpById.delete(socket.id);
     });
   });
 
