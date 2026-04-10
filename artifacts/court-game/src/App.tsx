@@ -1684,8 +1684,8 @@ function HelpCenter({
 
   return (
     <div className="relative space-y-4">
-      <div className="pointer-events-none absolute -top-8 right-8 h-24 w-24 rounded-full bg-red-500/10 blur-2xl" />
-      <div className="pointer-events-none absolute bottom-8 left-8 h-24 w-24 rounded-full bg-red-900/12 blur-2xl" />
+      <div className="pointer-events-none absolute -top-10 right-12 h-28 w-28 rounded-full bg-red-600/14 blur-3xl" />
+      <div className="pointer-events-none absolute bottom-8 left-10 h-28 w-28 rounded-full bg-red-900/18 blur-3xl" />
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
         <Input
@@ -1719,9 +1719,9 @@ function HelpCenter({
               transition={{ duration: 0.24, delay: idx * 0.045, ease: "easeOut" }}
             >
               <AccordionItem value={group.category} className="border-0">
-                <Card className="rounded-2xl border-zinc-800 bg-[linear-gradient(145deg,rgba(24,24,27,0.92),rgba(17,17,23,0.92))] text-zinc-100">
+                <Card className="rounded-2xl border-zinc-800 bg-[linear-gradient(145deg,rgba(26,16,18,0.94),rgba(15,15,20,0.96))] text-zinc-100 shadow-[0_10px_30px_rgba(0,0,0,0.35)]">
                 <CardHeader className="p-0">
-                  <AccordionTrigger className="relative h-16 px-5 py-0 text-zinc-100 hover:no-underline !justify-center text-center [&>svg]:absolute [&>svg]:right-5">
+                  <AccordionTrigger className="relative h-16 px-5 py-0 text-zinc-100 hover:no-underline !justify-between text-left [&>svg]:right-5">
                     <span
                       className={`flex items-center gap-2 leading-none ${
                         compact ? "text-base" : "text-lg"
@@ -10319,7 +10319,7 @@ export default function App() {
               <DialogContent
                 ref={createMatchDialogRef}
                 overlayClassName="bg-black/88"
-                className={`z-[180] !left-1/2 !top-1/2 !-translate-x-1/2 !-translate-y-1/2 w-[calc(100vw-1rem)] sm:w-[calc(100vw-2rem)] ${createPackCatalogOpen ? "max-w-[700px]" : "max-w-[780px]"} max-h-[90vh] overflow-y-auto border-zinc-800 bg-zinc-950 text-zinc-100 p-4 sm:p-6 ${HIDE_SCROLLBAR_CLASS} [scrollbar-width:thin] [scrollbar-color:rgba(82,82,91,0.35)_transparent] [&::-webkit-scrollbar]:w-[4px] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-600/45 [&::-webkit-scrollbar-thumb:hover]:bg-zinc-500/60 [&>button]:h-12 [&>button]:w-12 [&>button>svg]:h-7 [&>button>svg]:w-7 [&>button]:top-2 [&>button]:right-2`}
+                className={`z-[180] !left-1/2 !top-1/2 !-translate-x-1/2 !-translate-y-1/2 w-[calc(100vw-1rem)] sm:w-[calc(100vw-2rem)] ${createPackCatalogOpen ? "max-w-[770px]" : "max-w-[780px]"} max-h-[90vh] overflow-y-auto border-zinc-800 bg-zinc-950 text-zinc-100 p-4 sm:p-6 ${HIDE_SCROLLBAR_CLASS} [scrollbar-width:thin] [scrollbar-color:rgba(82,82,91,0.35)_transparent] [&::-webkit-scrollbar]:w-[4px] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-600/45 [&::-webkit-scrollbar-thumb:hover]:bg-zinc-500/60 [&>button]:h-12 [&>button]:w-12 [&>button>svg]:h-7 [&>button>svg]:w-7 [&>button]:top-2 [&>button]:right-2`}
               >
                 {upsellModalOpen && createMatchDialogOpen && (
                   <div className="pointer-events-none absolute inset-0 z-20 rounded-2xl bg-black/45" />
@@ -10345,11 +10345,16 @@ export default function App() {
                       </Button>
                       <button
                         type="button"
-                        disabled
-                        aria-disabled="true"
-                        className="h-11 min-w-[132px] rounded-2xl bg-red-600 px-5 text-base font-semibold text-white opacity-95 cursor-not-allowed"
+                        onClick={() =>
+                          openSubscriptionUpsell(
+                            "canCreatePacks",
+                            "Создание паков доступно только в подписке «Арбитр».",
+                          )
+                        }
+                        className="inline-flex h-11 min-w-[150px] items-center justify-center gap-2 rounded-2xl border border-zinc-700 bg-zinc-900 px-5 text-base font-semibold text-zinc-300 transition-colors hover:border-zinc-600 hover:bg-zinc-800 hover:text-zinc-100"
                       >
-                        Создать пак
+                        <Lock className="h-4 w-4" />
+                        Создать пак • Скоро
                       </button>
                     </div>
                     <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
@@ -11100,12 +11105,12 @@ export default function App() {
             transition={{ duration: 0.28, ease: "easeOut" }}
             className="relative max-w-7xl mx-auto w-full"
           >
-            <div className="pointer-events-none absolute -left-6 top-10 h-36 w-36 rounded-full bg-red-600/10 blur-3xl" />
-            <div className="pointer-events-none absolute right-6 bottom-10 h-36 w-36 rounded-full bg-red-900/12 blur-3xl" />
-            <Card className="relative rounded-[28px] border-zinc-800 bg-[linear-gradient(140deg,rgba(23,23,30,0.96),rgba(15,15,22,0.96))] text-zinc-100 shadow-[0_20px_60px_rgba(0,0,0,0.45)]">
+            <div className="pointer-events-none absolute -left-10 top-8 h-44 w-44 rounded-full bg-red-600/12 blur-3xl" />
+            <div className="pointer-events-none absolute right-2 bottom-10 h-44 w-44 rounded-full bg-red-900/16 blur-3xl" />
+            <Card className="relative rounded-[28px] border-zinc-800 bg-[linear-gradient(145deg,rgba(26,15,18,0.96),rgba(12,12,18,0.98))] text-zinc-100 shadow-[0_24px_64px_rgba(0,0,0,0.5)]">
               <CardContent className="p-6 md:p-8 lg:p-10">
-                <div className="mb-5 rounded-2xl border border-zinc-800 bg-gradient-to-r from-zinc-900 via-zinc-900/80 to-zinc-900 px-5 py-4">
-                  <div className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Справка CourtGame</div>
+                <div className="mb-5 rounded-2xl border border-red-500/25 bg-[linear-gradient(120deg,rgba(127,29,29,0.22),rgba(24,24,27,0.88))] px-5 py-4">
+                  <div className="text-[11px] uppercase tracking-[0.2em] text-red-200/70">Справка CourtGame</div>
                   <div className="mt-1 text-lg font-semibold text-zinc-100">Быстрые ответы по ролям, правилам и механикам</div>
                 </div>
                 <HelpCenter
