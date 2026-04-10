@@ -3251,7 +3251,7 @@ export default function App() {
     "home",
   );
   const [homeTab, setHomeTab] = useState<HomeTab>("play");
-  const [hasUnseenDevlog, setHasUnseenDevlog] = useState(() => {
+  const [, setHasUnseenDevlog] = useState(() => {
     try {
       return localStorage.getItem(DEVLOG_SEEN_STORAGE_KEY) !== CURRENT_VERSION;
     } catch {
@@ -8490,7 +8490,7 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="relative z-10 hidden w-full md:flex md:items-end md:justify-between md:gap-4">
+                  <div className="relative z-10 hidden w-full md:flex md:items-center md:justify-between md:gap-4">
                     <div className="flex min-w-0 items-center gap-4 text-left">
                       <div
                         className="relative cursor-pointer group/avatar"
@@ -9812,14 +9812,7 @@ export default function App() {
                         className={homeTab === "development" ? "h-[52px] rounded-xl bg-red-600 text-white hover:bg-red-500 border-0" : "h-[52px] rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"}
                       >
                         <Wrench className="w-4 h-4 mr-2" />
-                        <span className="relative inline-flex items-center">
-                          {hasUnseenDevlog && (
-                            <span className="pointer-events-none absolute -top-3 left-1/2 -translate-x-1/2 rounded-full border border-red-400/45 bg-red-600 px-1.5 py-0 text-[10px] font-semibold leading-none text-white">
-                              1
-                            </span>
-                          )}
-                          Разработка
-                        </span>
+                        Разработка
                       </Button>
                       <Button
                         variant={homeTab === "help" ? "default" : "outline"}
@@ -9901,14 +9894,7 @@ export default function App() {
                     }`}
                   >
                     <Wrench className="w-4 h-4" />
-                    <span className="relative inline-flex items-center">
-                      {hasUnseenDevlog && (
-                        <span className="pointer-events-none absolute -top-3 left-1/2 -translate-x-1/2 rounded-full border border-red-400/45 bg-red-600 px-1.5 py-0 text-[10px] font-semibold leading-none text-white">
-                          1
-                        </span>
-                      )}
-                      Разработка
-                    </span>
+                    Разработка
                   </Button>
                   <Button
                     variant="ghost"
@@ -13826,5 +13812,6 @@ export default function App() {
     </div>
   );
 }
+
 
 
