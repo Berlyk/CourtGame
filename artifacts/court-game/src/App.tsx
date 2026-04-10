@@ -9562,31 +9562,34 @@ export default function App() {
           )}
         </AnimatePresence>
 
-        <div className="max-w-6xl mx-auto mb-8 flex justify-center">
-          <div className="relative w-full min-w-0">
-            <div className="md:hidden -mx-4 mb-3 w-[calc(100%+2rem)] border-b border-zinc-800 bg-zinc-950/95 px-4 py-3 shadow-[0_8px_28px_rgba(0,0,0,0.45)]">
-              <div className="flex items-center justify-between gap-3">
-                <div className="inline-flex min-w-0 items-center gap-2.5">
-                  <img
-                    src="/favicon.ico"
-                    alt="CourtGame"
-                    className="h-8 w-8 rounded-md border border-zinc-700/90 object-cover shadow-[0_0_14px_rgba(239,68,68,0.22)]"
-                  />
-                  <div className="truncate text-[15px] font-semibold tracking-wide text-zinc-100">
-                    CourtGame
-                  </div>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setMobileMenuOpen((prev) => !prev)}
-                  className="h-11 w-11 p-0 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
-                  aria-label={mobileMenuOpen ? "Закрыть меню" : "Открыть меню"}
-                >
-                  {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-                </Button>
+        <div className="md:hidden fixed inset-x-0 top-0 z-[230] border-b border-zinc-800 bg-zinc-950/96 shadow-[0_10px_34px_rgba(0,0,0,0.55)]">
+          <div className="mx-auto flex h-16 w-full max-w-none items-center justify-between px-4">
+            <div className="inline-flex min-w-0 items-center gap-2.5">
+              <img
+                src="/favicon.png"
+                alt="CourtGame"
+                className="h-8 w-8 rounded-md object-cover shadow-[0_0_14px_rgba(239,68,68,0.24)]"
+              />
+              <div className="truncate text-[17px] font-semibold tracking-wide text-zinc-100">
+                CourtGame
               </div>
             </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setMobileMenuOpen((prev) => !prev)}
+              className="h-11 w-11 p-0 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+              aria-label={mobileMenuOpen ? "Закрыть меню" : "Открыть меню"}
+            >
+              {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </Button>
+          </div>
+        </div>
+
+        <div className="md:hidden h-16" />
+
+        <div className="max-w-6xl mx-auto mb-8 flex justify-center">
+          <div className="relative w-full min-w-0">
 
             <AnimatePresence>
               {mobileMenuOpen && (
@@ -9601,14 +9604,14 @@ export default function App() {
                     className="md:hidden fixed inset-0 z-[210] bg-black/80 backdrop-blur-[2px]"
                   />
                   <motion.div
-                    initial={{ opacity: 0, y: -10, scale: 0.985 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: -10, scale: 0.985 }}
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
                     transition={{ duration: 0.22 }}
-                    className="md:hidden fixed inset-0 z-[220] flex items-start justify-center px-4 pt-20 pb-4"
+                    className="md:hidden fixed inset-0 z-[240] flex items-start justify-center px-5 pt-24 pb-6"
                   >
-                    <div className="w-full max-h-full overflow-y-auto rounded-3xl border border-zinc-800 bg-zinc-950/96 p-5 shadow-[0_24px_60px_rgba(0,0,0,0.72)]">
-                    <div className="mb-5 flex justify-center">
+                    <div className="w-full max-h-full overflow-y-auto rounded-3xl border border-zinc-800 bg-zinc-950/98 p-6 shadow-[0_24px_60px_rgba(0,0,0,0.72)]">
+                    <div className="mb-6 flex justify-center">
                       {isAuthenticated ? (
                         <Button
                           variant="outline"
