@@ -12564,7 +12564,7 @@ export default function App() {
                             game.finished
                           }
                         >
-                          След. >
+                          {"След. >"}
                         </Button>
                       </>
                     )}
