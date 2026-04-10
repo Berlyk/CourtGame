@@ -9564,19 +9564,23 @@ export default function App() {
 
         <div className="max-w-6xl mx-auto mb-8 flex justify-center">
           <div className="relative w-full min-w-0">
-            <div className="md:hidden w-full rounded-2xl border border-zinc-800 bg-zinc-900/90 px-3 py-2.5 shadow-sm shadow-black/30">
+            <div className="md:hidden -mx-4 mb-3 w-[calc(100%+2rem)] border-b border-zinc-800 bg-zinc-950/95 px-4 py-3 shadow-[0_8px_28px_rgba(0,0,0,0.45)]">
               <div className="flex items-center justify-between gap-3">
-                <div className="inline-flex items-center gap-2">
-                  <div className="h-7 w-7 rounded-lg border border-red-500/45 bg-red-600/20 flex items-center justify-center text-red-200 text-[11px] font-bold">
-                    CG
+                <div className="inline-flex min-w-0 items-center gap-2.5">
+                  <img
+                    src="/favicon.ico"
+                    alt="CourtGame"
+                    className="h-8 w-8 rounded-md border border-zinc-700/90 object-cover shadow-[0_0_14px_rgba(239,68,68,0.22)]"
+                  />
+                  <div className="truncate text-[15px] font-semibold tracking-wide text-zinc-100">
+                    CourtGame
                   </div>
-                  <div className="text-sm font-semibold text-zinc-100 tracking-wide">CourtGame</div>
                 </div>
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => setMobileMenuOpen((prev) => !prev)}
-                  className="h-10 w-10 p-0 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                  className="h-11 w-11 p-0 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
                   aria-label={mobileMenuOpen ? "Закрыть меню" : "Открыть меню"}
                 >
                   {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -9597,13 +9601,14 @@ export default function App() {
                     className="md:hidden fixed inset-0 z-[210] bg-black/80 backdrop-blur-[2px]"
                   />
                   <motion.div
-                    initial={{ opacity: 0, y: -8, scale: 0.98 }}
+                    initial={{ opacity: 0, y: -10, scale: 0.985 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: -8, scale: 0.98 }}
-                    transition={{ duration: 0.2 }}
-                    className="md:hidden fixed left-3 right-3 top-20 z-[220] rounded-2xl border border-zinc-800 bg-zinc-900/96 p-4 shadow-[0_20px_50px_rgba(0,0,0,0.7)]"
+                    exit={{ opacity: 0, y: -10, scale: 0.985 }}
+                    transition={{ duration: 0.22 }}
+                    className="md:hidden fixed inset-0 z-[220] flex items-start justify-center px-4 pt-20 pb-4"
                   >
-                    <div className="mb-4 flex justify-center">
+                    <div className="w-full max-h-full overflow-y-auto rounded-3xl border border-zinc-800 bg-zinc-950/96 p-5 shadow-[0_24px_60px_rgba(0,0,0,0.72)]">
+                    <div className="mb-5 flex justify-center">
                       {isAuthenticated ? (
                         <Button
                           variant="outline"
@@ -9633,7 +9638,7 @@ export default function App() {
                         </Button>
                       )}
                     </div>
-                    <div className="grid gap-2.5">
+                    <div className="grid gap-3">
                       <Button
                         variant={homeTab === "play" ? "default" : "outline"}
                         onClick={() => {
@@ -9683,6 +9688,7 @@ export default function App() {
                         <CircleHelp className="w-4 h-4 mr-2" />
                         Помощь
                       </Button>
+                    </div>
                     </div>
                   </motion.div>
                 </>
