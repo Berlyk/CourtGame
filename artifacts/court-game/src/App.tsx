@@ -8400,31 +8400,31 @@ export default function App() {
                         </div>
                         <div className="min-w-0 flex-1 pr-1">
                           <div className="flex flex-wrap items-center gap-1.5">
-                            <div className="max-w-full truncate text-[20px] font-bold leading-none">
+                            <div className="max-w-full truncate text-[18px] font-bold leading-none">
                               {playerName || "Игрок"}
                             </div>
                             {selectedBadgeKey && (
                               <span
-                                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs ${
+                                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] ${
                                   getBadgeTheme(selectedBadgeKey).chip
                                 }`}
                               >
                                 <BadgeGlyph
                                   badgeKey={selectedBadgeKey}
-                                  className={`h-3.5 w-3.5 ${getBadgeTheme(selectedBadgeKey).iconOnly ?? "text-zinc-300"}`}
+                                  className={`h-3 w-3 ${getBadgeTheme(selectedBadgeKey).iconOnly ?? "text-zinc-300"}`}
                                 />
                                 {getBadgeTitleByKey(selectedBadgeKey, badges)}
                               </span>
                             )}
                           </div>
-                          <div className="mt-1.5 flex flex-wrap gap-1.5 text-[10px]">
-                            <span className="inline-flex h-6 items-center rounded-full border border-zinc-600 bg-black/35 px-2 whitespace-nowrap">
+                          <div className="mt-1.5 flex flex-wrap gap-1 text-[9px]">
+                            <span className="inline-flex h-5 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap">
                               Возраст: {ageLabel}
                             </span>
-                            <span className="inline-flex h-6 items-center rounded-full border border-zinc-600 bg-black/35 px-2 whitespace-nowrap">
+                            <span className="inline-flex h-5 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap">
                               Пол: {genderLabel}
                             </span>
-                            <span className="inline-flex h-6 items-center rounded-full border border-zinc-600 bg-black/35 px-2 whitespace-nowrap">
+                            <span className="inline-flex h-5 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap">
                               С нами с: {registeredAtLabel}
                             </span>
                           </div>
