@@ -9422,7 +9422,7 @@ export default function App() {
                       />
                       {rankResultToast.fromTitle}
                     </span>
-                    <span className="text-zinc-500">></span>
+                    <span className="text-zinc-500">{">"}</span>
                     <motion.span
                       animate={
                         rankResultToast.rankUp
@@ -11034,7 +11034,7 @@ export default function App() {
                     onClick={() => setDevlogPage((prev) => Math.max(1, prev - 1))}
                     disabled={currentDevlogPage <= 1}
                   >
-                    < Пред.
+                    {"< Пред."}
                   </Button>
                   <div className="text-sm text-zinc-400 min-w-[120px] text-center">
                     Страница {currentDevlogPage} из {devlogTotalPages}
