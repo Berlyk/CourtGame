@@ -520,6 +520,7 @@ function getSubscriptionFeatureIcon(feature: string): LucideIcon {
 
 function getSubscriptionDurationLabel(duration: SubscriptionDuration | string): string {
   if (duration === "1_day") return "1 день";
+  if (duration === "3_days") return "3 дня";
   if (duration === "7_days") return "7 дней";
   if (duration === "1_month") return "1 месяц";
   if (duration === "1_year") return "1 год";
@@ -1708,7 +1709,7 @@ function HelpCenter({
               <AccordionItem value={group.category} className="border-0">
                 <Card className="rounded-2xl border-zinc-800 bg-zinc-900/80 text-zinc-100">
                 <CardHeader className="p-0">
-                  <AccordionTrigger className="h-16 px-5 py-0 text-zinc-100 hover:no-underline">
+                  <AccordionTrigger className="relative h-16 px-5 py-0 text-zinc-100 hover:no-underline justify-center [&>svg]:absolute [&>svg]:right-5">
                     <span
                       className={`flex items-center gap-2 leading-none ${
                         compact ? "text-base" : "text-lg"
@@ -3732,13 +3733,26 @@ export default function App() {
         token: authToken,
         body: { code },
       });
+      const rawRewards = Array.isArray(payload.rewards) ? payload.rewards : [];
+      const subscriptionReward = rawRewards.find((item) => item.type === "subscription");
+      const normalizedRewards = rawRewards.filter((item) => {
+        if (item.type !== "badge") return true;
+        if (!subscriptionReward) return true;
+        const rewardLabel = item.label.toLowerCase();
+        const subscriptionLabel = subscriptionReward.label.toLowerCase();
+        const isTierBadgeDuplicate =
+          (rewardLabel.includes("стажер") && subscriptionLabel.includes("стажер")) ||
+          (rewardLabel.includes("практик") && subscriptionLabel.includes("практик")) ||
+          (rewardLabel.includes("арбитр") && subscriptionLabel.includes("арбитр"));
+        return !isTierBadgeDuplicate;
+      });
       setPromoCodeInput("");
       setPromoRewardsResult({
         text: payload.message || "Промокод активирован.",
-        rewards: Array.isArray(payload.rewards) ? payload.rewards : [],
+        rewards: normalizedRewards,
       });
-      setPromoDialogOpen(false);
       setPromoRewardsDialogOpen(true);
+      setPromoDialogOpen(false);
       try {
         const profilePayload = await authRequest<{ profile: PublicUserProfile }>("/auth/profile", {
           token: authToken,
@@ -7471,23 +7485,23 @@ export default function App() {
         : null;
     return (
       <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/80 px-4">
-        <div className="w-full max-w-xl rounded-2xl border border-red-500/45 bg-[radial-gradient(120%_130%_at_50%_0%,rgba(239,68,68,0.24),transparent_58%),linear-gradient(165deg,rgba(15,10,12,0.98),rgba(10,10,12,0.98))] p-5 text-zinc-100 shadow-[0_34px_100px_rgba(0,0,0,0.76)]">
+        <div className="w-full max-w-2xl rounded-2xl border border-red-500/45 bg-[radial-gradient(120%_130%_at_50%_0%,rgba(239,68,68,0.24),transparent_58%),linear-gradient(165deg,rgba(15,10,12,0.98),rgba(10,10,12,0.98))] p-5 text-zinc-100 shadow-[0_34px_100px_rgba(0,0,0,0.76)]">
           <div className="flex justify-center">
-            <div className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-red-400/60 bg-red-600/15 text-red-100">
+            <div className="mx-auto inline-flex h-11 w-11 items-center justify-center rounded-full border border-red-400/55 bg-red-600/12 text-red-100">
               <Lock className="h-5 w-5" />
             </div>
           </div>
-          <div className="mt-4 text-center text-4xl font-black tracking-[0.08em] text-red-100">
+          <div className="mt-3 text-center text-[46px] font-black tracking-[0.08em] text-red-100">
             ВЫ ЗАБЛОКИРОВАНЫ
           </div>
-          <div className="mt-4 text-center text-lg text-zinc-200">
+          <div className="mt-3 text-center text-xl text-zinc-200">
             {activeBan.reason?.trim() ? activeBan.reason.trim() : "Нарушение правил проекта."}
           </div>
           <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900/70 p-2">
             {activeBan.isPermanent ? (
               <div className="text-center text-xl font-bold text-red-200">Навсегда</div>
             ) : (
-              <div className="mx-auto grid max-w-[460px] grid-cols-4 gap-1.5">
+              <div className="mx-auto grid max-w-[420px] grid-cols-4 gap-2">
                 {[
                   { key: "d", value: countdown?.days ?? 0, label: "дней" },
                   { key: "h", value: countdown?.hours ?? 0, label: "часов" },
@@ -7496,10 +7510,10 @@ export default function App() {
                 ].map((item) => (
                   <div
                     key={`ban-timer-${item.key}`}
-                    className="rounded-lg border border-zinc-700 bg-zinc-950/90 px-1.5 py-1 text-center"
+                    className="rounded-lg border border-zinc-700 bg-zinc-950/92 px-2 py-1 text-center"
                   >
-                    <div className="text-base font-bold leading-none text-zinc-100">{String(item.value).padStart(2, "0")}</div>
-                    <div className="mt-0.5 text-[9px] uppercase tracking-[0.08em] text-zinc-500">{item.label}</div>
+                    <div className="text-lg font-bold leading-none text-zinc-100">{String(item.value).padStart(2, "0")}</div>
+                    <div className="mt-1 text-[9px] uppercase tracking-[0.12em] text-zinc-500">{item.label}</div>
                   </div>
                 ))}
               </div>
@@ -7743,7 +7757,7 @@ export default function App() {
                         onChange={(event) => setAdminSubscriptionDuration(event.target.value as SubscriptionDuration)}
                         className="h-10 appearance-none rounded-xl border border-zinc-700 bg-zinc-950 px-3 pr-8 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-red-500/40"
                       >
-                        {(["1_day", "7_days", "1_month", "1_year", "forever"] as SubscriptionDuration[]).map((duration) => (
+                        {(["1_day", "3_days", "7_days", "1_month", "1_year", "forever"] as SubscriptionDuration[]).map((duration) => (
                           <option key={`admin-sub-duration-${duration}`} value={duration} className="bg-zinc-950 text-zinc-100">
                             {getSubscriptionDurationLabel(duration)}
                           </option>
@@ -7876,7 +7890,7 @@ export default function App() {
                         disabled={adminPromoKind !== "subscription"}
                         className="h-10 appearance-none rounded-xl border border-zinc-700 bg-zinc-950 px-3 pr-8 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-red-500/40 disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        {(["1_day", "7_days", "1_month", "1_year", "forever"] as SubscriptionDuration[]).map((duration) => (
+                        {(["1_day", "3_days", "7_days", "1_month", "1_year", "forever"] as SubscriptionDuration[]).map((duration) => (
                           <option key={`admin-duration-${duration}`} value={duration} className="bg-zinc-950 text-zinc-100">
                             {getSubscriptionDurationLabel(duration)}
                           </option>
@@ -8345,7 +8359,7 @@ export default function App() {
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/45 to-black/15" />
                   <div className="absolute inset-0 opacity-0 group-hover/banner:opacity-100 transition-opacity bg-black/15" />
                   {profileBannerLocked && (
-                    <div className="pointer-events-none absolute right-6 top-4 inline-flex items-center gap-1.5 rounded-full border border-zinc-600/80 bg-zinc-950/90 px-2.5 py-1 text-[11px] font-medium text-zinc-200">
+                    <div className="pointer-events-none absolute right-6 top-5 inline-flex h-9 items-center gap-1.5 rounded-full border border-zinc-600/80 bg-zinc-950/90 px-3 text-[11px] font-medium text-zinc-200">
                       <Lock className="h-3.5 w-3.5" />
                       <span>Баннер</span>
                     </div>
@@ -9885,14 +9899,10 @@ export default function App() {
                               <button
                                 type="button"
                                 className="text-red-300 underline underline-offset-2 hover:text-red-200"
-                                onClick={() => {
-                                  setLegalDialogType("terms");
-                                  setLegalDialogOpen(true);
-                                }}
+                                onClick={() => setAuthView("rules")}
                               >
                                 пользовательское соглашение
                               </button>
-                              .
                             </span>
                           </label>
                           <Button
@@ -10960,7 +10970,7 @@ export default function App() {
                           className={`flex items-center gap-2.5 rounded-xl border px-3 py-2 text-sm ${
                             reward.type === "subscription"
                               ? "border-red-400/40 bg-red-600/12 text-red-100"
-                              : "border-amber-300/45 bg-amber-500/12 text-amber-100"
+                              : "border-zinc-600/60 bg-zinc-800/35 text-zinc-100"
                           }`}
                         >
                           {reward.type === "subscription" ? (
@@ -10968,20 +10978,29 @@ export default function App() {
                           ) : (
                             <BadgeCheck className="h-4 w-4 shrink-0" />
                           )}
-                          <span className="font-medium">{reward.label}</span>
+                          {reward.type === "subscription" && /\(([^)]+)\)/.test(reward.label) ? (
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-semibold">{reward.label.replace(/\s*\([^)]+\)\s*$/, "")}</span>
+                              <span className="rounded-full border border-red-400/45 bg-red-950/45 px-2 py-0.5 text-[11px] text-red-200">
+                                Срок: {reward.label.match(/\(([^)]+)\)/)?.[1] ?? ""}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="font-medium">{reward.label}</span>
+                          )}
                         </motion.div>
                       ))}
                     </div>
                   </div>
                   <Button
                     type="button"
-                    className="h-12 w-full rounded-xl bg-[linear-gradient(135deg,rgba(239,68,68,1),rgba(220,38,38,1))] text-white shadow-[0_12px_24px_rgba(239,68,68,0.3)] hover:brightness-110"
+                    className="h-12 w-full rounded-xl bg-[linear-gradient(135deg,rgba(239,68,68,1),rgba(220,38,38,1))] text-lg font-semibold text-white shadow-[0_12px_24px_rgba(239,68,68,0.3)] hover:brightness-110"
                     onClick={() => {
                       setPromoRewardsDialogOpen(false);
                       setPromoRewardsResult(null);
                     }}
                   >
-                    Отлично
+                    Забрать
                   </Button>
                 </div>
               </DialogContent>

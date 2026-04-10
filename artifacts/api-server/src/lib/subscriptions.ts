@@ -1,6 +1,7 @@
 export type SubscriptionTier = "free" | "trainee" | "practitioner" | "arbiter";
 export type SubscriptionDuration =
   | "1_day"
+  | "3_days"
   | "7_days"
   | "1_month"
   | "1_year"
@@ -110,6 +111,7 @@ const LABEL_BY_TIER: Record<SubscriptionTier, string> = {
 
 const DURATION_SET = new Set<SubscriptionDuration>([
   "1_day",
+  "3_days",
   "7_days",
   "1_month",
   "1_year",
@@ -223,6 +225,8 @@ export function getDurationMs(duration: SubscriptionDuration): number | null {
   switch (duration) {
     case "1_day":
       return DAY_MS;
+    case "3_days":
+      return 3 * DAY_MS;
     case "7_days":
       return 7 * DAY_MS;
     case "1_month":
@@ -267,4 +271,3 @@ export function canAccessCasePack(tier: SubscriptionTier, pack: PackInput): bool
   const requiredTier = getRequiredTierForCasePack(pack);
   return tierHasAccess(tier, requiredTier);
 }
-

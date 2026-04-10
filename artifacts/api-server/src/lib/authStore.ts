@@ -2176,6 +2176,8 @@ function promoDurationLabel(duration: SubscriptionDuration): string {
   switch (duration) {
     case "1_day":
       return "1 день";
+    case "3_days":
+      return "3 дня";
     case "7_days":
       return "7 дней";
     case "1_month":

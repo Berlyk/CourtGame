@@ -1,6 +1,7 @@
 export type SubscriptionTier = "free" | "trainee" | "practitioner" | "arbiter";
 export type SubscriptionDuration =
   | "1_day"
+  | "3_days"
   | "7_days"
   | "1_month"
   | "1_year"
@@ -176,6 +177,7 @@ function toTimestamp(value: unknown): number | null {
 function normalizeDuration(value: unknown): SubscriptionDuration {
   if (
     value === "1_day" ||
+    value === "3_days" ||
     value === "7_days" ||
     value === "1_month" ||
     value === "1_year" ||
@@ -277,4 +279,3 @@ export function canAccessPack(
     SUBSCRIPTION_TIER_ORDER.indexOf(requiredTier)
   );
 }
-
