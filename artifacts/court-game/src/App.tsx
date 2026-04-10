@@ -8361,7 +8361,7 @@ export default function App() {
 
               <div className="rounded-3xl border border-zinc-800 bg-zinc-950/70 overflow-hidden">
                 <div
-                  className="relative min-h-[250px] md:min-h-[122px] p-3.5 md:p-6 flex items-start md:items-end cursor-pointer group/banner"
+                  className="relative h-[176px] md:min-h-[122px] p-3.5 md:p-6 flex items-start md:items-end cursor-pointer group/banner"
                   style={getBannerStyle(profileBannerDraft, profileAvatarDraft, playerName || "Игрок")}
                   onClick={() => {
                     if (profileBannerLocked) {
@@ -8384,8 +8384,8 @@ export default function App() {
                   )}
 
                   <div className="relative z-10 w-full md:hidden">
-                    <div className="pt-9">
-                      <div className="flex items-center gap-3">
+                    <div className="pt-7 h-full flex flex-col justify-between">
+                      <div className="flex items-center gap-2.5">
                         <div
                           className="relative shrink-0 cursor-pointer group/avatar"
                           onClick={(e) => {
@@ -8393,14 +8393,14 @@ export default function App() {
                             avatarInputRef.current?.click();
                           }}
                         >
-                          <Avatar src={profileAvatarDraft} name={playerName || "?"} size={84} />
+                          <Avatar src={profileAvatarDraft} name={playerName || "?"} size={72} />
                           <div className="absolute inset-0 rounded-full bg-black/55 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity">
-                            <Camera className="w-5 h-5 text-white" />
+                            <Camera className="w-4 h-4 text-white" />
                           </div>
                         </div>
                         <div className="min-w-0 flex-1 pr-1">
                           <div className="flex flex-wrap items-center gap-1.5">
-                            <div className="max-w-full truncate text-[38px] font-bold leading-none">
+                            <div className="max-w-full truncate text-[20px] font-bold leading-none">
                               {playerName || "Игрок"}
                             </div>
                             {selectedBadgeKey && (
@@ -8417,14 +8417,14 @@ export default function App() {
                               </span>
                             )}
                           </div>
-                          <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
-                            <span className="inline-flex h-7 items-center rounded-full border border-zinc-600 bg-black/35 px-2.5 whitespace-nowrap">
+                          <div className="mt-1.5 flex flex-wrap gap-1.5 text-[10px]">
+                            <span className="inline-flex h-6 items-center rounded-full border border-zinc-600 bg-black/35 px-2 whitespace-nowrap">
                               Возраст: {ageLabel}
                             </span>
-                            <span className="inline-flex h-7 items-center rounded-full border border-zinc-600 bg-black/35 px-2.5 whitespace-nowrap">
+                            <span className="inline-flex h-6 items-center rounded-full border border-zinc-600 bg-black/35 px-2 whitespace-nowrap">
                               Пол: {genderLabel}
                             </span>
-                            <span className="inline-flex h-7 items-center rounded-full border border-zinc-600 bg-black/35 px-2.5 whitespace-nowrap">
+                            <span className="inline-flex h-6 items-center rounded-full border border-zinc-600 bg-black/35 px-2 whitespace-nowrap">
                               С нами с: {registeredAtLabel}
                             </span>
                           </div>
@@ -8433,7 +8433,7 @@ export default function App() {
                       <div className="mt-2">
                         <Button
                           variant="outline"
-                          className="h-9 w-full rounded-xl border-zinc-500/70 bg-black/30 text-zinc-100 hover:bg-black/50 hover:text-zinc-100"
+                          className="h-8 w-full rounded-xl border-zinc-500/70 bg-black/30 text-sm text-zinc-100 hover:bg-black/50 hover:text-zinc-100"
                           onClick={(e) => {
                             e.stopPropagation();
                             void resetProfileMedia();
@@ -11405,8 +11405,8 @@ export default function App() {
           }}
         >
           {activeLegalDoc ? (
-            <DialogContent overlayClassName="bg-black/94" className={`max-w-3xl max-h-[86vh] overflow-y-auto border-zinc-800 bg-zinc-950 pr-12 pt-11 text-zinc-100 sm:pr-6 sm:pt-6 ${HIDE_SCROLLBAR_CLASS} [scrollbar-width:thin] [scrollbar-color:rgba(82,82,91,0.45)_transparent] [&::-webkit-scrollbar]:w-[4px] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-600/55 [&::-webkit-scrollbar-thumb:hover]:bg-zinc-500/70`}>
-              <DialogHeader className="items-center pr-0 text-center">
+            <DialogContent overlayClassName="bg-black/94" className={`max-w-3xl max-h-[86vh] overflow-y-auto border-zinc-800 bg-zinc-950 pt-9 text-zinc-100 sm:pt-6 ${HIDE_SCROLLBAR_CLASS} [scrollbar-width:thin] [scrollbar-color:rgba(82,82,91,0.45)_transparent] [&::-webkit-scrollbar]:w-[4px] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-600/55 [&::-webkit-scrollbar-thumb:hover]:bg-zinc-500/70`}>
+              <DialogHeader className="items-center text-center">
                 <DialogTitle className="text-xl">{activeLegalDoc.title}</DialogTitle>
                 <DialogDescription className="text-zinc-400">
                   Обновлено: {activeLegalDoc.updatedAt}
@@ -11542,9 +11542,9 @@ export default function App() {
             }}
           >
             <DialogContent className="rounded-2xl border-zinc-800 bg-zinc-950 text-zinc-100 sm:max-w-xl">
-              <DialogHeader>
+              <DialogHeader className="items-center text-center">
                 <DialogTitle>Выбор роли</DialogTitle>
-                <DialogDescription className="text-zinc-400">
+                <DialogDescription className="text-zinc-400 text-center">
                   Игрок: {roleDialogTargetPlayer.name}. Свободные роли можно выбрать сразу.
                 </DialogDescription>
               </DialogHeader>
