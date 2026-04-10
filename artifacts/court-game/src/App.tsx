@@ -50,6 +50,8 @@ import {
   Swords,
   Gem,
   BookOpenText,
+  Menu,
+  X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { getSocket } from "@/lib/socket";
@@ -3383,6 +3385,7 @@ export default function App() {
   });
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [createMatchDialogOpen, setCreateMatchDialogOpen] = useState(false);
   const createMatchDialogRef = useRef<HTMLDivElement | null>(null);
   const [publicMatches, setPublicMatches] = useState<PublicMatchInfo[]>([]);
@@ -9560,8 +9563,133 @@ export default function App() {
         </AnimatePresence>
 
         <div className="max-w-6xl mx-auto mb-8 flex justify-center">
-          <div className="relative w-full sm:w-auto min-w-0">
-            <div className="w-full sm:w-auto rounded-[28px] border border-zinc-800 bg-zinc-900/90 p-2 shadow-sm shadow-black/30 overflow-visible">
+          <div className="relative w-full min-w-0">
+            <div className="md:hidden w-full rounded-2xl border border-zinc-800 bg-zinc-900/90 px-3 py-2.5 shadow-sm shadow-black/30">
+              <div className="flex items-center justify-between gap-3">
+                <div className="inline-flex items-center gap-2">
+                  <div className="h-7 w-7 rounded-lg border border-red-500/45 bg-red-600/20 flex items-center justify-center text-red-200 text-[11px] font-bold">
+                    CG
+                  </div>
+                  <div className="text-sm font-semibold text-zinc-100 tracking-wide">CourtGame</div>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setMobileMenuOpen((prev) => !prev)}
+                  className="h-10 w-10 p-0 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                  aria-label={mobileMenuOpen ? "Закрыть меню" : "Открыть меню"}
+                >
+                  {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+                </Button>
+              </div>
+            </div>
+
+            <AnimatePresence>
+              {mobileMenuOpen && (
+                <>
+                  <motion.button
+                    type="button"
+                    aria-label="Закрыть меню"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="md:hidden fixed inset-0 z-[210] bg-black/80 backdrop-blur-[2px]"
+                  />
+                  <motion.div
+                    initial={{ opacity: 0, y: -8, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -8, scale: 0.98 }}
+                    transition={{ duration: 0.2 }}
+                    className="md:hidden fixed left-3 right-3 top-20 z-[220] rounded-2xl border border-zinc-800 bg-zinc-900/96 p-4 shadow-[0_20px_50px_rgba(0,0,0,0.7)]"
+                  >
+                    <div className="mb-4 flex justify-center">
+                      {isAuthenticated ? (
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setMobileMenuOpen(false);
+                            openProfileScreen();
+                          }}
+                          className="h-11 min-w-[220px] rounded-full border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100 pl-1 pr-3 gap-2.5 justify-start"
+                        >
+                          <Avatar src={avatar} name={playerName || "Игрок"} size={30} />
+                          <span className="max-w-[130px] truncate text-sm">{playerName || "Игрок"}</span>
+                          <ChevronDown className="w-4 h-4 text-zinc-400" />
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setMobileMenuOpen(false);
+                            setAuthMode("login");
+                            setAuthView("form");
+                            setAuthDialogOpen(true);
+                          }}
+                          className="h-11 min-w-[220px] rounded-full border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100 px-4 gap-2 inline-flex items-center justify-center"
+                        >
+                          <LogIn className="w-4 h-4" />
+                          Войти
+                        </Button>
+                      )}
+                    </div>
+                    <div className="grid gap-2.5">
+                      <Button
+                        variant={homeTab === "play" ? "default" : "outline"}
+                        onClick={() => {
+                          setHomeTab("play");
+                          setProfileMenuOpen(false);
+                          setMobileMenuOpen(false);
+                        }}
+                        className={homeTab === "play" ? "h-11 rounded-xl bg-red-600 text-white hover:bg-red-500 border-0" : "h-11 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"}
+                      >
+                        <Gamepad2 className="w-4 h-4 mr-2" />
+                        Играть
+                      </Button>
+                      <Button
+                        variant={homeTab === "shop" ? "default" : "outline"}
+                        onClick={() => {
+                          setHomeTab("shop");
+                          setProfileMenuOpen(false);
+                          setMobileMenuOpen(false);
+                        }}
+                        className={homeTab === "shop" ? "h-11 rounded-xl bg-red-600 text-white hover:bg-red-500 border-0" : "h-11 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"}
+                      >
+                        <Crown className="w-4 h-4 mr-2" />
+                        Магазин
+                      </Button>
+                      <Button
+                        variant={homeTab === "development" ? "default" : "outline"}
+                        onClick={() => {
+                          setHomeTab("development");
+                          setProfileMenuOpen(false);
+                          setMobileMenuOpen(false);
+                        }}
+                        className={homeTab === "development" ? "h-11 rounded-xl bg-red-600 text-white hover:bg-red-500 border-0" : "h-11 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"}
+                      >
+                        <Wrench className="w-4 h-4 mr-2" />
+                        Разработка
+                      </Button>
+                      <Button
+                        variant={homeTab === "help" ? "default" : "outline"}
+                        onClick={() => {
+                          setHomeTab("help");
+                          setMainHelpQuery("");
+                          setProfileMenuOpen(false);
+                          setMobileMenuOpen(false);
+                        }}
+                        className={homeTab === "help" ? "h-11 rounded-xl bg-red-600 text-white hover:bg-red-500 border-0" : "h-11 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"}
+                      >
+                        <CircleHelp className="w-4 h-4 mr-2" />
+                        Помощь
+                      </Button>
+                    </div>
+                  </motion.div>
+                </>
+              )}
+            </AnimatePresence>
+
+            <div className="hidden md:block w-full sm:w-auto rounded-[28px] border border-zinc-800 bg-zinc-900/90 p-2 shadow-sm shadow-black/30 overflow-visible">
               <div className="sm:flex sm:items-center sm:gap-1">
                 <div className={`grid grid-cols-2 gap-1 sm:flex sm:items-center sm:gap-1 overflow-visible sm:overflow-x-auto sm:pr-0.5 ${HIDE_SCROLLBAR_CLASS}`}>
                   <Button
@@ -9683,6 +9811,7 @@ export default function App() {
                 </motion.div>
               )}
             </AnimatePresence>
+            </div>
 
             <Dialog
               open={authDialogOpen}
@@ -10319,7 +10448,7 @@ export default function App() {
               <DialogContent
                 ref={createMatchDialogRef}
                 overlayClassName="bg-black/88"
-                className={`z-[180] !left-1/2 !top-1/2 !-translate-x-1/2 !-translate-y-1/2 rounded-2xl sm:rounded-3xl w-[calc(100vw-1.15rem)] sm:w-[calc(100vw-2rem)] ${createPackCatalogOpen ? "max-w-[770px]" : "max-w-[780px]"} max-h-[90vh] overflow-y-auto border-zinc-800 bg-zinc-950 text-zinc-100 p-4 sm:p-6 ${HIDE_SCROLLBAR_CLASS} [scrollbar-width:thin] [scrollbar-color:rgba(82,82,91,0.35)_transparent] [&::-webkit-scrollbar]:w-[4px] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-600/45 [&::-webkit-scrollbar-thumb:hover]:bg-zinc-500/60 [&>button]:h-12 [&>button]:w-12 [&>button>svg]:h-7 [&>button>svg]:w-7 [&>button]:top-2 [&>button]:right-2`}
+                className={`z-[180] !left-1/2 !top-1/2 !-translate-x-1/2 !-translate-y-1/2 rounded-2xl sm:rounded-3xl w-[calc(100vw-1.15rem)] sm:w-[calc(100vw-2rem)] ${createPackCatalogOpen ? "max-w-[770px]" : "max-w-[780px]"} max-h-[90vh] overflow-y-auto border-zinc-800 bg-zinc-950 text-zinc-100 p-4 sm:p-6 ${HIDE_SCROLLBAR_CLASS} [scrollbar-width:thin] [scrollbar-color:rgba(82,82,91,0.35)_transparent] [&::-webkit-scrollbar]:w-[4px] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-600/45 [&::-webkit-scrollbar-thumb:hover]:bg-zinc-500/60`}
               >
                 {upsellModalOpen && createMatchDialogOpen && (
                   <div className="pointer-events-none absolute inset-0 z-20 rounded-2xl bg-black/45" />
@@ -11151,8 +11280,11 @@ export default function App() {
                 Пользовательское соглашение
               </button>
             </div>
-            <div className="mt-1 text-zinc-700">© 2026 CourtGame. Все права защищены.</div>
-            <div className="mt-1 text-zinc-700">support@courtgame.site</div>
+            <div className="mt-1 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-zinc-700">
+              <span>© 2026 CourtGame. Все права защищены.</span>
+              <span className="text-zinc-800">•</span>
+              <span>support@courtgame.site</span>
+            </div>
           </div>
         )}
         <Dialog
