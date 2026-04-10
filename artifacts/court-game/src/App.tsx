@@ -1685,7 +1685,7 @@ function HelpCenter({
   return (
     <div className="relative space-y-4">
       <div className="pointer-events-none absolute -top-8 right-8 h-24 w-24 rounded-full bg-red-500/10 blur-2xl" />
-      <div className="pointer-events-none absolute bottom-8 left-8 h-24 w-24 rounded-full bg-cyan-500/10 blur-2xl" />
+      <div className="pointer-events-none absolute bottom-8 left-8 h-24 w-24 rounded-full bg-red-900/12 blur-2xl" />
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
         <Input
@@ -7446,8 +7446,8 @@ export default function App() {
   const renderUpsellModal = () => (
     <Dialog open={upsellModalOpen} onOpenChange={setUpsellModalOpen}>
       <DialogContent
-        overlayClassName={upsellNestedBackdrop ? "!bg-transparent" : undefined}
-        className="max-w-[470px] border-red-950/70 bg-[radial-gradient(130%_110%_at_0%_0%,rgba(239,68,68,0.22),transparent_50%),linear-gradient(160deg,rgba(12,10,11,0.98),rgba(10,10,12,0.98))] text-zinc-100 shadow-[0_24px_84px_rgba(0,0,0,0.72)]"
+        overlayClassName={upsellNestedBackdrop ? "z-[510] !bg-transparent" : "z-[510] bg-black/86"}
+        className="z-[520] max-w-[470px] border-red-950/70 bg-[radial-gradient(130%_110%_at_0%_0%,rgba(239,68,68,0.22),transparent_50%),linear-gradient(160deg,rgba(12,10,11,0.98),rgba(10,10,12,0.98))] text-zinc-100 shadow-[0_24px_84px_rgba(0,0,0,0.72)]"
       >
         <DialogHeader>
           <div className="mb-1 inline-flex h-10 w-10 items-center justify-center rounded-full border border-red-400/55 bg-red-600/20 text-red-100 shadow-[0_0_18px_rgba(239,68,68,0.2)]">
@@ -10319,7 +10319,7 @@ export default function App() {
               <DialogContent
                 ref={createMatchDialogRef}
                 overlayClassName="bg-black/88"
-                className={`z-[180] !left-1/2 !top-1/2 !-translate-x-1/2 !-translate-y-1/2 w-[calc(100vw-1rem)] sm:w-[calc(100vw-2rem)] ${createPackCatalogOpen ? "max-w-[860px]" : "max-w-[780px]"} max-h-[90vh] overflow-y-auto border-zinc-800 bg-zinc-950 text-zinc-100 p-4 sm:p-6 ${HIDE_SCROLLBAR_CLASS} [scrollbar-width:thin] [scrollbar-color:rgba(82,82,91,0.35)_transparent] [&::-webkit-scrollbar]:w-[4px] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-600/45 [&::-webkit-scrollbar-thumb:hover]:bg-zinc-500/60 [&>button]:h-12 [&>button]:w-12 [&>button>svg]:h-7 [&>button>svg]:w-7 [&>button]:top-2 [&>button]:right-2`}
+                className={`z-[180] !left-1/2 !top-1/2 !-translate-x-1/2 !-translate-y-1/2 w-[calc(100vw-1rem)] sm:w-[calc(100vw-2rem)] ${createPackCatalogOpen ? "max-w-[700px]" : "max-w-[780px]"} max-h-[90vh] overflow-y-auto border-zinc-800 bg-zinc-950 text-zinc-100 p-4 sm:p-6 ${HIDE_SCROLLBAR_CLASS} [scrollbar-width:thin] [scrollbar-color:rgba(82,82,91,0.35)_transparent] [&::-webkit-scrollbar]:w-[4px] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-600/45 [&::-webkit-scrollbar-thumb:hover]:bg-zinc-500/60 [&>button]:h-12 [&>button]:w-12 [&>button>svg]:h-7 [&>button>svg]:w-7 [&>button]:top-2 [&>button]:right-2`}
               >
                 {upsellModalOpen && createMatchDialogOpen && (
                   <div className="pointer-events-none absolute inset-0 z-20 rounded-2xl bg-black/45" />
@@ -11101,7 +11101,7 @@ export default function App() {
             className="relative max-w-7xl mx-auto w-full"
           >
             <div className="pointer-events-none absolute -left-6 top-10 h-36 w-36 rounded-full bg-red-600/10 blur-3xl" />
-            <div className="pointer-events-none absolute right-6 bottom-10 h-36 w-36 rounded-full bg-cyan-500/10 blur-3xl" />
+            <div className="pointer-events-none absolute right-6 bottom-10 h-36 w-36 rounded-full bg-red-900/12 blur-3xl" />
             <Card className="relative rounded-[28px] border-zinc-800 bg-[linear-gradient(140deg,rgba(23,23,30,0.96),rgba(15,15,22,0.96))] text-zinc-100 shadow-[0_20px_60px_rgba(0,0,0,0.45)]">
               <CardContent className="p-6 md:p-8 lg:p-10">
                 <div className="mb-5 rounded-2xl border border-zinc-800 bg-gradient-to-r from-zinc-900 via-zinc-900/80 to-zinc-900 px-5 py-4">
