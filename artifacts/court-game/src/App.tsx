@@ -1011,6 +1011,7 @@ interface DevLogEntry {
 }
 
 const CURRENT_VERSION = "Beta 0.5";
+const DEVLOG_SEEN_STORAGE_KEY = "court_devlog_seen_version";
 
 const DEVLOG_ENTRIES: DevLogEntry[] = [
   {
@@ -1042,8 +1043,67 @@ const DEVLOG_ENTRIES: DevLogEntry[] = [
       "Выполнен крупный редизайн интерфейсов и состояний по всему сайту, включая мобильную адаптацию.",
     ],
   },
+  {
+    date: "24.03.2026",
+    version: "Beta 0.4.5",
+    title: "Релиз Beta 0.4.5: стабильность комнат, протесты и интерфейс",
+    changes: [
+      "Добавлена серверная очистка зависших/старых комнат.",
+      "Переработана механика протестов: активный протест, решение судьи (Принять/Отклонить), блокировка параллельных протестов.",
+      "Свидетелям отключена кнопка «Протестую».",
+      "Добавлены уведомления о применении карты механики.",
+      "Полностью переработан блок «Предупреждения» у судьи.",
+      "Улучшен приватный чат адвокат - клиент (размер, верстка, стабильность длинных сообщений).",
+      "На главную добавлена кнопка «Поиск игроков» с переходом в Discord.",
+      "На страницу «Разработка» добавлена кнопка «Сообщить о баге» с переходом в Discord.",
+    ],
+  },
+  {
+    date: "22.03.2026",
+    version: "Beta 0.4",
+    title: "Релиз Beta 0.4: подбор игроков, влияние и переподключение",
+    changes: [
+      "Добавлен раздел «Подбор игроков» с отображением активных комнат и быстрым входом.",
+      "Добавлено расширенное создание матча: выбор режима, лимита игроков, приватности и пароля.",
+      "Добавлены открытые/приватные комнаты, проверка пароля при входе и отображение статуса матча.",
+      "Добавлена и интегрирована система профиля игрока в верхнюю навигацию.",
+      "Проведён крупный редизайн главной страницы, лобби и мобильной версии интерфейса.",
+      "Добавлена система «Влияние» в матче: протест, тишина в зале, предупреждения, заметки.",
+      "Добавлена система предупреждений судьи с возможностью выдавать и снимать предупреждения.",
+      "Переработана система выхода/переподключения: трекинг отключений, таймер удержания, очистка игроков и комнат.",
+      "Проведено исправление визуальных и игровых багов.",
+      "Добавлен приватный чат «адвокат - клиент».",
+      "Добавлен чат лобби.",
+    ],
+  },
+  {
+    date: "20.03.2026",
+    version: "Beta 0.3",
+    title: "Релиз Beta 0.3: модульное меню, помощь и этапы",
+    changes: [
+      "Добавлено модульное верхнее меню навигации с вкладками.",
+      "Добавлена страница «Помощь» с полноценным справочником по игре.",
+      "Добавлена страница «Разработка» с дев-блогом обновлений.",
+      "Проведено исправление визуальных и игровых багов.",
+      "Переработана система игровых этапов под разные составы игроков.",
+    ],
+  },
+  {
+    date: "19.03.2026",
+    version: "Beta 0.2",
+    title: "Стабилизация лобби и расширение игровых механик",
+    changes: [
+      "Добавлены аватарки игроков с отображением в лобби и во время матча.",
+      "Добавлен переключатель «Я — Судья» для ведущего в лобби.",
+      "Добавлена роль наблюдателя «Свидетель» для подключения в уже идущий матч.",
+      "Ведущий может кикать игроков из лобби с уведомлением о кике.",
+      "Добавлена подсветка последнего раскрытого факта и последней механики.",
+      "Во вступительной речи ограничение: можно раскрыть не более 2 фактов.",
+      "На этапе «Подготовка» отключено раскрытие фактов и применение механик.",
+    ],
+  },
 ];
-const DEVLOG_PAGE_SIZE = 1;
+const DEVLOG_PAGE_SIZE = 2;
 
 interface HelpTopic {
   id: string;
@@ -3191,6 +3251,13 @@ export default function App() {
     "home",
   );
   const [homeTab, setHomeTab] = useState<HomeTab>("play");
+  const [hasUnseenDevlog, setHasUnseenDevlog] = useState(() => {
+    try {
+      return localStorage.getItem(DEVLOG_SEEN_STORAGE_KEY) !== CURRENT_VERSION;
+    } catch {
+      return true;
+    }
+  });
   const [shopDuration, setShopDuration] = useState<
     Extract<SubscriptionDuration, "1_month" | "1_year">
   >("1_month");
@@ -3352,6 +3419,14 @@ export default function App() {
     progressShimmer: string;
     rankUp: boolean;
   } | null>(null);
+
+  useEffect(() => {
+    if (homeTab !== "development") return;
+    setHasUnseenDevlog(false);
+    try {
+      localStorage.setItem(DEVLOG_SEEN_STORAGE_KEY, CURRENT_VERSION);
+    } catch {}
+  }, [homeTab]);
   const [copiedRoomCode, setCopiedRoomCode] = useState(false);
   const [startGameLoading, setStartGameLoading] = useState(false);
   const [roomActionPending, setRoomActionPending] = useState<"create" | "join" | null>(null);
@@ -9737,7 +9812,14 @@ export default function App() {
                         className={homeTab === "development" ? "h-[52px] rounded-xl bg-red-600 text-white hover:bg-red-500 border-0" : "h-[52px] rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"}
                       >
                         <Wrench className="w-4 h-4 mr-2" />
-                        Разработка
+                        <span className="relative inline-flex items-center">
+                          {hasUnseenDevlog && (
+                            <span className="pointer-events-none absolute -top-3 left-1/2 -translate-x-1/2 rounded-full border border-red-400/45 bg-red-600 px-1.5 py-0 text-[10px] font-semibold leading-none text-white">
+                              1
+                            </span>
+                          )}
+                          Разработка
+                        </span>
                       </Button>
                       <Button
                         variant={homeTab === "help" ? "default" : "outline"}
@@ -9819,7 +9901,14 @@ export default function App() {
                     }`}
                   >
                     <Wrench className="w-4 h-4" />
-                    Разработка
+                    <span className="relative inline-flex items-center">
+                      {hasUnseenDevlog && (
+                        <span className="pointer-events-none absolute -top-3 left-1/2 -translate-x-1/2 rounded-full border border-red-400/45 bg-red-600 px-1.5 py-0 text-[10px] font-semibold leading-none text-white">
+                          1
+                        </span>
+                      )}
+                      Разработка
+                    </span>
                   </Button>
                   <Button
                     variant="ghost"
@@ -11221,26 +11310,10 @@ export default function App() {
           </motion.div>
         )}
         {homeTab === "development" && (
-          <div className="max-w-6xl mx-auto">
+          <div className="max-w-7xl mx-auto">
             <Card className="rounded-[28px] border-zinc-800 bg-zinc-900/95 text-zinc-100">
               <CardContent className="relative p-8 md:p-10 space-y-6">
-                <motion.a
-                  href={DISCORD_INVITE_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  whileHover={{ y: -1 }}
-                  whileTap={{ scale: 0.99 }}
-                  className="absolute right-8 top-8 md:right-10 md:top-10 z-10 hidden md:block"
-                >
-                  <Button
-                    variant="outline"
-                    className="h-10 rounded-xl border-red-500/35 bg-red-950/20 text-red-100 hover:bg-red-900/30 hover:text-white gap-2 px-4"
-                  >
-                    <AlertCircle className="w-4 h-4" />
-                    <span>Сообщить о баге</span>
-                  </Button>
-                </motion.a>
-                <div className="flex justify-center">
+                <div className="flex flex-col items-center gap-4 md:gap-5">
                   <div className="w-full max-w-md rounded-3xl border border-red-500/35 bg-gradient-to-br from-red-950/50 via-zinc-900 to-zinc-900 px-6 py-5 text-center shadow-[0_16px_40px_rgba(185,28,28,0.25)]">
                     <div className="text-[11px] uppercase tracking-[0.22em] text-red-300/80">
                       Build
@@ -11249,16 +11322,21 @@ export default function App() {
                       {CURRENT_VERSION}
                     </div>
                   </div>
-                </div>
-                <div className="md:hidden flex justify-center">
-                  <Button
-                    variant="outline"
-                    onClick={() => window.open(DISCORD_INVITE_URL, "_blank", "noopener,noreferrer")}
-                    className="h-10 rounded-xl border-red-500/35 bg-red-950/20 text-red-100 hover:bg-red-900/30 hover:text-white gap-2 px-4"
+                  <motion.a
+                    href={DISCORD_INVITE_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    whileHover={{ y: -1 }}
+                    whileTap={{ scale: 0.99 }}
                   >
-                    <AlertCircle className="w-4 h-4" />
-                    <span>Сообщить о баге</span>
-                  </Button>
+                    <Button
+                      variant="outline"
+                      className="h-10 rounded-xl border-red-500/35 bg-red-950/20 text-red-100 hover:bg-red-900/30 hover:text-white gap-2 px-4"
+                    >
+                      <AlertCircle className="w-4 h-4" />
+                      <span>Сообщить о баге</span>
+                    </Button>
+                  </motion.a>
                 </div>
 
                 <div className="space-y-4">
