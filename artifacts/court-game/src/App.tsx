@@ -1719,7 +1719,7 @@ function HelpCenter({
               transition={{ duration: 0.24, delay: idx * 0.045, ease: "easeOut" }}
             >
               <AccordionItem value={group.category} className="border-0">
-                <Card className="rounded-2xl border-zinc-800 bg-[linear-gradient(145deg,rgba(24,24,28,0.94),rgba(14,14,20,0.96))] text-zinc-100 shadow-[0_10px_30px_rgba(0,0,0,0.35)]">
+                <Card className="rounded-2xl border-zinc-800 bg-[linear-gradient(145deg,rgba(30,30,36,0.94),rgba(26,26,32,0.94)_58%,rgba(23,23,30,0.94))] text-zinc-100 shadow-[0_10px_30px_rgba(0,0,0,0.35)]">
                 <CardHeader className="p-0">
                   <AccordionTrigger className="relative h-16 px-5 py-0 text-zinc-100 hover:no-underline !justify-between text-left [&>svg]:right-5">
                     <span
@@ -11106,7 +11106,7 @@ export default function App() {
             className="relative max-w-7xl mx-auto w-full"
           >
             <div className="pointer-events-none absolute -left-10 top-8 h-44 w-44 rounded-full bg-zinc-800/10 blur-3xl" />
-            <div className="pointer-events-none absolute right-2 bottom-10 h-44 w-44 rounded-full bg-zinc-800/10 blur-3xl" />
+            <div className="pointer-events-none absolute right-2 bottom-10 h-44 w-44 rounded-full bg-zinc-700/6 blur-3xl" />
             <Card className="relative rounded-[28px] border-zinc-800 bg-zinc-900/95 text-zinc-100 shadow-[0_24px_64px_rgba(0,0,0,0.5)]">
               <CardContent className="p-6 md:p-8 lg:p-10">
                 <div className="mb-5 rounded-2xl border border-zinc-800 bg-gradient-to-r from-zinc-900 via-zinc-900/80 to-zinc-900 px-5 py-4">
