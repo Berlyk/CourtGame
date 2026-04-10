@@ -11105,9 +11105,9 @@ export default function App() {
             transition={{ duration: 0.28, ease: "easeOut" }}
             className="relative max-w-7xl mx-auto w-full"
           >
-            <div className="pointer-events-none absolute -left-10 top-8 h-44 w-44 rounded-full bg-zinc-700/10 blur-3xl" />
-            <div className="pointer-events-none absolute right-2 bottom-10 h-44 w-44 rounded-full bg-zinc-700/10 blur-3xl" />
-            <Card className="relative rounded-[28px] border-zinc-800 bg-[linear-gradient(145deg,rgba(23,23,30,0.96),rgba(15,15,22,0.98))] text-zinc-100 shadow-[0_24px_64px_rgba(0,0,0,0.5)]">
+            <div className="pointer-events-none absolute -left-10 top-8 h-44 w-44 rounded-full bg-zinc-800/10 blur-3xl" />
+            <div className="pointer-events-none absolute right-2 bottom-10 h-44 w-44 rounded-full bg-zinc-800/10 blur-3xl" />
+            <Card className="relative rounded-[28px] border-zinc-800 bg-zinc-900/95 text-zinc-100 shadow-[0_24px_64px_rgba(0,0,0,0.5)]">
               <CardContent className="p-6 md:p-8 lg:p-10">
                 <div className="mb-5 rounded-2xl border border-zinc-800 bg-gradient-to-r from-zinc-900 via-zinc-900/80 to-zinc-900 px-5 py-4">
                   <div className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Справка CourtGame</div>
