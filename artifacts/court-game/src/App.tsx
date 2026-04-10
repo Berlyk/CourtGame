@@ -476,8 +476,8 @@ function getCasePackSortOrder(
   const key = (pack?.key ?? "").toLowerCase();
   const title = (pack?.title ?? "").toLowerCase();
   const full = `${key} ${title}`;
-  if (full.includes("запад") || full.includes("west")) return 55;
-  if (full.includes("18+")) return 56;
+  if (full.includes("18+")) return 55;
+  if (full.includes("запад") || full.includes("west")) return 56;
   return base;
 }
 
@@ -1709,7 +1709,7 @@ function HelpCenter({
               <AccordionItem value={group.category} className="border-0">
                 <Card className="rounded-2xl border-zinc-800 bg-zinc-900/80 text-zinc-100">
                 <CardHeader className="p-0">
-                  <AccordionTrigger className="relative h-16 px-5 py-0 text-zinc-100 hover:no-underline justify-center [&>svg]:absolute [&>svg]:right-5">
+                  <AccordionTrigger className="relative h-16 px-5 py-0 text-zinc-100 hover:no-underline !justify-center text-center [&>svg]:absolute [&>svg]:right-5">
                     <span
                       className={`flex items-center gap-2 leading-none ${
                         compact ? "text-base" : "text-lg"
@@ -7483,22 +7483,17 @@ export default function App() {
     return (
       <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/80 px-4">
         <div className="w-full max-w-2xl rounded-2xl border border-red-500/45 bg-[radial-gradient(120%_130%_at_50%_0%,rgba(239,68,68,0.24),transparent_58%),linear-gradient(165deg,rgba(15,10,12,0.98),rgba(10,10,12,0.98))] p-5 text-zinc-100 shadow-[0_34px_100px_rgba(0,0,0,0.76)]">
-          <div className="flex justify-center">
-            <div className="mx-auto inline-flex h-11 w-11 items-center justify-center rounded-full border border-red-400/55 bg-red-600/12 text-red-100">
-              <Lock className="h-5 w-5" />
-            </div>
-          </div>
-          <div className="mt-3 text-center text-[46px] font-black tracking-[0.08em] text-red-100">
+          <div className="text-center text-[46px] font-black tracking-[0.08em] text-red-100">
             ВЫ ЗАБЛОКИРОВАНЫ
           </div>
-          <div className="mt-3 text-center text-xl text-zinc-200">
+          <div className="mt-5 text-center text-xl text-zinc-200">
             {activeBan.reason?.trim() ? activeBan.reason.trim() : "Нарушение правил проекта."}
           </div>
-          <div className="mt-4">
+          <div className="mt-5">
             {activeBan.isPermanent ? (
               <div className="text-center text-xl font-bold text-red-200">Навсегда</div>
             ) : (
-              <div className="mx-auto flex max-w-[520px] items-center justify-center gap-1.5">
+              <div className="mx-auto flex max-w-[500px] items-center justify-center gap-1.5 rounded-2xl border border-zinc-800/85 bg-zinc-950/45 px-2 py-2">
                 {[
                   { key: "d", value: countdown?.days ?? 0, label: "дней" },
                   { key: "h", value: countdown?.hours ?? 0, label: "часов" },
@@ -7506,11 +7501,11 @@ export default function App() {
                   { key: "s", value: countdown?.seconds ?? 0, label: "секунд" },
                 ].map((item, idx, arr) => (
                   <div key={`ban-timer-${item.key}`} className="flex items-center">
-                    <div className="w-[92px] rounded-md border border-zinc-700/70 bg-zinc-950/70 px-2 py-1 text-center">
-                      <div className="text-[17px] font-bold leading-none text-zinc-100">{String(item.value).padStart(2, "0")}</div>
-                      <div className="mt-1 text-[8px] uppercase tracking-[0.14em] text-zinc-500">{item.label}</div>
+                    <div className="w-[84px] rounded-lg border border-zinc-700/70 bg-zinc-950/80 px-2 py-1.5 text-center">
+                      <div className="text-[16px] font-bold leading-none text-zinc-100">{String(item.value).padStart(2, "0")}</div>
+                      <div className="mt-1 text-[9px] uppercase tracking-[0.12em] text-zinc-500">{item.label}</div>
                     </div>
-                    {idx < arr.length - 1 && <div className="mx-0.5 text-zinc-700">:</div>}
+                    {idx < arr.length - 1 && <div className="mx-1 text-zinc-700">:</div>}
                   </div>
                 ))}
               </div>
@@ -8356,8 +8351,8 @@ export default function App() {
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/45 to-black/15" />
                   <div className="absolute inset-0 opacity-0 group-hover/banner:opacity-100 transition-opacity bg-black/15" />
                   {profileBannerLocked && (
-                    <div className="pointer-events-none absolute right-6 top-5 inline-flex h-10 items-center gap-1.5 rounded-full border border-zinc-500/80 bg-zinc-900/80 px-3.5 text-[12px] font-semibold text-zinc-100">
-                      <Lock className="h-4 w-4" />
+                    <div className="pointer-events-none absolute right-4 top-4 inline-flex h-8 items-center gap-1.5 rounded-full border border-zinc-500/80 bg-zinc-900/80 px-3 text-xs font-semibold text-zinc-100">
+                      <Lock className="h-3.5 w-3.5" />
                       <span>Баннер</span>
                     </div>
                   )}
@@ -10312,7 +10307,7 @@ export default function App() {
               <DialogContent
                 ref={createMatchDialogRef}
                 overlayClassName="bg-black/88"
-                className={`z-[180] !left-1/2 !top-1/2 !-translate-x-1/2 !-translate-y-1/2 w-[calc(100vw-1rem)] sm:w-[calc(100vw-2rem)] ${createPackCatalogOpen ? "max-w-[820px]" : "max-w-[780px]"} max-h-[90vh] overflow-y-auto border-zinc-800 bg-zinc-950 text-zinc-100 p-4 sm:p-6 ${HIDE_SCROLLBAR_CLASS} [scrollbar-width:thin] [scrollbar-color:rgba(82,82,91,0.35)_transparent] [&::-webkit-scrollbar]:w-[4px] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-600/45 [&::-webkit-scrollbar-thumb:hover]:bg-zinc-500/60 [&>button]:h-12 [&>button]:w-12 [&>button>svg]:h-7 [&>button>svg]:w-7 [&>button]:top-2 [&>button]:right-2`}
+                className={`z-[180] !left-1/2 !top-1/2 !-translate-x-1/2 !-translate-y-1/2 w-[calc(100vw-1rem)] sm:w-[calc(100vw-2rem)] ${createPackCatalogOpen ? "max-w-[760px]" : "max-w-[780px]"} max-h-[90vh] overflow-y-auto border-zinc-800 bg-zinc-950 text-zinc-100 p-4 sm:p-6 ${HIDE_SCROLLBAR_CLASS} [scrollbar-width:thin] [scrollbar-color:rgba(82,82,91,0.35)_transparent] [&::-webkit-scrollbar]:w-[4px] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-600/45 [&::-webkit-scrollbar-thumb:hover]:bg-zinc-500/60 [&>button]:h-12 [&>button]:w-12 [&>button>svg]:h-7 [&>button>svg]:w-7 [&>button]:top-2 [&>button]:right-2`}
               >
                 {upsellModalOpen && createMatchDialogOpen && (
                   <div className="pointer-events-none absolute inset-0 z-20 rounded-2xl bg-black/45" />
@@ -10338,27 +10333,11 @@ export default function App() {
                       </Button>
                       <Button
                         type="button"
-                        onClick={() => {
-                          if (!canCreatePacks) {
-                            openSubscriptionUpsell(
-                              "canCreatePacks",
-                              "Создание паков будет доступно в подписке «Арбитр».",
-                            );
-                            return;
-                          }
-                          setUpsellTitle("Скоро");
-                          setUpsellDescription("Создание паков находится в разработке.");
-                          setUpsellRequiredTier("arbiter");
-                          setUpsellModalOpen(true);
-                        }}
-                        className={`h-9 rounded-xl border ${
-                          canCreatePacks
-                            ? "border-red-500/60 bg-red-600/20 text-red-100 hover:bg-red-600/30"
-                            : "border-zinc-700 bg-zinc-800 text-zinc-400"
-                        }`}
+                        disabled
+                        className="h-9 rounded-xl border border-zinc-700 bg-zinc-800 text-zinc-500 cursor-not-allowed"
                       >
                         <span className="inline-flex items-center gap-1.5">
-                          {!canCreatePacks && <Lock className="h-3.5 w-3.5" />}
+                          <Lock className="h-3.5 w-3.5" />
                           Создать пак · Скоро
                         </span>
                       </Button>
@@ -11110,6 +11089,10 @@ export default function App() {
           >
             <Card className="rounded-[28px] border-zinc-800 bg-zinc-900/95 text-zinc-100">
               <CardContent className="p-6 md:p-8 lg:p-10">
+                <div className="mb-5 rounded-2xl border border-zinc-800 bg-gradient-to-r from-zinc-900 via-zinc-900/80 to-zinc-900 px-5 py-4">
+                  <div className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Справка CourtGame</div>
+                  <div className="mt-1 text-lg font-semibold text-zinc-100">Быстрые ответы по ролям, правилам и механикам</div>
+                </div>
                 <HelpCenter
                   query={mainHelpQuery}
                   onQueryChange={setMainHelpQuery}
@@ -11139,6 +11122,7 @@ export default function App() {
               </button>
             </div>
             <div className="mt-1 text-zinc-700">© 2026 CourtGame. Все права защищены.</div>
+            <div className="mt-1 text-zinc-700">support@courtgame.site</div>
           </div>
         )}
         <Dialog
