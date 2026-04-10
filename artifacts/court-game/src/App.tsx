@@ -988,7 +988,7 @@ const DEVLOG_ENTRIES: DevLogEntry[] = [
       "Свидетелям отключена кнопка «Протестую».",
       "Добавлены уведомления о применении карты механики.",
       "Полностью переработан блок «Предупреждения» у судьи.",
-      "Улучшен приватный чат адвокат ↔ клиент (размер, верстка, стабильность длинных сообщений).",
+      "Улучшен приватный чат адвокат - клиент (размер, верстка, стабильность длинных сообщений).",
       "На главную добавлена кнопка «Поиск игроков» с переходом в Discord.",
       "На страницу «Разработка» добавлена кнопка «Сообщить о баге» с переходом в Discord.",
     ],
@@ -1007,7 +1007,7 @@ const DEVLOG_ENTRIES: DevLogEntry[] = [
       "Добавлена система предупреждений судьи с возможностью выдавать и снимать предупреждения.",
       "Переработана система выхода/переподключения: трекинг отключений, таймер удержания, очистка игроков и комнат.",
       "Проведено исправление визуальных и игровых багов.",
-      "Добавлен приватный чат «адвокат ↔ клиент».",
+      "Добавлен приватный чат «адвокат - клиент».",
       "Добавлен чат лобби.",
     ],
   },
@@ -2756,7 +2756,7 @@ function BadgeGlyph({
       <span
         className={`inline-flex items-center justify-center leading-none align-middle shrink-0 ${className}`}
       >
-        ★
+        ?
       </span>
     );
   }
@@ -3201,6 +3201,7 @@ export default function App() {
     text: string;
     rewards: Array<{ type: "subscription" | "badge"; label: string }>;
   } | null>(null);
+  const [loaderForceHidden, setLoaderForceHidden] = useState(false);
   const [adminToolsOpen, setAdminToolsOpen] = useState(false);
   const [adminPanelKey, setAdminPanelKey] = useState(
     () => localStorage.getItem("court_admin_panel_key") ?? "",
@@ -4691,6 +4692,7 @@ export default function App() {
       : 0;
   const globalBlockingLoading =
     authLoading || myProfileLoading || imageCropLoading;
+  const safeGlobalBlockingLoading = globalBlockingLoading && !loaderForceHidden;
   const protestCooldownLeft = Math.max(
     0,
     Math.ceil((protestCooldownEndsAt - nowMs) / 1000),
@@ -4708,6 +4710,17 @@ export default function App() {
     (currentDevlogPage - 1) * DEVLOG_PAGE_SIZE,
     currentDevlogPage * DEVLOG_PAGE_SIZE,
   );
+
+  useEffect(() => {
+    if (!globalBlockingLoading) {
+      setLoaderForceHidden(false);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setLoaderForceHidden(true);
+    }, 12000);
+    return () => window.clearTimeout(timer);
+  }, [globalBlockingLoading]);
 
   useEffect(() => {
     if (screen !== "room" && screen !== "game") {
@@ -7459,11 +7472,11 @@ export default function App() {
           <div className="mt-4 text-center text-lg text-zinc-200">
             {activeBan.reason?.trim() ? activeBan.reason.trim() : "Нарушение правил проекта."}
           </div>
-          <div className="mt-5 rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3">
+          <div className="mt-5 rounded-2xl border border-zinc-800 bg-zinc-900/70 p-2.5">
             {activeBan.isPermanent ? (
               <div className="text-center text-2xl font-bold text-red-200">Навсегда</div>
             ) : (
-              <div className="grid grid-cols-4 gap-2">
+              <div className="mx-auto grid max-w-[520px] grid-cols-4 gap-1.5">
                 {[
                   { key: "d", value: countdown?.days ?? 0, label: "дней" },
                   { key: "h", value: countdown?.hours ?? 0, label: "часов" },
@@ -7472,10 +7485,10 @@ export default function App() {
                 ].map((item) => (
                   <div
                     key={`ban-timer-${item.key}`}
-                    className="rounded-xl border border-zinc-700 bg-zinc-950/90 px-2 py-2 text-center"
+                    className="rounded-lg border border-zinc-700 bg-zinc-950/90 px-1.5 py-1.5 text-center"
                   >
-                    <div className="text-2xl font-bold text-zinc-100">{String(item.value).padStart(2, "0")}</div>
-                    <div className="text-[11px] uppercase tracking-[0.08em] text-zinc-500">{item.label}</div>
+                    <div className="text-lg font-bold leading-none text-zinc-100">{String(item.value).padStart(2, "0")}</div>
+                    <div className="mt-1 text-[10px] uppercase tracking-[0.08em] text-zinc-500">{item.label}</div>
                   </div>
                 ))}
               </div>
@@ -8321,7 +8334,7 @@ export default function App() {
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/45 to-black/15" />
                   <div className="absolute inset-0 opacity-0 group-hover/banner:opacity-100 transition-opacity bg-black/15" />
                   {profileBannerLocked && (
-                    <div className="pointer-events-none absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-zinc-600/80 bg-zinc-950/90 text-zinc-200 shadow-[0_0_14px_rgba(0,0,0,0.45)]">
+                    <div className="pointer-events-none absolute bottom-4 right-6 inline-flex h-8 w-8 items-center justify-center rounded-full border border-zinc-600/80 bg-zinc-950/92 text-zinc-300">
                       <Lock className="h-4 w-4" />
                     </div>
                   )}
@@ -8654,7 +8667,7 @@ export default function App() {
                           </span>
                         )}
                       </div>
-                      <div className="mt-2 text-sm text-zinc-300">
+                      <div className="mt-1 text-sm text-zinc-300">
                         {formatSubscriptionTimeLeftLabel(profileSubscription, nowMs)}
                       </div>
                       {profileTier !== "arbiter" && (
@@ -9330,7 +9343,7 @@ export default function App() {
         {renderAdminTools()}
         {renderUpsellModal()}
         {renderBanOverlay()}
-        <ScreenTransitionLoader open={globalBlockingLoading} />
+        <ScreenTransitionLoader open={safeGlobalBlockingLoading} />
       </motion.div>
     );
   }
@@ -9409,7 +9422,7 @@ export default function App() {
                       />
                       {rankResultToast.fromTitle}
                     </span>
-                    <span className="text-zinc-500">→</span>
+                    <span className="text-zinc-500">></span>
                     <motion.span
                       animate={
                         rankResultToast.rankUp
@@ -9653,7 +9666,7 @@ export default function App() {
             >
               <DialogContent
                 overlayClassName="bg-black/88 backdrop-blur-[1.5px]"
-                className="max-w-[440px] border-zinc-800 bg-[radial-gradient(130%_120%_at_0%_0%,rgba(239,68,68,0.2),transparent_54%),linear-gradient(155deg,rgba(15,15,20,0.98),rgba(8,8,12,0.98))] text-zinc-100 shadow-[0_34px_110px_rgba(0,0,0,0.76)]"
+                className="max-w-[400px] border-zinc-800 bg-[radial-gradient(130%_120%_at_0%_0%,rgba(239,68,68,0.2),transparent_54%),linear-gradient(155deg,rgba(15,15,20,0.98),rgba(8,8,12,0.98))] text-zinc-100 shadow-[0_34px_110px_rgba(0,0,0,0.76)]"
               >
                 {authView === "rules" ? (
                   <>
@@ -9683,9 +9696,6 @@ export default function App() {
                 ) : (
                   <>
                     <DialogHeader>
-                      <div className="inline-flex w-fit items-center rounded-full border border-red-500/45 bg-red-600/20 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-red-100">
-                        CourtGame
-                      </div>
                       <DialogTitle>
                         {authMode === "login" ? "Вход в аккаунт" : "Регистрация"}
                       </DialogTitle>
@@ -9694,6 +9704,9 @@ export default function App() {
                           ? "Войдите, чтобы использовать личный профиль."
                           : "Создайте аккаунт. После регистрации откроется ваш профиль."}
                       </DialogDescription>
+                      <div className="pt-1 text-[11px] uppercase tracking-[0.14em] text-zinc-500">
+                        CourtGame Account
+                      </div>
                     </DialogHeader>
 
                     <div className="space-y-3">
@@ -10084,7 +10097,7 @@ export default function App() {
                                     className="w-full h-12 rounded-xl border-red-600/50 text-red-400 hover:bg-red-600/10 hover:text-red-300 gap-2"
                                   >
                                     {reconnectPersistent ? (
-                                      "↩ Переподключиться к игре"
+                                      "? Переподключиться к игре"
                                     ) : (
                                       <span className="inline-flex items-center gap-2">
                                         <motion.span
@@ -10094,7 +10107,7 @@ export default function App() {
                                         >
                                           <DoorOpen className="h-4 w-4" />
                                         </motion.span>
-                                        <span>{`↩ Переподключиться к игре (${reconnectSecondsLeft}s)`}</span>
+                                        <span>{`? Переподключиться к игре (${reconnectSecondsLeft}s)`}</span>
                                       </span>
                                     )}
                                   </Button>
@@ -11021,7 +11034,7 @@ export default function App() {
                     onClick={() => setDevlogPage((prev) => Math.max(1, prev - 1))}
                     disabled={currentDevlogPage <= 1}
                   >
-                    ← Пред.
+                    < Пред.
                   </Button>
                   <div className="text-sm text-zinc-400 min-w-[120px] text-center">
                     Страница {currentDevlogPage} из {devlogTotalPages}
@@ -11034,7 +11047,7 @@ export default function App() {
                     }
                     disabled={currentDevlogPage >= devlogTotalPages}
                   >
-                    След. →
+                    След. >
                   </Button>
                 </div>
               </CardContent>
@@ -11119,7 +11132,7 @@ export default function App() {
         {renderAdminTools()}
         {renderUpsellModal()}
         {renderBanOverlay()}
-        <ScreenTransitionLoader open={globalBlockingLoading} />
+        <ScreenTransitionLoader open={safeGlobalBlockingLoading} />
       </motion.div>
     );
   }
@@ -12042,7 +12055,7 @@ export default function App() {
         {renderAdminTools()}
         {renderUpsellModal()}
         {renderBanOverlay()}
-        <ScreenTransitionLoader open={globalBlockingLoading} />
+        <ScreenTransitionLoader open={safeGlobalBlockingLoading} />
       </motion.div>
     );
   }
@@ -12206,7 +12219,7 @@ export default function App() {
                         className="text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 rounded-lg h-8 w-8 p-0"
                         onClick={() => setShowFactHistory(false)}
                       >
-                        ✕
+                        ?
                       </Button>
                     </CardTitle>
                   </CardHeader>
@@ -12540,7 +12553,7 @@ export default function App() {
                           onClick={retreatStage}
                           disabled={game.stageIndex <= 0 || game.finished}
                         >
-                          ← Пред.
+                          < Пред.
                         </Button>
                         <Button
                           variant="secondary"
@@ -12551,7 +12564,7 @@ export default function App() {
                             game.finished
                           }
                         >
-                          След. →
+                          След. >
                         </Button>
                       </>
                     )}
@@ -13417,7 +13430,7 @@ export default function App() {
         {renderAdminTools()}
         {renderUpsellModal()}
         {renderBanOverlay()}
-        <ScreenTransitionLoader open={globalBlockingLoading} />
+        <ScreenTransitionLoader open={safeGlobalBlockingLoading} />
       </motion.div>
     );
   }
@@ -13434,4 +13447,5 @@ export default function App() {
     </div>
   );
 }
+
 
