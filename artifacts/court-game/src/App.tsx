@@ -5097,7 +5097,7 @@ export default function App() {
             <div className="space-y-4">
               <div className="rounded-3xl border border-zinc-800 bg-zinc-950/70">
                 <div
-                  className="relative min-h-[122px] rounded-3xl p-4 flex items-end overflow-visible"
+                  className="relative min-h-[122px] rounded-3xl p-4 flex items-center overflow-visible"
                   style={getBannerStyle(
                     viewPlayerProfile.banner,
                     viewPlayerProfile.avatar,
@@ -5105,9 +5105,9 @@ export default function App() {
                   )}
                 >
                   <div className="absolute inset-0 rounded-3xl bg-gradient-to-t from-black/75 via-black/35 to-black/10" />
-                  <div className="relative z-10 flex items-end gap-3">
+                  <div className="relative z-10 flex min-w-0 items-center gap-3">
                     <Avatar src={viewPlayerProfile.avatar ?? null} name={viewPlayerProfile.nickname} size={82} />
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <div className="text-xl font-bold leading-none truncate max-w-[240px] sm:max-w-[320px]">
                         {viewPlayerProfile.nickname}
                       </div>
@@ -5134,7 +5134,7 @@ export default function App() {
                             </span>
                           </button>
                           {viewProfileBadgeHintOpen ? (
-                            <div className="absolute left-0 top-full z-30 mt-2 w-[min(84vw,320px)] rounded-xl border border-zinc-700 bg-zinc-900/95 px-3 py-2 text-sm leading-relaxed text-zinc-200 shadow-[0_10px_24px_rgba(0,0,0,0.45)] whitespace-pre-wrap break-words">
+                            <div className="absolute left-1/2 top-full z-30 mt-2 w-64 max-w-[calc(100vw-4rem)] -translate-x-1/2 rounded-xl border border-zinc-700 bg-zinc-900/95 px-3 py-2 text-sm leading-relaxed text-zinc-200 shadow-[0_10px_24px_rgba(0,0,0,0.45)] whitespace-pre-wrap break-words sm:left-0 sm:translate-x-0">
                               {viewPlayerProfile.badges?.find(
                                 (badge) => badge.key === viewPlayerProfile.selectedBadgeKey,
                               )?.description ?? "Информация о бейдже отсутствует."}
@@ -8350,7 +8350,7 @@ export default function App() {
 
               <div className="rounded-3xl border border-zinc-800 bg-zinc-950/70 overflow-hidden">
               <div
-                  className="relative min-h-[122px] md:min-h-[122px] p-5 md:p-6 flex flex-col justify-end cursor-pointer group/banner"
+                  className="relative min-h-[150px] md:min-h-[122px] p-4 md:p-6 flex items-end cursor-pointer group/banner"
                   style={getBannerStyle(profileBannerDraft, profileAvatarDraft, playerName || "Игрок")}
                   onClick={() => {
                     if (profileBannerLocked) {
@@ -8366,13 +8366,13 @@ export default function App() {
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/45 to-black/15" />
                   <div className="absolute inset-0 opacity-0 group-hover/banner:opacity-100 transition-opacity bg-black/15" />
                   {profileBannerLocked && (
-                    <div className="pointer-events-none absolute right-[17px] top-4 inline-flex h-8 items-center gap-1.5 rounded-full border border-zinc-500/80 bg-zinc-900/80 px-3 text-xs font-semibold text-zinc-100">
+                    <div className="pointer-events-none absolute right-3 top-3 inline-flex h-7 items-center gap-1.5 rounded-full border border-zinc-500/80 bg-zinc-900/80 px-2.5 text-[11px] font-semibold text-zinc-100 md:h-8 md:px-3 md:text-xs">
                       <Lock className="h-3.5 w-3.5" />
                       <span>Баннер</span>
                     </div>
                   )}
-                  <div className="relative z-10 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                      <div className="flex flex-col items-center gap-4 text-center md:flex-row md:items-center md:text-left min-w-0">
+                  <div className="relative z-10 flex w-full items-end justify-between gap-3 md:gap-4">
+                      <div className="flex min-w-0 flex-1 items-center gap-3 md:gap-4 text-left">
                       <div
                         className="relative cursor-pointer group/avatar"
                         onClick={(e) => {
@@ -8380,12 +8380,12 @@ export default function App() {
                           avatarInputRef.current?.click();
                         }}
                       >
-                        <Avatar src={profileAvatarDraft} name={playerName || "?"} size={138} />
+                        <Avatar src={profileAvatarDraft} name={playerName || "?"} size={isMobile ? 94 : 138} />
                         <div className="absolute inset-0 rounded-full bg-black/55 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity">
                           <Camera className="w-6 h-6 text-white" />
                         </div>
                       </div>
-                        <div className="min-w-0 w-full">
+                        <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
                             <div className="text-2xl md:text-3xl font-bold leading-none">{playerName || "Игрок"}</div>
                             {selectedBadgeKey && (
@@ -8402,7 +8402,7 @@ export default function App() {
                               </span>
                             )}
                           </div>
-                          <div className="mt-3 flex flex-wrap items-center justify-center gap-2 text-xs md:justify-start">
+                          <div className="mt-2.5 flex flex-wrap items-center gap-2 text-xs">
                             <span className="inline-flex h-8 items-center rounded-full border border-zinc-600 bg-black/35 px-3 whitespace-nowrap">
                               Возраст: {ageLabel}
                           </span>
@@ -8415,10 +8415,10 @@ export default function App() {
                           </div>
                         </div>
                       </div>
-                    <div className="flex w-full items-center justify-center md:w-auto md:justify-end">
+                    <div className="flex items-center justify-end">
                       <Button
                         variant="outline"
-                        className="h-10 w-full max-w-[220px] rounded-xl border-zinc-500/70 bg-black/30 text-zinc-100 hover:bg-black/50 hover:text-zinc-100 md:w-auto md:max-w-none"
+                        className="h-10 min-w-[118px] rounded-xl border-zinc-500/70 bg-black/30 text-zinc-100 hover:bg-black/50 hover:text-zinc-100"
                         onClick={(e) => {
                           e.stopPropagation();
                           void resetProfileMedia();
@@ -9568,7 +9568,7 @@ export default function App() {
               <img
                 src="/favicon.png"
                 alt="CourtGame"
-                className="h-9 w-9 rounded-full object-cover shadow-[0_0_16px_rgba(239,68,68,0.3)]"
+                className="h-10 w-10 object-contain"
               />
               <div className="truncate text-[17px] font-semibold tracking-wide text-zinc-100">
                 CourtGame
@@ -9577,18 +9577,18 @@ export default function App() {
             <Button
               type="button"
               variant="outline"
-              onClick={() => setMobileMenuOpen((prev) => !prev)}
+              onClick={() => setMobileMenuOpen(true)}
               className="h-11 w-11 p-0 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
-              aria-label={mobileMenuOpen ? "Закрыть меню" : "Открыть меню"}
+              aria-label="Открыть меню"
             >
-              {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+              <Menu className="h-5 w-5" />
             </Button>
           </div>
         </div>
 
-        <div className="md:hidden h-14" />
+        <div className="md:hidden h-12" />
 
-        <div className="max-w-6xl mx-auto mb-3 md:mb-8 flex justify-center">
+        <div className="max-w-6xl mx-auto mb-2 md:mb-8 flex justify-center">
           <div className="relative w-full min-w-0">
 
             <AnimatePresence>
@@ -9608,10 +9608,10 @@ export default function App() {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
                     transition={{ duration: 0.22 }}
-                    className="md:hidden fixed inset-0 z-[240] flex items-start justify-center px-4 pt-20 pb-4"
+                    className="md:hidden fixed inset-0 z-[240] flex items-start justify-center px-4 pt-20 pb-3"
                   >
-                    <div className="w-full max-h-full overflow-y-auto rounded-3xl border border-zinc-800 bg-zinc-950/98 p-5 shadow-[0_24px_60px_rgba(0,0,0,0.72)]">
-                    <div className="mb-5 flex items-center justify-between">
+                    <div className="w-full max-h-full overflow-y-auto rounded-3xl border border-zinc-800 bg-zinc-950/98 p-6 shadow-[0_24px_60px_rgba(0,0,0,0.72)]">
+                    <div className="mb-6 flex items-center justify-between">
                       <div className="text-xs uppercase tracking-[0.16em] text-zinc-500">Навигация</div>
                       <Button
                         type="button"
@@ -9623,7 +9623,7 @@ export default function App() {
                         <X className="h-5 w-5" />
                       </Button>
                     </div>
-                    <div className="mb-7 flex justify-center">
+                    <div className="mb-8 flex justify-center">
                       {isAuthenticated ? (
                         <Button
                           variant="outline"
@@ -9631,10 +9631,13 @@ export default function App() {
                             setMobileMenuOpen(false);
                             openProfileScreen();
                           }}
-                          className="h-14 w-full max-w-[340px] rounded-2xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100 px-3 gap-3 justify-start"
+                          className="h-16 w-full max-w-[360px] rounded-2xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100 px-3 gap-3 justify-start"
                         >
                           <Avatar src={avatar} name={playerName || "Игрок"} size={34} />
-                          <span className="max-w-[220px] truncate text-base font-semibold">{playerName || "Игрок"}</span>
+                          <span className="min-w-0 text-left">
+                            <span className="block max-w-[220px] truncate text-base font-semibold">{playerName || "Игрок"}</span>
+                            <span className="block text-xs text-zinc-400">Личный кабинет</span>
+                          </span>
                         </Button>
                       ) : (
                         <Button
@@ -9645,14 +9648,14 @@ export default function App() {
                             setAuthView("form");
                             setAuthDialogOpen(true);
                           }}
-                          className="h-14 w-full max-w-[340px] rounded-2xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100 px-4 gap-2 inline-flex items-center justify-center"
+                          className="h-16 w-full max-w-[360px] rounded-2xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100 px-4 gap-2 inline-flex items-center justify-center"
                         >
                           <LogIn className="w-4 h-4" />
                           Войти
                         </Button>
                       )}
                     </div>
-                    <div className="grid gap-3.5">
+                    <div className="grid gap-4">
                       <Button
                         variant={homeTab === "play" ? "default" : "outline"}
                         onClick={() => {
@@ -9660,7 +9663,7 @@ export default function App() {
                           setProfileMenuOpen(false);
                           setMobileMenuOpen(false);
                         }}
-                        className={homeTab === "play" ? "h-12 rounded-xl bg-red-600 text-white hover:bg-red-500 border-0" : "h-12 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"}
+                        className={homeTab === "play" ? "h-[52px] rounded-xl bg-red-600 text-white hover:bg-red-500 border-0" : "h-[52px] rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"}
                       >
                         <Gamepad2 className="w-4 h-4 mr-2" />
                         Играть
@@ -9672,7 +9675,7 @@ export default function App() {
                           setProfileMenuOpen(false);
                           setMobileMenuOpen(false);
                         }}
-                        className={homeTab === "shop" ? "h-12 rounded-xl bg-red-600 text-white hover:bg-red-500 border-0" : "h-12 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"}
+                        className={homeTab === "shop" ? "h-[52px] rounded-xl bg-red-600 text-white hover:bg-red-500 border-0" : "h-[52px] rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"}
                       >
                         <Crown className="w-4 h-4 mr-2" />
                         Магазин
@@ -9684,7 +9687,7 @@ export default function App() {
                           setProfileMenuOpen(false);
                           setMobileMenuOpen(false);
                         }}
-                        className={homeTab === "development" ? "h-12 rounded-xl bg-red-600 text-white hover:bg-red-500 border-0" : "h-12 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"}
+                        className={homeTab === "development" ? "h-[52px] rounded-xl bg-red-600 text-white hover:bg-red-500 border-0" : "h-[52px] rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"}
                       >
                         <Wrench className="w-4 h-4 mr-2" />
                         Разработка
@@ -9697,10 +9700,24 @@ export default function App() {
                           setProfileMenuOpen(false);
                           setMobileMenuOpen(false);
                         }}
-                        className={homeTab === "help" ? "h-12 rounded-xl bg-red-600 text-white hover:bg-red-500 border-0" : "h-12 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"}
+                        className={homeTab === "help" ? "h-[52px] rounded-xl bg-red-600 text-white hover:bg-red-500 border-0" : "h-[52px] rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"}
                       >
                         <CircleHelp className="w-4 h-4 mr-2" />
                         Помощь
+                      </Button>
+                    </div>
+                    <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
+                      <div className="text-xs uppercase tracking-[0.14em] text-zinc-500">Дополнительно</div>
+                      <div className="mt-2 text-sm text-zinc-300">
+                        Поиск игроков и общение доступны в нашем Discord.
+                      </div>
+                      <Button
+                        variant="outline"
+                        onClick={() => window.open(DISCORD_INVITE_URL, "_blank", "noopener,noreferrer")}
+                        className="mt-3 h-11 w-full rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                      >
+                        <DiscordIcon className="mr-2 h-4 w-4" />
+                        Перейти в Discord
                       </Button>
                     </div>
                     </div>
