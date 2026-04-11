@@ -775,21 +775,23 @@ export function updateRoomManagement(
       const nonHostPool = activeMainPlayers.filter((player) => player.id !== room.hostId);
       const hostPool = activeMainPlayers.filter((player) => player.id === room.hostId);
       const overflowPlayers = [...shuffle(nonHostPool), ...hostPool].slice(0, overflowCount);
+      const overflowIds = new Set(overflowPlayers.map((player) => player.id));
       room.allowWitnesses = true;
 
       for (const player of overflowPlayers) {
-        const currentWitnessCount = room.players.filter((entry) => entry.roleKey === "witness").length;
-        const supportRole = currentWitnessCount < MAX_WITNESS_PLAYERS ? "witness" : "observer";
-        player.roleKey = supportRole;
-        player.roleTitle = supportRole === "witness" ? getWitnessRoleTitle(room) : "Наблюдатель";
+        player.roleKey = "witness";
+        player.roleTitle = getWitnessRoleTitle(room);
         player.goal =
-          supportRole === "witness"
-            ? "Наблюдать за процессом суда и, по требованию судьи, давать показания."
-            : "Наблюдать за процессом суда без участия в механиках и действиях сторон.";
+          "Наблюдать за процессом суда и, по требованию судьи, давать показания.";
         player.facts = [];
         player.cards = [];
         clearLobbyRoleState(player);
       }
+
+      room.players = [
+        ...room.players.filter((player) => !overflowIds.has(player.id)),
+        ...room.players.filter((player) => overflowIds.has(player.id)),
+      ];
     }
     room.modeKey = nextMode;
     room.maxPlayers = nextMaxPlayers;

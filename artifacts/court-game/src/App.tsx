@@ -391,6 +391,17 @@ function getSubscriptionTierLabel(tier: SubscriptionTier): string {
   return "Бесплатно";
 }
 
+const SUBSCRIPTION_TIER_PRIORITY: Record<SubscriptionTier, number> = {
+  free: 0,
+  trainee: 1,
+  practitioner: 2,
+  arbiter: 3,
+};
+
+function getHigherSubscriptionTier(a: SubscriptionTier, b: SubscriptionTier): SubscriptionTier {
+  return SUBSCRIPTION_TIER_PRIORITY[a] >= SUBSCRIPTION_TIER_PRIORITY[b] ? a : b;
+}
+
 function isPackLockedForTier(
   pack: { key?: string; title?: string; isAdult?: boolean } | null | undefined,
   tier: SubscriptionTier,
@@ -3465,6 +3476,7 @@ export default function App() {
   const [adminBotCount, setAdminBotCount] = useState(1);
   const [lobbyRoleDialogOpen, setLobbyRoleDialogOpen] = useState(false);
   const [lobbyRoleTargetPlayerId, setLobbyRoleTargetPlayerId] = useState<string | null>(null);
+  const [pendingFactRevealIds, setPendingFactRevealIds] = useState<string[]>([]);
   const [joinPasswordDialogMatch, setJoinPasswordDialogMatch] = useState<PublicMatchInfo | null>(null);
   const [joinPasswordInput, setJoinPasswordInput] = useState("");
   const [joinPasswordDialogError, setJoinPasswordDialogError] = useState("");
@@ -3642,12 +3654,17 @@ export default function App() {
     myProfile?.subscription ?? authUser?.subscription ?? null,
   );
   const myTier = normalizeSubscriptionTier(mySubscription.tier);
+  const roomHostTier = normalizeSubscriptionTier(room?.hostSubscriptionTier ?? "free");
+  const isMyHostRoom = !!room && room.hostId === roomControlPlayerId;
+  const effectiveLobbyTier = isMyHostRoom
+    ? getHigherSubscriptionTier(myTier, roomHostTier)
+    : myTier;
   const canUseRating = hasCapability(myTier, "canUseRating");
   const canUseProfileBanner = hasCapability(myTier, "canUseProfileBanner");
   const canUseAnimatedProfileMedia = hasCapability(myTier, "canUseAnimatedProfileMedia");
   const canCreatePrivateRooms = hasCapability(myTier, "canCreatePrivateRooms");
-  const canLetPlayersChooseRoles = hasCapability(myTier, "canLetPlayersChooseRoles");
-  const canChooseRoleInOwnLobby = hasCapability(myTier, "canChooseRoleInOwnLobby");
+  const canLetPlayersChooseRoles = hasCapability(effectiveLobbyTier, "canLetPlayersChooseRoles");
+  const canChooseRoleInOwnLobby = hasCapability(effectiveLobbyTier, "canChooseRoleInOwnLobby");
   const canChooseRoleInOtherLobbies = hasCapability(myTier, "canChooseRoleInOtherLobbies");
   const canCreatePacks = hasCapability(myTier, "canCreatePacks");
   const baseCreatePackKey = casePacks.find((pack) => pack.key === "classic")?.key ?? casePacks[0]?.key ?? "classic";
@@ -5700,6 +5717,7 @@ export default function App() {
         venueLabel,
         venueUrl,
         requiresPassword,
+        hostSubscriptionTier,
         lobbyChat,
       }: {
         players: PlayerInfo[];
@@ -5720,6 +5738,7 @@ export default function App() {
         venueLabel?: string;
         venueUrl?: string;
         requiresPassword?: boolean;
+        hostSubscriptionTier?: SubscriptionTier;
         lobbyChat?: LobbyChatMessage[];
       }) => {
         rememberKnownUserIds(players);
@@ -5756,6 +5775,7 @@ export default function App() {
             venueLabel: venueLabel ?? prev.venueLabel,
             venueUrl: venueUrl ?? prev.venueUrl,
             requiresPassword: requiresPassword ?? prev.requiresPassword,
+            hostSubscriptionTier: hostSubscriptionTier ?? prev.hostSubscriptionTier,
             lobbyChat: lobbyChat ?? prev.lobbyChat,
           };
         });
@@ -6080,12 +6100,40 @@ export default function App() {
 
     socket.on(
       "facts_updated",
-      ({ revealedFacts }: { revealedFacts: RevealedFact[] }) => {
-        setGame((prev) => (prev ? { ...prev, revealedFacts } : prev));
+      ({
+        revealedFacts,
+        players,
+      }: {
+        revealedFacts: RevealedFact[];
+        players?: Array<{ id: string; facts: Fact[] }>;
+      }) => {
+        setGame((prev) => {
+          if (!prev) return prev;
+          const myPlayerFacts = players?.find((player) => player.id === prev.me?.id)?.facts;
+          if (!myPlayerFacts || !prev.me) {
+            return { ...prev, revealedFacts };
+          }
+          const revealedIds = new Set(
+            myPlayerFacts.filter((fact) => fact.revealed).map((fact) => fact.id),
+          );
+          setPendingFactRevealIds((pending) => pending.filter((id) => !revealedIds.has(id)));
+          return {
+            ...prev,
+            revealedFacts,
+            me: {
+              ...prev.me,
+              facts: myPlayerFacts,
+            },
+          };
+        });
       },
     );
 
     socket.on("my_facts_updated", ({ facts }: { facts: Fact[] }) => {
+      const revealedIds = new Set(
+        facts.filter((fact) => fact.revealed).map((fact) => fact.id),
+      );
+      setPendingFactRevealIds((prev) => prev.filter((id) => !revealedIds.has(id)));
       setGame((prev) =>
         prev && prev.me ? { ...prev, me: { ...prev.me, facts } } : prev,
       );
@@ -6119,6 +6167,7 @@ export default function App() {
     });
 
     socket.on("stage_updated", ({ stageIndex }: { stageIndex: number }) => {
+      setPendingFactRevealIds([]);
       setGame((prev) => (prev ? { ...prev, stageIndex } : prev));
     });
 
@@ -6992,13 +7041,20 @@ export default function App() {
   const revealFact = useCallback(
     (factId: string) => {
       if (!game || !mySessionToken) return;
+      if (pendingFactRevealIds.includes(factId)) return;
+      const fact = game.me?.facts.find((item) => item.id === factId);
+      if (!fact || fact.revealed || game.me?.canRevealFactsNow !== true) return;
+      setPendingFactRevealIds((prev) => (prev.includes(factId) ? prev : [...prev, factId]));
+      window.setTimeout(() => {
+        setPendingFactRevealIds((prev) => prev.filter((id) => id !== factId));
+      }, 2500);
       socket.emit("reveal_fact", {
         code: game.code,
         sessionToken: mySessionToken,
         factId,
       });
     },
-    [socket, game, mySessionToken],
+    [socket, game, mySessionToken, pendingFactRevealIds],
   );
 
   const useCard = useCallback(
@@ -9005,7 +9061,7 @@ export default function App() {
           )}
         </div>
         <Dialog open={profileMatchesOpen} onOpenChange={setProfileMatchesOpen}>
-          <DialogContent className="relative max-w-3xl border-zinc-800 bg-zinc-950 text-zinc-100">
+          <DialogContent className="relative !left-1/2 !top-1/2 !translate-x-[-50%] !translate-y-[-50%] w-[min(96vw,56rem)] max-w-3xl max-h-[82vh] overflow-hidden border-zinc-800 bg-zinc-950 text-zinc-100">
             {viewPlayerProfileOpen && (
               <div className="pointer-events-none absolute inset-0 z-10 rounded-[inherit] bg-black/45" />
             )}
@@ -11517,7 +11573,7 @@ export default function App() {
       room.players.find((player) => player.id === lobbyRoleTargetPlayerId) ?? myLobbyPlayer;
     const getRolePickerButtonForPlayer = (player: PlayerInfo) => {
       if (player.roleKey === "witness" || player.roleKey === "observer") return null;
-      const selfPlayerId = myLobbyPlayer?.id ?? roomControlPlayerId;
+      const selfPlayerId = myLobbyPlayer?.id ?? roomControlPlayerId ?? myId;
       const isSelf = player.id === selfPlayerId;
       if (hasRoomHostControl) {
         if (isSelf && !canChooseRoleInOwnLobby) return null;
@@ -11551,7 +11607,7 @@ export default function App() {
         ? roleDialogTargetPlayer.id === myLobbyPlayer?.id
           ? canChooseRoleInOwnLobby
           : !usePreferredRoles && canLetPlayersChooseRoles
-        : roleDialogTargetPlayer.id === (myLobbyPlayer?.id ?? roomControlPlayerId) &&
+        : roleDialogTargetPlayer.id === (myLobbyPlayer?.id ?? roomControlPlayerId ?? myId) &&
           (usePreferredRoles || canChooseRoleInOtherLobbies));
     const canStartRoomNow = isQuickRoomMode
       ? activeLobbyPlayersCount >= 3 && activeLobbyPlayersCount <= roomMaxPlayers
@@ -13555,7 +13611,8 @@ export default function App() {
                       const canRevealThisFact =
                         !fact.revealed &&
                         !game.finished &&
-                        canRevealFactsAtCurrentStage;
+                        canRevealFactsAtCurrentStage &&
+                        !pendingFactRevealIds.includes(fact.id);
 
                       return (
                         <Card
