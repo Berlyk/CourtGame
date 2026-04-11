@@ -3635,7 +3635,9 @@ export default function App() {
     });
   }, []);
   const selectedCreateMode = getRoomModeMeta(createRoomMode);
-  const mySubscription = resolveSubscriptionView(myProfile?.subscription);
+  const mySubscription = resolveSubscriptionView(
+    myProfile?.subscription ?? authUser?.subscription ?? null,
+  );
   const myTier = normalizeSubscriptionTier(mySubscription.tier);
   const canUseRating = hasCapability(myTier, "canUseRating");
   const canUseProfileBanner = hasCapability(myTier, "canUseProfileBanner");
@@ -5128,7 +5130,10 @@ export default function App() {
           if (!open) setViewProfileBadgeHintOpen(false);
         }}
       >
-        <DialogContent className="max-w-[520px] overflow-visible border-zinc-800 bg-zinc-950 text-zinc-100">
+        <DialogContent
+          overlayClassName={profileMatchesOpen ? "bg-transparent backdrop-blur-0" : undefined}
+          className="max-w-[520px] overflow-visible border-zinc-800 bg-zinc-950 text-zinc-100"
+        >
           <DialogHeader>
             <DialogTitle>Профиль игрока</DialogTitle>
             <DialogDescription className="text-zinc-400">
@@ -7552,31 +7557,31 @@ export default function App() {
         ? getBanCountdownParts(activeBan.bannedUntil - nowMs)
         : null;
     return (
-      <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/80 px-4">
-        <div className="w-full max-w-2xl rounded-2xl border border-red-500/45 bg-[radial-gradient(120%_130%_at_50%_0%,rgba(239,68,68,0.24),transparent_58%),linear-gradient(165deg,rgba(15,10,12,0.98),rgba(10,10,12,0.98))] p-5 text-zinc-100 shadow-[0_34px_100px_rgba(0,0,0,0.76)]">
-          <div className="text-center text-[46px] font-black tracking-[0.08em] text-red-100">
+      <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/80 px-3 sm:px-4">
+        <div className="w-full max-w-2xl rounded-2xl border border-red-500/45 bg-[radial-gradient(120%_130%_at_50%_0%,rgba(239,68,68,0.24),transparent_58%),linear-gradient(165deg,rgba(15,10,12,0.98),rgba(10,10,12,0.98))] p-4 sm:p-5 text-zinc-100 shadow-[0_34px_100px_rgba(0,0,0,0.76)]">
+          <div className="text-center text-[clamp(1.95rem,8.4vw,2.9rem)] leading-[0.95] font-black tracking-[0.08em] text-red-100 break-words">
             ВЫ ЗАБЛОКИРОВАНЫ
           </div>
-          <div className="mt-4 text-center text-xl text-zinc-200">
+          <div className="mt-4 text-center text-base sm:text-xl text-zinc-200 break-words">
             {activeBan.reason?.trim() ? activeBan.reason.trim() : "Нарушение правил проекта."}
           </div>
           <div className="mt-5">
             {activeBan.isPermanent ? (
               <div className="text-center text-xl font-bold text-red-200">Навсегда</div>
             ) : (
-              <div className="mx-auto flex max-w-[500px] items-center justify-center gap-1.5 rounded-2xl border border-zinc-800/85 bg-zinc-950/45 px-2 py-2">
+              <div className="mx-auto grid w-full max-w-[500px] grid-cols-2 gap-1.5 rounded-2xl border border-zinc-800/85 bg-zinc-950/45 px-2 py-2 sm:flex sm:items-center sm:justify-center">
                 {[
                   { key: "d", value: countdown?.days ?? 0, label: "дней" },
                   { key: "h", value: countdown?.hours ?? 0, label: "часов" },
                   { key: "m", value: countdown?.minutes ?? 0, label: "минут" },
                   { key: "s", value: countdown?.seconds ?? 0, label: "секунд" },
                 ].map((item, idx, arr) => (
-                  <div key={`ban-timer-${item.key}`} className="flex items-center">
-                    <div className="w-[84px] rounded-lg border border-zinc-700/70 bg-zinc-950/80 px-2 py-1.5 text-center">
+                  <div key={`ban-timer-${item.key}`} className="flex items-center justify-center">
+                    <div className="w-full sm:w-[84px] rounded-lg border border-zinc-700/70 bg-zinc-950/80 px-2 py-1.5 text-center">
                       <div className="text-[16px] font-bold leading-none text-zinc-100">{String(item.value).padStart(2, "0")}</div>
                       <div className="mt-1 text-[9px] uppercase tracking-[0.12em] text-zinc-500">{item.label}</div>
                     </div>
-                    {idx < arr.length - 1 && <div className="mx-1 text-zinc-700">:</div>}
+                    {idx < arr.length - 1 && <div className="mx-1 hidden sm:block text-zinc-700">:</div>}
                   </div>
                 ))}
               </div>
@@ -9670,7 +9675,10 @@ export default function App() {
                 <div className="mt-5 flex justify-end">
                   <Button
                     variant="outline"
-                    onClick={() => setRankResultToast(null)}
+                    onClick={() => {
+                      localStorage.removeItem(RANK_TOAST_PENDING_STORAGE_KEY);
+                      setRankResultToast(null);
+                    }}
                     className="border-zinc-700 text-zinc-100 hover:bg-zinc-800"
                   >
                     Закрыть
@@ -10420,7 +10428,7 @@ export default function App() {
                                     className="w-full h-12 rounded-xl border-red-600/50 text-red-400 hover:bg-red-600/10 hover:text-red-300 gap-2"
                                   >
                                     {reconnectPersistent ? (
-                                      "? Переподключиться к игре"
+                                      "Переподключиться к игре"
                                     ) : (
                                       <span className="inline-flex items-center gap-2">
                                         <motion.span
@@ -10430,7 +10438,7 @@ export default function App() {
                                         >
                                           <DoorOpen className="h-4 w-4" />
                                         </motion.span>
-                                        <span>{`? Переподключиться к игре (${reconnectSecondsLeft}s)`}</span>
+                                        <span>{`Переподключиться к игре (${reconnectSecondsLeft}s)`}</span>
                                       </span>
                                     )}
                                   </Button>
@@ -10557,15 +10565,15 @@ export default function App() {
                                       </Badge>
                                     )}
                                   </div>
-                                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-zinc-400">
+                                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-zinc-400">
                                     <span>Хост: {match.hostName}</span>
                                     <span>{statusLabel}</span>
-                                    <span className="text-zinc-300">
-                                      Режим: {modeMeta.title}
+                                    <span className="min-w-0 text-zinc-300 max-w-full break-words [text-wrap:balance]">
+                                      <span className="text-zinc-500">Режим:</span> {modeMeta.title}
                                     </span>
                                     {match.currentStage && (
-                                      <span className="text-zinc-300">
-                                        Этап: {match.currentStage}
+                                      <span className="min-w-0 text-zinc-300 max-w-full break-words [text-wrap:balance]">
+                                        <span className="text-zinc-500">Этап:</span> {match.currentStage}
                                       </span>
                                     )}
                                   </div>
@@ -11517,7 +11525,7 @@ export default function App() {
         };
       }
       if (!isSelf) return null;
-      if (!usePreferredRoles || !canChooseRoleInOtherLobbies) return null;
+      if (!canChooseRoleInOtherLobbies) return null;
       return {
         label: "Выбрать роль",
         locked: false,
@@ -11536,7 +11544,6 @@ export default function App() {
           ? canChooseRoleInOwnLobby
           : !usePreferredRoles && canLetPlayersChooseRoles
         : roleDialogTargetPlayer.id === myLobbyPlayer?.id &&
-          usePreferredRoles &&
           canChooseRoleInOtherLobbies);
     const canStartRoomNow = isQuickRoomMode
       ? activeLobbyPlayersCount >= 3 && activeLobbyPlayersCount <= roomMaxPlayers
@@ -12584,7 +12591,7 @@ export default function App() {
                         className="text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 rounded-lg h-8 w-8 p-0"
                         onClick={() => setShowFactHistory(false)}
                       >
-                        ?
+                        <X className="h-4 w-4" />
                       </Button>
                     </CardTitle>
                   </CardHeader>
@@ -12880,12 +12887,12 @@ export default function App() {
             <CardContent className="p-8 space-y-6">
               <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6">
                 <div className="space-y-2 max-w-3xl">
-                  <div className="flex items-center gap-2 text-sm text-zinc-400">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs sm:text-sm text-zinc-400 min-w-0">
                     <Badge className="bg-zinc-800 text-zinc-100 border border-zinc-700">
                       {game.caseData.mode}
                     </Badge>
-                    <span>{game.caseData.title}</span>
-                    <span className="text-zinc-600">• Комната {game.code}</span>
+                    <span className="min-w-0 break-words [text-wrap:balance]">{game.caseData.title}</span>
+                    <span className="text-zinc-600 break-words">• Комната {game.code}</span>
                   </div>
                   <h1 className="text-3xl md:text-4xl font-bold">
                     {game.caseData.description}
@@ -12946,7 +12953,7 @@ export default function App() {
             </CardContent>
           </Card>
 
-          <div className="grid xl:grid-cols-[1.1fr_1.1fr_0.9fr] gap-6">
+          <div className="grid xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1.1fr)_minmax(0,0.9fr)] gap-6">
             <InfoBlock title="Ваша роль" icon={<Shield className="w-5 h-5" />}>
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
@@ -12999,7 +13006,7 @@ export default function App() {
                           style={getBannerStyle(p.banner, p.avatar, p.name)}
                         />
                         <div className="pointer-events-none absolute inset-0 bg-black/35" />
-                        <div className="relative z-10 flex items-center gap-2 min-w-0">
+                        <div className="relative z-10 flex items-center gap-2 min-w-0 flex-1">
                           <div
                             className={`inline-flex items-center gap-2 min-w-0 rounded-md px-1 py-0.5 text-left ${
                               profileUserId
@@ -13019,11 +13026,6 @@ export default function App() {
                               </span>
                             ) : null}
                           </div>
-                          {(p.warningCount ?? 0) > 0 && (
-                            <Badge className="bg-red-950/70 text-red-300 border border-red-700/70">
-                              {p.warningCount}/3
-                            </Badge>
-                          )}
                           {typeof p.disconnectedUntil === "number" &&
                             p.disconnectedUntil > nowMs && (
                               <motion.span
@@ -13050,7 +13052,19 @@ export default function App() {
                               </motion.span>
                             )}
                         </div>
-                        <span className="relative z-10 text-zinc-500">{p.roleTitle}</span>
+                        <div className="relative z-10 ml-2 shrink-0 flex items-center gap-2">
+                          {(p.warningCount ?? 0) > 0 && (
+                            <Badge className="bg-red-950/70 text-red-300 border border-red-700/70">
+                              {p.warningCount}/3
+                            </Badge>
+                          )}
+                          <span
+                            className="text-zinc-300 text-right"
+                            style={{ textShadow: "0 1px 2px rgba(0,0,0,0.85), 0 0 10px rgba(0,0,0,0.45)" }}
+                          >
+                            {p.roleTitle}
+                          </span>
+                        </div>
                       </div>
                       );
                     })}
@@ -13060,7 +13074,7 @@ export default function App() {
             </InfoBlock>
 
             <InfoBlock title="Улики дела" icon={<Eye className="w-5 h-5" />}>
-              <div className="space-y-3">
+              <div className="space-y-3 min-h-[320px]">
                 {game.caseData.evidence.map((item, index) => (
                   <motion.div
                     key={index}
@@ -13070,7 +13084,7 @@ export default function App() {
                     animate="animate"
                   >
                     <Card className="rounded-2xl border-dashed border-zinc-700 bg-zinc-900/80 text-zinc-100">
-                      <CardContent className="p-4 text-sm">{item}</CardContent>
+                      <CardContent className="p-4 text-sm min-h-[74px] flex items-center">{item}</CardContent>
                     </Card>
                   </motion.div>
                 ))}
@@ -13235,9 +13249,7 @@ export default function App() {
                         Назад
                       </Button>
                     </div>
-                    <div
-                      className="space-y-2.5 max-h-[340px] overflow-y-auto overflow-x-hidden pr-2 [scrollbar-width:thin] [scrollbar-color:rgba(113,113,122,0.9)_rgba(24,24,27,0.45)] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-zinc-900/55 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-700/85 [&::-webkit-scrollbar-thumb:hover]:bg-zinc-500"
-                    >
+                    <div className="space-y-2.5 max-h-[420px] overflow-y-auto overflow-x-hidden pr-2 [scrollbar-width:thin] [scrollbar-color:rgba(113,113,122,0.9)_rgba(24,24,27,0.45)] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-zinc-900/55 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-700/85 [&::-webkit-scrollbar-thumb:hover]:bg-zinc-500">
                       {warningTargets.length === 0 ? (
                         <div className="text-sm text-zinc-500">
                           Нет игроков для предупреждения.
@@ -13437,7 +13449,7 @@ export default function App() {
           </div>
 
           <div
-            className={`grid gap-6 ${isObserverRole ? "xl:grid-cols-2" : "xl:grid-cols-[1fr_1fr_1fr_1fr]"}`}
+            className={`grid gap-6 ${isObserverRole ? "xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]" : "xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]"}`}
           >
             <InfoBlock
               title="Раскрытые факты"
@@ -13455,7 +13467,7 @@ export default function App() {
                 ) : undefined
               }
             >
-              <div className="space-y-3 min-h-[80px]">
+              <div className="space-y-3 min-h-[80px] min-w-0">
                 {visibleFacts.length === 0 ? (
                   <div className="text-sm text-zinc-400">
                     Пока никто не раскрыл ни одного факта.
@@ -13525,7 +13537,7 @@ export default function App() {
                 title="Ваши факты"
                 icon={<AlertCircle className="w-5 h-5" />}
               >
-                <div className="space-y-3">
+                <div className="space-y-3 min-w-0">
                   {game.me.facts.length === 0 ? (
                     <div className="text-sm text-zinc-400">
                       У вас нет фактов для раскрытия.
@@ -13587,7 +13599,7 @@ export default function App() {
                 title="Ваши карты механик"
                 icon={<Scale className="w-5 h-5" />}
               >
-                <div className="space-y-3">
+                <div className="space-y-3 min-w-0">
                   {game.me.cards.map((card) => (
                     <Card
                       key={card.id}
@@ -13636,7 +13648,7 @@ export default function App() {
               title="Журнал механик"
               icon={<Sparkles className="w-5 h-5" />}
             >
-              <div className="space-y-3 min-h-[80px]">
+              <div className="space-y-3 min-h-[80px] min-w-0">
                 {visibleCards.length === 0 ? (
                   <div className="text-sm text-zinc-400">
                     Пока ни одна карта не была использована.

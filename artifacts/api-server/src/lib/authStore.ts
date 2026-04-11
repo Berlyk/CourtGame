@@ -2932,6 +2932,8 @@ export async function recordMatchOutcome(input: {
   roomCode: string;
   verdict: string;
   expectedVerdict: string;
+  matchStartedAt?: number;
+  matchFinishedAt?: number;
   players: Array<{
     userId?: string;
     roleKey?: string;
@@ -3011,20 +3013,103 @@ export async function recordMatchOutcome(input: {
     witness: false,
   };
 
-  for (const player of input.players) {
-    const nickname =
-      typeof player.nickname === "string" && player.nickname.trim()
-        ? player.nickname.trim()
-        : "Игрок";
-    const rawUserId = typeof player.userId === "string" ? player.userId : "";
-    const userId = await resolveUserId(rawUserId, nickname);
-    const roleKeyRaw = typeof player.roleKey === "string" ? player.roleKey.trim() : "";
-    const roleKey = normalizeRoleKey(
-      roleKeyRaw,
-      typeof player.roleTitle === "string" ? player.roleTitle : "",
+  const MIN_MATCH_DURATION_MS = 10 * 60 * 1000;
+  const SAME_OPPONENT_WINS_LIMIT = 2;
+  const safeStartedAt =
+    typeof input.matchStartedAt === "number" && Number.isFinite(input.matchStartedAt)
+      ? input.matchStartedAt
+      : null;
+  const safeFinishedAt =
+    typeof input.matchFinishedAt === "number" && Number.isFinite(input.matchFinishedAt)
+      ? input.matchFinishedAt
+      : Date.now();
+  const isShortMatch =
+    safeStartedAt !== null &&
+    safeFinishedAt > safeStartedAt &&
+    safeFinishedAt - safeStartedAt < MIN_MATCH_DURATION_MS;
+
+  const normalizedPlayers = await Promise.all(
+    input.players.map(async (player) => {
+      const nickname =
+        typeof player.nickname === "string" && player.nickname.trim()
+          ? player.nickname.trim()
+          : "Игрок";
+      const rawUserId = typeof player.userId === "string" ? player.userId : "";
+      const userId = await resolveUserId(rawUserId, nickname);
+      const roleKeyRaw = typeof player.roleKey === "string" ? player.roleKey.trim() : "";
+      const roleKey = normalizeRoleKey(
+        roleKeyRaw,
+        typeof player.roleTitle === "string" ? player.roleTitle : "",
+      );
+      const roleTitle =
+        typeof player.roleTitle === "string" && player.roleTitle.trim()
+          ? player.roleTitle.trim()
+          : ROLE_TITLES[roleKey] ?? "Роль";
+      return {
+        userId,
+        nickname,
+        roleKey,
+        roleTitle,
+      };
+    }),
+  );
+
+  const matchParticipantIds = normalizedPlayers
+    .map((player) => player.userId)
+    .filter((value): value is string => !!value)
+    .sort();
+  const repeatWinCache = new Map<string, boolean>();
+  const shouldBlockWinBySameOpponents = async (userId: string): Promise<boolean> => {
+    const cached = repeatWinCache.get(userId);
+    if (typeof cached === "boolean") return cached;
+    const opponentSignature = matchParticipantIds.filter((id) => id !== userId).join(",");
+    if (!opponentSignature) {
+      repeatWinCache.set(userId, false);
+      return false;
+    }
+    const historyRows = await pool.query<{ participants: unknown }>(
+      `
+        SELECT participants
+        FROM auth_user_match_history
+        WHERE user_id = $1
+          AND did_win = TRUE
+        ORDER BY finished_at DESC
+        LIMIT 300
+      `,
+      [userId],
     );
+    let repeatedWins = 0;
+    for (const row of historyRows.rows) {
+      const participants = Array.isArray(row.participants) ? row.participants : [];
+      const participantIds = participants
+        .map((entry) =>
+          entry && typeof entry === "object" && typeof (entry as { userId?: unknown }).userId === "string"
+            ? ((entry as { userId: string }).userId || "").trim()
+            : "",
+        )
+        .filter((value) => value.length > 0)
+        .sort();
+      const signature = participantIds.filter((id) => id !== userId).join(",");
+      if (signature === opponentSignature) {
+        repeatedWins += 1;
+        if (repeatedWins >= SAME_OPPONENT_WINS_LIMIT) {
+          repeatWinCache.set(userId, true);
+          return true;
+        }
+      }
+    }
+    repeatWinCache.set(userId, false);
+    return false;
+  };
+
+  for (const player of normalizedPlayers) {
+    const userId = player.userId;
+    const roleKey = player.roleKey;
     if (!userId || !roleKey || roleKey === "witness") continue;
-    const win = roleWinMap[roleKey] ?? false;
+    const baseWin = roleWinMap[roleKey] ?? false;
+    const repeatedWinBlocked = baseWin ? await shouldBlockWinBySameOpponents(userId) : false;
+    const ignoreProgress = isShortMatch || repeatedWinBlocked;
+    const didWin = baseWin && !ignoreProgress;
     await pool.query(
       `
         INSERT INTO auth_user_role_stats (user_id, role_key, matches, wins, updated_at)
@@ -3035,7 +3120,7 @@ export async function recordMatchOutcome(input: {
           wins = auth_user_role_stats.wins + EXCLUDED.wins,
           updated_at = NOW()
       `,
-      [userId, roleKey, win ? 1 : 0],
+      [userId, roleKey, didWin ? 1 : 0],
     );
 
     const subscriptionRow = await pool.query<{
@@ -3065,6 +3150,7 @@ export async function recordMatchOutcome(input: {
         ? resolveSubscriptionView(subscriptionRow.rows[0]).capabilities.canUseRating
         : false;
     if (canUseRating) {
+      const ratingDelta = ignoreProgress ? 0 : baseWin ? 1 : -1;
       await pool.query(
         `
           INSERT INTO auth_user_ranks (user_id, points, updated_at)
@@ -3074,22 +3160,16 @@ export async function recordMatchOutcome(input: {
             points = GREATEST(0, auth_user_ranks.points + EXCLUDED.points),
             updated_at = NOW()
         `,
-        [userId, win ? 1 : -1],
+        [userId, ratingDelta],
       );
     }
 
-    const participants = input.players.map((entry) => ({
-      userId: typeof entry.userId === "string" && entry.userId.trim() ? entry.userId.trim() : undefined,
-      nickname:
-        typeof entry.nickname === "string" && entry.nickname.trim()
-          ? entry.nickname.trim()
-          : "Игрок",
-      roleKey: typeof entry.roleKey === "string" ? entry.roleKey : "",
-      roleTitle:
-        typeof entry.roleTitle === "string" && entry.roleTitle.trim()
-          ? entry.roleTitle.trim()
-          : ROLE_TITLES[typeof entry.roleKey === "string" ? entry.roleKey : ""] ?? "Роль",
-      isSelf: typeof entry.userId === "string" && entry.userId.trim() === userId,
+    const participants = normalizedPlayers.map((entry) => ({
+      userId: entry.userId ?? undefined,
+      nickname: entry.nickname,
+      roleKey: entry.roleKey,
+      roleTitle: entry.roleTitle,
+      isSelf: entry.userId === userId,
     }));
 
     await pool.query(
@@ -3115,10 +3195,8 @@ export async function recordMatchOutcome(input: {
         input.verdict,
         input.expectedVerdict,
         roleKey,
-        typeof player.roleTitle === "string" && player.roleTitle.trim()
-          ? player.roleTitle.trim()
-          : ROLE_TITLES[roleKey] ?? "Роль",
-        win,
+        player.roleTitle,
+        didWin,
         JSON.stringify(participants),
       ],
     );

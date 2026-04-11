@@ -251,19 +251,22 @@ async function requireAdmin(
     return null;
   }
   const requiredKey = String(process.env.ADMIN_PANEL_KEY ?? "").trim();
-  if (requiredKey) {
-    const providedRaw = req.headers["x-admin-key"];
-    const provided =
-      typeof providedRaw === "string"
-        ? providedRaw.trim()
-        : Array.isArray(providedRaw)
-          ? String(providedRaw[0] ?? "").trim()
-          : "";
-    if (!provided || !secureCompare(provided, requiredKey)) {
-      registerAdminFailure(clientIp, nowMs);
-      res.status(403).json({ message: "Неверный ключ админ-панели." });
-      return null;
-    }
+  if (!requiredKey) {
+    registerAdminFailure(clientIp, nowMs);
+    res.status(503).json({ message: "ADMIN_PANEL_KEY не настроен на сервере." });
+    return null;
+  }
+  const providedRaw = req.headers["x-admin-key"];
+  const provided =
+    typeof providedRaw === "string"
+      ? providedRaw.trim()
+      : Array.isArray(providedRaw)
+        ? String(providedRaw[0] ?? "").trim()
+        : "";
+  if (!provided || !secureCompare(provided, requiredKey)) {
+    registerAdminFailure(clientIp, nowMs);
+    res.status(403).json({ message: "Неверный ключ админ-панели." });
+    return null;
   }
   const allowedIps = getAdminAllowedIps();
   if (allowedIps.size > 0) {
