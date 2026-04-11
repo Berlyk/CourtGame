@@ -3013,7 +3013,7 @@ function PlayerCard({
                 <span className="truncate">{player.name}</span>
                 {player.selectedBadgeKey ? (
                   <span
-                    className={`inline-flex h-6 w-6 shrink-0 self-center items-center justify-center rounded-md border border-zinc-600/80 shadow-[0_0_0_1px_rgba(0,0,0,0.28)] ${badgeTheme.icon}`}
+                    className={`inline-flex h-6 w-6 shrink-0 self-center items-center justify-center rounded-md ${badgeTheme.icon}`}
                   >
                     <BadgeGlyph badgeKey={player.selectedBadgeKey} className="h-3.5 w-3.5" />
                   </span>
@@ -6863,8 +6863,9 @@ export default function App() {
   const chooseLobbyRole = useCallback((roleKey: AssignableRole | null, targetPlayerId?: string) => {
     if (!room || !roomControlSessionToken) return;
     const isHost = room.hostId === roomControlPlayerId;
-    const targetId = targetPlayerId ?? roomControlPlayerId ?? "";
-    const isSelf = !targetId || targetId === roomControlPlayerId;
+    const selfPlayerId = roomControlPlayerId ?? myId ?? "";
+    const targetId = targetPlayerId ?? selfPlayerId;
+    const isSelf = !targetId || targetId === selfPlayerId;
     if (isHost) {
       if (isSelf && !canChooseRoleInOwnLobby) {
         openSubscriptionUpsell(
@@ -6880,7 +6881,7 @@ export default function App() {
         );
         return;
       }
-    } else if (!canChooseRoleInOtherLobbies) {
+    } else if (!room.usePreferredRoles && !canChooseRoleInOtherLobbies) {
       openSubscriptionUpsell(
         "canChooseRoleInOtherLobbies",
         "Выбор роли в чужом лобби доступен только в подписке «Арбитр».",
@@ -7562,7 +7563,7 @@ export default function App() {
     return (
       <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/80 px-3 sm:px-4">
         <div className="w-full max-w-2xl rounded-2xl border border-red-500/45 bg-[radial-gradient(120%_130%_at_50%_0%,rgba(239,68,68,0.24),transparent_58%),linear-gradient(165deg,rgba(15,10,12,0.98),rgba(10,10,12,0.98))] p-4 sm:p-5 text-zinc-100 shadow-[0_34px_100px_rgba(0,0,0,0.76)]">
-          <div className="text-center text-[clamp(1.95rem,8.4vw,2.9rem)] leading-[0.95] font-black tracking-[0.08em] text-red-100 break-words">
+          <div className="text-center text-[clamp(1.5rem,6.2vw,2.35rem)] leading-[0.95] font-black tracking-[0.03em] text-red-100 whitespace-nowrap">
             ВЫ ЗАБЛОКИРОВАНЫ
           </div>
           <div className="mt-4 text-center text-base sm:text-xl text-zinc-200 break-words">
@@ -7572,7 +7573,7 @@ export default function App() {
             {activeBan.isPermanent ? (
               <div className="text-center text-xl font-bold text-red-200">Навсегда</div>
             ) : (
-              <div className="mx-auto flex w-full max-w-[520px] items-center justify-start gap-1.5 overflow-x-auto rounded-2xl border border-zinc-800/85 bg-zinc-950/45 px-2 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:justify-center">
+              <div className="mx-auto flex w-full max-w-[520px] items-center justify-center gap-1 rounded-2xl border border-zinc-800/85 bg-zinc-950/45 px-1.5 py-2">
                 {[
                   { key: "d", value: countdown?.days ?? 0, label: "дней" },
                   { key: "h", value: countdown?.hours ?? 0, label: "часов" },
@@ -7580,11 +7581,11 @@ export default function App() {
                   { key: "s", value: countdown?.seconds ?? 0, label: "секунд" },
                 ].map((item, idx, arr) => (
                   <div key={`ban-timer-${item.key}`} className="flex shrink-0 items-center justify-center">
-                    <div className="w-[74px] rounded-lg border border-zinc-700/70 bg-zinc-950/80 px-2 py-1.5 text-center sm:w-[84px]">
-                      <div className="text-[16px] font-bold leading-none text-zinc-100">{String(item.value).padStart(2, "0")}</div>
+                    <div className="w-[66px] rounded-lg border border-zinc-700/70 bg-zinc-950/80 px-1.5 py-1.5 text-center sm:w-[80px]">
+                      <div className="text-[15px] font-bold leading-none text-zinc-100">{String(item.value).padStart(2, "0")}</div>
                       <div className="mt-1 text-[9px] uppercase tracking-[0.12em] text-zinc-500">{item.label}</div>
                     </div>
-                    {idx < arr.length - 1 && <div className="mx-1 text-zinc-700">:</div>}
+                    {idx < arr.length - 1 && <div className="mx-0.5 text-zinc-700">:</div>}
                   </div>
                 ))}
               </div>
@@ -11516,7 +11517,8 @@ export default function App() {
       room.players.find((player) => player.id === lobbyRoleTargetPlayerId) ?? myLobbyPlayer;
     const getRolePickerButtonForPlayer = (player: PlayerInfo) => {
       if (player.roleKey === "witness" || player.roleKey === "observer") return null;
-      const isSelf = player.id === myLobbyPlayer?.id;
+      const selfPlayerId = myLobbyPlayer?.id ?? roomControlPlayerId;
+      const isSelf = player.id === selfPlayerId;
       if (hasRoomHostControl) {
         if (isSelf && !canChooseRoleInOwnLobby) return null;
         if (!isSelf && usePreferredRoles) return null;
@@ -11531,7 +11533,7 @@ export default function App() {
         };
       }
       if (!isSelf) return null;
-      if (!canChooseRoleInOtherLobbies) return null;
+      if (!usePreferredRoles && !canChooseRoleInOtherLobbies) return null;
       return {
         label: "Выбрать роль",
         locked: false,
@@ -11549,8 +11551,8 @@ export default function App() {
         ? roleDialogTargetPlayer.id === myLobbyPlayer?.id
           ? canChooseRoleInOwnLobby
           : !usePreferredRoles && canLetPlayersChooseRoles
-        : roleDialogTargetPlayer.id === myLobbyPlayer?.id &&
-          canChooseRoleInOtherLobbies);
+        : roleDialogTargetPlayer.id === (myLobbyPlayer?.id ?? roomControlPlayerId) &&
+          (usePreferredRoles || canChooseRoleInOtherLobbies));
     const canStartRoomNow = isQuickRoomMode
       ? activeLobbyPlayersCount >= 3 && activeLobbyPlayersCount <= roomMaxPlayers
       : activeLobbyPlayersCount === roomMaxPlayers;
@@ -12412,7 +12414,7 @@ export default function App() {
                             <span className="truncate text-sm font-semibold text-zinc-100">{player.name}</span>
                             {player.selectedBadgeKey ? (
                               <span
-                                className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-zinc-600/80 shadow-[0_0_0_1px_rgba(0,0,0,0.28)] ${
+                                className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md ${
                                   getBadgeTheme(player.selectedBadgeKey).icon
                                 }`}
                               >
@@ -12469,15 +12471,7 @@ export default function App() {
     const lawyerChatButtonLabel = isLawyerRole
       ? "Чат с клиентом"
       : "Чат с адвокатом";
-    const localSpeechRole = resolveNormalizedSpeechRole(
-      game.me.roleKey,
-      game.me.roleTitle,
-    );
-    const canRevealFactsAtCurrentStage =
-      game.me.canRevealFactsNow === true ||
-      (!!localSpeechRole &&
-        !isPreparationStage &&
-        canRoleRevealFactsAtStage(localSpeechRole, currentStage));
+    const canRevealFactsAtCurrentStage = game.me.canRevealFactsNow === true;
     const hasActiveProtest = !!game.activeProtest;
     const verdictCloseAt =
       typeof game.verdictCloseAt === "number" ? game.verdictCloseAt : null;
@@ -13032,7 +13026,7 @@ export default function App() {
                             <span className="truncate">{p.name}</span>
                             {p.selectedBadgeKey ? (
                               <span
-                                className={`inline-flex h-6 w-6 shrink-0 self-center items-center justify-center rounded-md border border-zinc-600/80 shadow-[0_0_0_1px_rgba(0,0,0,0.28)] ${
+                                className={`inline-flex h-6 w-6 shrink-0 self-center items-center justify-center rounded-md ${
                                   getBadgeTheme(p.selectedBadgeKey).icon
                                 }`}
                               >
@@ -13800,7 +13794,7 @@ export default function App() {
                             <span className="truncate text-sm font-semibold text-zinc-100">{player.name}</span>
                             {player.selectedBadgeKey ? (
                               <span
-                                className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-zinc-600/80 shadow-[0_0_0_1px_rgba(0,0,0,0.28)] ${
+                                className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md ${
                                   getBadgeTheme(player.selectedBadgeKey).icon
                                 }`}
                               >

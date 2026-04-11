@@ -232,8 +232,8 @@ function resolveSpeechOwnerRole(stageName: string): SpeechOwnerRole | null {
   const normalizedStageName = normalizeStageName(stageName);
   if (!normalizedStageName) return null;
   const hasLawyer = normalizedStageName.includes("адвокат");
-  const hasPlaintiff = normalizedStageName.includes("истец");
-  const hasDefendant = normalizedStageName.includes("ответчик");
+  const hasPlaintiff = normalizedStageName.includes("истц");
+  const hasDefendant = normalizedStageName.includes("ответч");
   const hasProsecutor = normalizedStageName.includes("прокурор");
 
   if (hasLawyer && hasPlaintiff) return "plaintiffLawyer";
