@@ -3665,7 +3665,6 @@ export default function App() {
   const canCreatePrivateRooms = hasCapability(myTier, "canCreatePrivateRooms");
   const canLetPlayersChooseRoles = hasCapability(effectiveLobbyTier, "canLetPlayersChooseRoles");
   const canChooseRoleInOwnLobby = hasCapability(effectiveLobbyTier, "canChooseRoleInOwnLobby");
-  const canChooseRoleInOtherLobbies = hasCapability(myTier, "canChooseRoleInOtherLobbies");
   const canCreatePacks = hasCapability(myTier, "canCreatePacks");
   const baseCreatePackKey = casePacks.find((pack) => pack.key === "classic")?.key ?? casePacks[0]?.key ?? "classic";
   const freeCreatePack = casePacks.find((pack) => pack.key === baseCreatePackKey) ?? casePacks[0] ?? null;
@@ -6926,12 +6925,6 @@ export default function App() {
         );
         return;
       }
-    } else if (!room.usePreferredRoles && !canChooseRoleInOtherLobbies) {
-      openSubscriptionUpsell(
-        "canChooseRoleInOtherLobbies",
-        "Выбор роли в чужом лобби доступен только в подписке «Арбитр».",
-      );
-      return;
     }
     socket.emit("choose_lobby_role", {
       code: room.code,
@@ -6946,30 +6939,11 @@ export default function App() {
     roomControlPlayerId,
     canChooseRoleInOwnLobby,
     canLetPlayersChooseRoles,
-    canChooseRoleInOtherLobbies,
     openSubscriptionUpsell,
   ]);
 
   const updateRoomManagementSettings = useCallback((patch: Record<string, unknown>) => {
     if (!room || !roomControlSessionToken) return;
-    if (patch.visibility === "private" && !canCreatePrivateRooms) {
-      openSubscriptionUpsell(
-        "canCreatePrivateRooms",
-        "Приватные комнаты доступны только в подписке «Арбитр».",
-      );
-      return;
-    }
-    if (typeof patch.casePackKey === "string") {
-      const nextPack = casePacks.find((pack) => pack.key === patch.casePackKey);
-      if (nextPack && isPackLockedForTier(nextPack, myTier)) {
-        const requiredTier = getRequiredTierForPack(nextPack);
-        openSubscriptionUpsell(
-          requiredTier === "trainee" ? "canAccessPackSevere" : "canAccessAllPacks",
-          `Пак «${getCasePackTitleDisplay(nextPack.title)}» доступен с подписки «${getSubscriptionTierLabel(requiredTier)}».`,
-        );
-        return;
-      }
-    }
     socket.emit("update_room_management", {
       code: room.code,
       sessionToken: roomControlSessionToken,
@@ -6979,10 +6953,6 @@ export default function App() {
     socket,
     room,
     roomControlSessionToken,
-    canCreatePrivateRooms,
-    openSubscriptionUpsell,
-    casePacks,
-    myTier,
   ]);
 
   const transferRoomHostTo = useCallback((targetPlayerId: string) => {
@@ -11565,6 +11535,11 @@ export default function App() {
     const myLobbyPlayer = room.players.find((player) => player.id === myId) ?? null;
     const hostTransferCandidates = room.players.filter((player) => player.id !== room.hostId);
     const hasRoomHostControl = roomControlPlayerId === room.hostId;
+    const hostRoomCapabilityTier = normalizeSubscriptionTier(room.hostSubscriptionTier ?? "free");
+    const roomManagementTier = hasRoomHostControl
+      ? getHigherSubscriptionTier(hostRoomCapabilityTier, myTier)
+      : myTier;
+    const canCreatePrivateRoomsInRoom = hasCapability(roomManagementTier, "canCreatePrivateRooms");
     const roleDialogTargetPlayer =
       room.players.find((player) => player.id === lobbyRoleTargetPlayerId) ?? myLobbyPlayer;
     const getRolePickerButtonForPlayer = (player: PlayerInfo) => {
@@ -11585,7 +11560,6 @@ export default function App() {
         };
       }
       if (!isSelf) return null;
-      if (!usePreferredRoles && !canChooseRoleInOtherLobbies) return null;
       return {
         label: "Выбрать роль",
         locked: false,
@@ -11603,8 +11577,7 @@ export default function App() {
         ? roleDialogTargetPlayer.id === myLobbyPlayer?.id
           ? canChooseRoleInOwnLobby
           : !usePreferredRoles && canLetPlayersChooseRoles
-        : roleDialogTargetPlayer.id === (myLobbyPlayer?.id ?? roomControlPlayerId ?? myId) &&
-          (usePreferredRoles || canChooseRoleInOtherLobbies));
+        : roleDialogTargetPlayer.id === (myLobbyPlayer?.id ?? roomControlPlayerId ?? myId));
     const canStartRoomNow = isQuickRoomMode
       ? activeLobbyPlayersCount >= 3 && activeLobbyPlayersCount <= roomMaxPlayers
       : activeLobbyPlayersCount === roomMaxPlayers;
@@ -11805,7 +11778,7 @@ export default function App() {
                         return getCasePackSortOrder(a) - getCasePackSortOrder(b);
                       })
                       .map((pack) => {
-                      const isLocked = isPackLockedForTier(pack, myTier);
+                      const isLocked = isPackLockedForTier(pack, roomManagementTier);
                       return (
                         <button
                           key={`manage-pack-${pack.key}`}
@@ -12055,12 +12028,12 @@ export default function App() {
                   <div className="flex items-center justify-between gap-2">
                     <div className="text-sm font-medium text-zinc-100 inline-flex items-center gap-1.5">
                       Приватная
-                      {!canCreatePrivateRooms && <Lock className="h-3.5 w-3.5 text-zinc-400" />}
+                      {!canCreatePrivateRoomsInRoom && <Lock className="h-3.5 w-3.5 text-zinc-400" />}
                     </div>
                     <Switch
                       checked={room.visibility === "private"}
                       onCheckedChange={(checked) => {
-                        if (checked && !canCreatePrivateRooms) {
+                        if (checked && !canCreatePrivateRoomsInRoom) {
                           openSubscriptionUpsell(
                             "canCreatePrivateRooms",
                             "Приватные комнаты доступны только в подписке «Арбитр».",

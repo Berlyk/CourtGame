@@ -1138,9 +1138,11 @@ export function setupSocket(httpServer: HttpServer) {
             : null;
           const authSelectedBadgeKey =
             authPublicProfile?.selectedBadgeKey ?? authUser?.selectedBadgeKey ?? undefined;
-          const subscriptionTier = normalizeSubscriptionTier(
-            authPublicProfile?.subscription?.tier ?? "free",
-          );
+          const subscriptionTier = authUser?.id
+            ? authPublicProfile?.subscription?.tier
+              ? normalizeSubscriptionTier(authPublicProfile.subscription.tier)
+              : (await getSubscriptionByUserId(authUser.id)).tier
+            : "free";
           const nextOptions: CreateRoomOptions = { ...(options ?? {}) };
           if (
             nextOptions.visibility === "private" &&
@@ -1245,9 +1247,11 @@ export function setupSocket(httpServer: HttpServer) {
           : null;
         const authSelectedBadgeKey =
           authPublicProfile?.selectedBadgeKey ?? authUser?.selectedBadgeKey ?? undefined;
-        const subscriptionTier = normalizeSubscriptionTier(
-          authPublicProfile?.subscription?.tier ?? "free",
-        );
+        const subscriptionTier = authUser?.id
+          ? authPublicProfile?.subscription?.tier
+            ? normalizeSubscriptionTier(authPublicProfile.subscription.tier)
+            : (await getSubscriptionByUserId(authUser.id)).tier
+          : "free";
         const sanitizedMedia = sanitizeProfileMediaByTier(subscriptionTier, {
           avatar: avatar || authUser?.avatar || undefined,
           banner: banner || authUser?.banner || undefined,
@@ -1677,6 +1681,8 @@ export function setupSocket(httpServer: HttpServer) {
         const actorTier = actor?.userId
           ? (await getSubscriptionByUserId(actor.userId)).tier
           : "free";
+        room.hostSubscriptionTier = actorTier;
+        room.isPromoted = hasCapability(actorTier, "canHighlightHostedMatch");
         if (!hasCapability(actorTier, "canLetPlayersChooseRoles")) {
           socket.emit("error", {
             message: "Разрешать игрокам выбирать роли можно с подпиской «Практик».",
@@ -1729,6 +1735,8 @@ export function setupSocket(httpServer: HttpServer) {
         const actorTier = actor?.userId
           ? (await getSubscriptionByUserId(actor.userId)).tier
           : "free";
+        room.hostSubscriptionTier = actorTier;
+        room.isPromoted = hasCapability(actorTier, "canHighlightHostedMatch");
         if (patch?.visibility === "private" && !hasCapability(actorTier, "canCreatePrivateRooms")) {
           socket.emit("error", {
             message: "Приватные комнаты доступны только в подписке «Арбитр».",
@@ -1851,7 +1859,10 @@ export function setupSocket(httpServer: HttpServer) {
             socket.emit("error", { message: "Можно менять только свою роль." });
             return;
           }
-          if (!hasCapability(actorTier, "canChooseRoleInOtherLobbies")) {
+          if (
+            !room.usePreferredRoles &&
+            !hasCapability(actorTier, "canChooseRoleInOtherLobbies")
+          ) {
             socket.emit("error", {
               message: "Выбор роли в чужом лобби доступен только в подписке «Арбитр».",
             });
