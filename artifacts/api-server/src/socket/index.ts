@@ -2581,21 +2581,21 @@ export function setupSocket(httpServer: HttpServer) {
           sessionToken
         });
         if (!actorId || room.hostId !== actorId) {
-          socket.emit("error", { message: "Only host can kick players." });
+          socket.emit("error", { message: "Только ведущий может кикать игроков." });
           return;
         }
         if (room.started || room.game) {
-          socket.emit("error", { message: "Kick is available only in lobby before game starts." });
+          socket.emit("error", { message: "Кик доступен только в лобби до старта матча." });
           return;
         }
         if (targetPlayerId === room.hostId) {
-          socket.emit("error", { message: "Host cannot be kicked." });
+          socket.emit("error", { message: "Ведущего нельзя кикнуть." });
           return;
         }
 
         const targetPlayer = room.players.find((p: any) => p.id === targetPlayerId);
         if (!targetPlayer) {
-          socket.emit("error", { message: "Player not found in room." });
+          socket.emit("error", { message: "Игрок не найден в лобби." });
           return;
         }
 
@@ -2612,7 +2612,7 @@ export function setupSocket(httpServer: HttpServer) {
         if (targetSocketId) {
           socketToRoom.delete(targetSocketId);
           io.to(targetSocketId).emit("kicked", {
-            message: "You were kicked from the room by the host."
+            message: "Вы были кикнуты из лобби."
           });
           io.in(targetSocketId).socketsLeave(roomCode);
         }

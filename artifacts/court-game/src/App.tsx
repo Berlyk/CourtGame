@@ -6024,7 +6024,7 @@ export default function App() {
       setScreen("home");
     });
 
-    socket.on("kicked", (payload?: { message?: string }) => {
+    socket.on("kicked", () => {
       clearRoomActionPending();
       clearReconnectWindow();
       localStorage.removeItem("court_session");
@@ -6051,12 +6051,8 @@ export default function App() {
       setJoinPasswordVisible(false);
       setProfileMenuOpen(false);
       setScreen("home");
-      setKickedAlert(
-        typeof payload?.message === "string" && payload.message.trim()
-          ? payload.message.trim()
-          : "Вы были кикнуты из комнаты.",
-      );
-      setTimeout(() => setKickedAlert(""), 5000);
+      setKickedAlert("Вы были кикнуты из лобби.");
+      setTimeout(() => setKickedAlert(""), 3000);
     });
 
     socket.on("room_closed", () => {
