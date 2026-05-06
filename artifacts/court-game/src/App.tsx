@@ -8160,9 +8160,9 @@ export default function App() {
           overlayClassName={
             profileMatchesOpen || observerListDialogOpen ? "bg-transparent backdrop-blur-0" : undefined
           }
-          className="max-w-[640px] overflow-visible !rounded-[32px] border-zinc-800 bg-zinc-950 text-zinc-100"
+          className="w-[calc(100vw-1.5rem)] max-w-[760px] overflow-visible !rounded-[32px] border-zinc-800 bg-zinc-950 text-zinc-100"
         >
-          <DialogHeader className="mb-3 text-center">
+          <DialogHeader className="mb-1 text-center sm:mb-2">
             <DialogTitle className="text-center text-2xl font-bold sm:text-3xl">Профиль игрока</DialogTitle>
             <DialogDescription className="sr-only">Публичная информация.</DialogDescription>
           </DialogHeader>
@@ -8184,14 +8184,14 @@ export default function App() {
             <div className="space-y-4">
               <div className="rounded-3xl border border-zinc-800 bg-zinc-950/70">
                 <div
-                  className="relative min-h-[122px] rounded-t-3xl p-4 flex items-center overflow-visible"
+                  className="relative min-h-[122px] overflow-hidden rounded-3xl p-4 flex items-center"
                   style={getBannerStyle(
                     viewPlayerProfile.banner,
                     viewPlayerProfile.avatar,
                     viewPlayerProfile.nickname,
                   )}
                 >
-                  <div className="absolute inset-0 rounded-t-3xl bg-gradient-to-t from-black/75 via-black/35 to-black/10" />
+                  <div className="absolute inset-0 rounded-3xl bg-gradient-to-t from-black/75 via-black/35 to-black/10" />
                   <div className="relative z-10 flex min-w-0 items-center gap-3">
                     <Avatar src={viewPlayerProfile.avatar ?? null} name={viewPlayerProfile.nickname} size={82} />
                     <div className="min-w-0 flex-1 [text-shadow:0_1px_6px_rgba(0,0,0,0.75)]">
@@ -8239,12 +8239,15 @@ export default function App() {
                         <span className="inline-flex h-5 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap sm:h-6 sm:px-2">
                           Пол: {genderLabel}
                         </span>
-                        <span className="inline-flex h-5 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap sm:h-6 sm:px-2">
+                        <span className="hidden h-5 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap sm:inline-flex sm:h-6 sm:px-2">
                           С нами с: {createdAtLabel || "неизвестной даты"}
                         </span>
                       </div>
                     </div>
                   </div>
+                </div>
+                <div className="px-2 py-1 text-center text-[11px] leading-4 text-zinc-400 sm:hidden">
+                  С нами с: {createdAtLabel || "неизвестной даты"}
                 </div>
               </div>
               {viewPlayerProfile.bio?.trim() && (
@@ -8256,17 +8259,17 @@ export default function App() {
                 </div>
               )}
               <div className="grid grid-cols-3 gap-2 text-center">
-                <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-2 py-2">
-                  <div className="text-[11px] text-zinc-500">Матчей</div>
-                  <div className="text-sm font-semibold mt-1">{viewPlayerProfile.stats?.totalMatches ?? 0}</div>
+                <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-2 py-3">
+                  <div className="text-xs text-zinc-500">Матчей</div>
+                  <div className="mt-1 text-lg font-bold">{viewPlayerProfile.stats?.totalMatches ?? 0}</div>
                 </div>
-                <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-2 py-2">
-                  <div className="text-[11px] text-zinc-500">Побед</div>
-                  <div className="text-sm font-semibold mt-1">{viewPlayerProfile.stats?.totalWins ?? 0}</div>
+                <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-2 py-3">
+                  <div className="text-xs text-zinc-500">Побед</div>
+                  <div className="mt-1 text-lg font-bold">{viewPlayerProfile.stats?.totalWins ?? 0}</div>
                 </div>
-                <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-2 py-2">
-                  <div className="text-[11px] text-zinc-500">Winrate</div>
-                  <div className="text-sm font-semibold mt-1">
+                <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-2 py-3">
+                  <div className="text-xs text-zinc-500">Winrate</div>
+                  <div className="mt-1 text-lg font-bold">
                     {Math.round(viewPlayerProfile.stats?.totalWinRate ?? 0)}%
                   </div>
                 </div>
@@ -13398,10 +13401,10 @@ export default function App() {
                         type="button"
                         variant="outline"
                         onClick={() => setMobileMenuOpen(false)}
-                        className="!absolute right-3 top-3 z-20 !h-7 !w-7 min-w-7 rounded-lg border-zinc-700 bg-zinc-900/90 p-0 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                        className="!absolute right-3 top-3 z-20 !h-6 !w-6 !min-w-6 rounded-md border-zinc-700 bg-zinc-900/90 p-0 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
                         aria-label="Закрыть меню"
                       >
-                        <X className="h-4 w-4" />
+                        <X className="h-3.5 w-3.5" />
                       </Button>
                     <div className="mb-3 pr-10">
                       <div className="flex items-start gap-3">
