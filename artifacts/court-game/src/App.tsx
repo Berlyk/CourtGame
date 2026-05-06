@@ -420,6 +420,10 @@ function buildShopPaymentLogoFallbackDataUrl(title: string): string {
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }
 
+const SOLANA_MARK_DATA_URL = buildShopPaymentLogoDataUrl(
+  `<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 508.07 398.17"><defs><style>.cls-1{fill:url(#linear-gradient);}.cls-2{fill:url(#linear-gradient-2);}.cls-3{fill:url(#linear-gradient-3);}</style><linearGradient id="linear-gradient" x1="463" y1="205.16" x2="182.39" y2="742.62" gradientTransform="translate(0 -198)" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#00ffa3"/><stop offset="1" stop-color="#dc1fff"/></linearGradient><linearGradient id="linear-gradient-2" x1="340.31" y1="141.1" x2="59.71" y2="678.57" xlink:href="#linear-gradient"/><linearGradient id="linear-gradient-3" x1="401.26" y1="172.92" x2="120.66" y2="710.39" xlink:href="#linear-gradient"/></defs><path class="cls-1" d="M84.53,358.89A16.63,16.63,0,0,1,96.28,354H501.73a8.3,8.3,0,0,1,5.87,14.18l-80.09,80.09a16.61,16.61,0,0,1-11.75,4.86H10.31A8.31,8.31,0,0,1,4.43,439Z" transform="translate(-1.98 -55)"/><path class="cls-2" d="M84.53,59.85A17.08,17.08,0,0,1,96.28,55H501.73a8.3,8.3,0,0,1,5.87,14.18l-80.09,80.09a16.61,16.61,0,0,1-11.75,4.86H10.31A8.31,8.31,0,0,1,4.43,140Z" transform="translate(-1.98 -55)"/><path class="cls-3" d="M427.51,208.42a16.61,16.61,0,0,0-11.75-4.86H10.31a8.31,8.31,0,0,0-5.88,14.18l80.1,80.09a16.6,16.6,0,0,0,11.75,4.86H501.73a8.3,8.3,0,0,0,5.87-14.18Z" transform="translate(-1.98 -55)"/></svg>`,
+);
+
 const SHOP_PAYMENT_INLINE_LOGOS: Record<string, string> = {
   sbp: buildShopPaymentLogoDataUrl(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 220" role="img" aria-label="СБП"><defs><linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#2ec8ff"/><stop offset="100%" stop-color="#2f6bff"/></linearGradient></defs><rect width="640" height="220" rx="28" fill="transparent"/><g transform="translate(30 30)"><polygon points="70,0 105,60 35,60" fill="#f6a623"/><polygon points="140,60 210,60 175,0" fill="#ef3d7f"/><polygon points="105,70 175,70 140,130" fill="#7047d5"/><polygon points="70,140 105,80 35,80" fill="#2f98ff"/><polygon points="140,140 210,140 175,200" fill="#1dcf72"/><polygon points="105,150 175,150 140,210" fill="#00c7c7"/></g><text x="270" y="120" fill="#f4f6ff" font-size="78" font-weight="700" font-family="Inter,Segoe UI,Arial,sans-serif">СБП</text></svg>`),
   visa: buildShopPaymentLogoDataUrl(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 220" role="img" aria-label="VISA"><rect width="640" height="220" rx="28" fill="transparent"/><text x="50%" y="62%" dominant-baseline="middle" text-anchor="middle" fill="#1a4dff" font-size="126" font-weight="800" letter-spacing="2" font-family="Arial Black,Segoe UI,Arial,sans-serif">VISA</text></svg>`),
@@ -682,7 +686,7 @@ function renderShopPaymentLogo(method: ShopPaymentMethod): React.ReactNode {
             preserveAspectRatio="xMidYMid meet"
           />
           <image
-            href="https://solana.com/src/img/branding/solanaLogoMark.svg"
+            href={SOLANA_MARK_DATA_URL}
             x="184"
             y="74"
             width="52"
@@ -3031,13 +3035,19 @@ function Avatar({
   src,
   name,
   size = 32,
+  staticIfAnimated = false,
 }: {
   src: string | null;
   name: string;
   size?: number;
+  staticIfAnimated?: boolean;
 }) {
   const gifMeta = parseGifCropMeta(src);
   const finalSrc = gifMeta?.src ?? src;
+  const initials = name ? name.slice(0, 2).toUpperCase() : "??";
+  if (staticIfAnimated && finalSrc && isAnimatedProfileMediaValue(src)) {
+    return <StaticAvatarCanvas src={finalSrc} name={name} size={size} gifMeta={gifMeta} initials={initials} />;
+  }
   if (finalSrc && gifMeta?.target === "avatar") {
     const hasPreciseRatios =
       typeof gifMeta.displayRatioX === "number" &&
@@ -3098,7 +3108,6 @@ function Avatar({
       />
     );
   }
-  const initials = name ? name.slice(0, 2).toUpperCase() : "??";
   return (
     <div
       className="rounded-full bg-zinc-700 text-zinc-200 flex items-center justify-center flex-shrink-0 text-xs font-bold border border-zinc-600"
@@ -3106,6 +3115,109 @@ function Avatar({
     >
       {initials}
     </div>
+  );
+}
+
+function StaticAvatarCanvas({
+  src,
+  name,
+  size,
+  gifMeta,
+  initials,
+}: {
+  src: string;
+  name: string;
+  size: number;
+  gifMeta: GifCropMeta | null;
+  initials: string;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setFailed(false);
+    const image = new Image();
+    image.decoding = "async";
+    image.onload = () => {
+      if (cancelled || !canvasRef.current) return;
+      const canvas = canvasRef.current;
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      canvas.width = Math.ceil(size * dpr);
+      canvas.height = Math.ceil(size * dpr);
+      canvas.style.width = `${size}px`;
+      canvas.style.height = `${size}px`;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, size, size);
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+      ctx.clip();
+
+      if (gifMeta?.target === "avatar") {
+        const hasPreciseRatios =
+          typeof gifMeta.displayRatioX === "number" &&
+          Number.isFinite(gifMeta.displayRatioX) &&
+          gifMeta.displayRatioX > 0 &&
+          typeof gifMeta.displayRatioY === "number" &&
+          Number.isFinite(gifMeta.displayRatioY) &&
+          gifMeta.displayRatioY > 0 &&
+          typeof gifMeta.offsetRatioX === "number" &&
+          Number.isFinite(gifMeta.offsetRatioX) &&
+          typeof gifMeta.offsetRatioY === "number" &&
+          Number.isFinite(gifMeta.offsetRatioY);
+        const mediaWidth = hasPreciseRatios ? size * (gifMeta.displayRatioX ?? 1) : size * gifMeta.zoom;
+        const mediaHeight = hasPreciseRatios ? size * (gifMeta.displayRatioY ?? 1) : size * gifMeta.zoom;
+        const offsetXPx = hasPreciseRatios ? size * (gifMeta.offsetRatioX ?? 0) : 0;
+        const offsetYPx = hasPreciseRatios ? size * (gifMeta.offsetRatioY ?? 0) : 0;
+        const drawX = size / 2 - mediaWidth / 2 + offsetXPx;
+        const drawY = size / 2 - mediaHeight / 2 + offsetYPx;
+        if (gifMeta.flipX) {
+          ctx.translate(size, 0);
+          ctx.scale(-1, 1);
+          ctx.drawImage(image, size - drawX - mediaWidth, drawY, mediaWidth, mediaHeight);
+        } else {
+          ctx.drawImage(image, drawX, drawY, mediaWidth, mediaHeight);
+        }
+      } else {
+        const scale = Math.max(size / Math.max(1, image.naturalWidth), size / Math.max(1, image.naturalHeight));
+        const drawWidth = image.naturalWidth * scale;
+        const drawHeight = image.naturalHeight * scale;
+        ctx.drawImage(image, (size - drawWidth) / 2, (size - drawHeight) / 2, drawWidth, drawHeight);
+      }
+
+      ctx.restore();
+    };
+    image.onerror = () => {
+      if (!cancelled) setFailed(true);
+    };
+    image.src = src;
+    return () => {
+      cancelled = true;
+    };
+  }, [gifMeta, size, src]);
+
+  if (failed) {
+    return (
+      <div
+        className="rounded-full bg-zinc-700 text-zinc-200 flex items-center justify-center flex-shrink-0 text-xs font-bold border border-zinc-600"
+        style={{ width: size, height: size }}
+      >
+        {initials}
+      </div>
+    );
+  }
+
+  return (
+    <canvas
+      ref={canvasRef}
+      aria-label={name}
+      role="img"
+      className="rounded-full object-cover flex-shrink-0 border border-zinc-700 bg-zinc-700"
+      style={{ width: size, height: size }}
+    />
   );
 }
 
@@ -4000,24 +4112,7 @@ function PlayerCard({
     playerRoleLabel === "Адвокат ответчика";
   const isTwoLineLawyerRole = isPlaintiffLawyerRole || isDefendantLawyerRole;
   const hasRolePickerButton = !!rolePickerButton;
-  const playerRoleLabelNode =
-    isPlaintiffLawyerRole
-      ? (
-          <>
-            Адвокат
-            <br />
-            истца
-          </>
-        )
-      : isDefendantLawyerRole
-        ? (
-            <>
-              Адвокат
-              <br />
-              ответчика
-            </>
-          )
-        : playerRoleLabel;
+  const playerRoleLabelNode = playerRoleLabel;
   const disconnectProgress = isDisconnected
     ? 1 - Math.min(1, disconnectRemainingMs / RECONNECT_GRACE_MS)
     : 1;
@@ -4069,7 +4164,7 @@ function PlayerCard({
               <div
                 className={
                   isTwoLineLawyerRole
-                    ? "max-w-[132px] whitespace-normal break-words text-[11px] leading-[1.06] text-zinc-200 sm:max-w-[220px] sm:text-[13px]"
+                    ? "max-w-[132px] whitespace-normal break-words text-[11px] leading-[1.08] text-zinc-200 sm:max-w-none sm:whitespace-nowrap sm:break-normal sm:text-[13px]"
                     : "max-w-[132px] truncate whitespace-nowrap text-[11px] leading-tight text-zinc-200 sm:max-w-[220px] sm:text-[13px]"
                 }
                 style={{ textShadow: "0 1px 2px rgba(0,0,0,0.85), 0 0 10px rgba(0,0,0,0.45)" }}
@@ -8065,13 +8160,11 @@ export default function App() {
           overlayClassName={
             profileMatchesOpen || observerListDialogOpen ? "bg-transparent backdrop-blur-0" : undefined
           }
-          className="max-w-[520px] overflow-visible border-zinc-800 bg-zinc-950 text-zinc-100"
+          className="!w-[min(calc(100vw-3rem),420px)] !max-w-[420px] gap-2 overflow-visible !rounded-[32px] border-zinc-800 bg-zinc-950 p-5 text-zinc-100 sm:!w-full sm:!max-w-[582px] sm:px-7 sm:pb-7 sm:pt-3"
         >
-          <DialogHeader>
-            <DialogTitle>Профиль игрока</DialogTitle>
-            <DialogDescription className="text-zinc-400">
-              Публичная информация.
-            </DialogDescription>
+          <DialogHeader className="mb-0 grid min-w-0 w-full place-items-center justify-self-stretch text-center sm:mb-1">
+            <DialogTitle className="mx-auto block w-full min-w-0 max-w-full text-center text-2xl font-bold sm:text-[23px]">Профиль игрока</DialogTitle>
+            <DialogDescription className="sr-only">Публичная информация.</DialogDescription>
           </DialogHeader>
           {viewPlayerProfileLoading ? (
             <div className="space-y-3 rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
@@ -8088,78 +8181,88 @@ export default function App() {
               {viewPlayerProfileError}
             </div>
           ) : viewPlayerProfile ? (
-            <div className="space-y-4">
-              <div className="rounded-3xl border border-zinc-800 bg-zinc-950/70">
+            <div className="min-w-0 w-full max-w-full space-y-4 justify-self-stretch">
+              <div className="w-full max-w-full overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-950/70">
                 <div
-                  className="relative min-h-[122px] rounded-3xl p-4 flex items-center overflow-visible"
+                  className="relative mx-auto min-h-[132px] w-full max-w-full overflow-hidden rounded-t-3xl px-3 py-4 flex items-center sm:min-h-[130px] sm:rounded-3xl sm:p-5"
                   style={getBannerStyle(
                     viewPlayerProfile.banner,
                     viewPlayerProfile.avatar,
                     viewPlayerProfile.nickname,
                   )}
                 >
-                  <div className="absolute inset-0 rounded-3xl bg-gradient-to-t from-black/75 via-black/35 to-black/10" />
-                  <div className="relative z-10 flex min-w-0 items-center gap-3">
-                    <Avatar src={viewPlayerProfile.avatar ?? null} name={viewPlayerProfile.nickname} size={82} />
-                    <div className="min-w-0 flex-1 [text-shadow:0_1px_6px_rgba(0,0,0,0.75)]">
-                      <div className="text-xl font-bold leading-none truncate max-w-[240px] sm:max-w-[320px]">
-                        {viewPlayerProfile.nickname}
-                      </div>
-                      {viewPlayerProfile.selectedBadgeKey ? (
-                        <div className="mt-2 relative inline-flex">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setViewProfileBadgeHintOpen((prev) => !prev)
-                            }
-                            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors shadow-[0_6px_16px_rgba(0,0,0,0.45)] drop-shadow-[0_1px_4px_rgba(0,0,0,0.45)] ${
-                              getBadgeTheme(viewPlayerProfile.selectedBadgeKey).chip
-                            }`}
-                          >
-                            <BadgeGlyph
-                              badgeKey={viewPlayerProfile.selectedBadgeKey}
-                              className={`h-3.5 w-3.5 ${getBadgeTheme(viewPlayerProfile.selectedBadgeKey).iconOnly ?? "text-zinc-300"}`}
-                            />
-                            <span>
-                              {getBadgeTitleByKey(
-                                viewPlayerProfile.selectedBadgeKey,
-                                viewPlayerProfile.badges,
-                              )}
-                            </span>
-                          </button>
-                          {viewProfileBadgeHintOpen ? (
-                            <div className="absolute left-1/2 top-full z-30 mt-2 w-64 max-w-[calc(100vw-4rem)] -translate-x-1/2 rounded-xl border border-zinc-700 bg-zinc-900/95 px-3 py-2 text-sm leading-relaxed text-zinc-200 shadow-[0_10px_24px_rgba(0,0,0,0.45)] whitespace-pre-wrap break-words sm:left-0 sm:translate-x-0">
-                              {findBadgeByKey(
-                                viewPlayerProfile.selectedBadgeKey,
-                                viewPlayerProfile.badges,
-                              )?.description ?? "Информация о бейдже отсутствует."}
-                            </div>
-                          ) : null}
+                  <div className="absolute inset-0 rounded-t-3xl bg-gradient-to-t from-black/75 via-black/35 to-black/10 sm:rounded-3xl" />
+                  {viewProfileBadgeHintOpen && viewPlayerProfile.selectedBadgeKey ? (
+                    <div className="absolute left-1/2 top-4 z-30 w-max min-w-[150px] max-w-[min(220px,calc(100vw-4rem))] -translate-x-1/2 rounded-lg border border-zinc-700 bg-zinc-900/95 px-2.5 py-1.5 text-xs leading-snug text-zinc-200 shadow-[0_10px_24px_rgba(0,0,0,0.45)] whitespace-normal break-words sm:hidden">
+                      {findBadgeByKey(
+                        viewPlayerProfile.selectedBadgeKey,
+                        viewPlayerProfile.badges,
+                      )?.description ?? "Информация о бейдже отсутствует."}
+                    </div>
+                  ) : null}
+                  <div className="relative z-10 flex min-w-0 w-full items-center gap-1 sm:gap-3">
+                    <span className="block shrink-0 sm:hidden">
+                      <Avatar src={viewPlayerProfile.avatar ?? null} name={viewPlayerProfile.nickname} size={76} />
+                    </span>
+                    <span className="hidden shrink-0 sm:block">
+                      <Avatar src={viewPlayerProfile.avatar ?? null} name={viewPlayerProfile.nickname} size={90} />
+                    </span>
+                    <div className="min-w-0 flex-1 overflow-hidden [text-shadow:0_1px_6px_rgba(0,0,0,0.75)]">
+                      <div className="flex min-w-0 max-w-full flex-nowrap items-center gap-1 sm:gap-2">
+                        <div className="min-w-0 truncate text-xl font-bold leading-none [text-shadow:0_2px_8px_rgba(0,0,0,0.95)] sm:text-2xl">
+                          {viewPlayerProfile.nickname}
                         </div>
-                      ) : null}
-                      <div className="mt-2 text-xs text-zinc-300 [text-shadow:0_1px_6px_rgba(0,0,0,0.75)]">
-                        Профиль с {createdAtLabel || "неизвестной даты"}
+                        {viewPlayerProfile.selectedBadgeKey ? (
+                          <div className="relative inline-flex shrink-0">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setViewProfileBadgeHintOpen((prev) => !prev)
+                              }
+                              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] transition-colors shadow-[0_6px_16px_rgba(0,0,0,0.45)] drop-shadow-[0_1px_4px_rgba(0,0,0,0.75)] [text-shadow:0_2px_8px_rgba(0,0,0,0.95)] sm:gap-1.5 sm:px-2.5 sm:py-1 sm:text-sm ${
+                                getBadgeTheme(viewPlayerProfile.selectedBadgeKey).chip
+                              }`}
+                            >
+                              <BadgeGlyph
+                                badgeKey={viewPlayerProfile.selectedBadgeKey}
+                                className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${getBadgeTheme(viewPlayerProfile.selectedBadgeKey).iconOnly ?? "text-zinc-300"}`}
+                              />
+                              <span>
+                                {getBadgeTitleByKey(
+                                  viewPlayerProfile.selectedBadgeKey,
+                                  viewPlayerProfile.badges,
+                                )}
+                              </span>
+                            </button>
+                            {viewProfileBadgeHintOpen ? (
+                              <div className="absolute left-1/2 top-full z-30 mt-1.5 hidden w-max min-w-[150px] max-w-[min(220px,calc(100vw-4rem))] -translate-x-1/2 rounded-lg border border-zinc-700 bg-zinc-900/95 px-2.5 py-1.5 text-xs leading-snug text-zinc-200 shadow-[0_10px_24px_rgba(0,0,0,0.45)] whitespace-normal break-words sm:block sm:left-0 sm:translate-x-0">
+                                {findBadgeByKey(
+                                  viewPlayerProfile.selectedBadgeKey,
+                                  viewPlayerProfile.badges,
+                                )?.description ?? "Информация о бейдже отсутствует."}
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </div>
+                      <div className="mt-1.5 flex max-w-full flex-nowrap items-center gap-0.5 text-[10px] sm:mt-2 sm:gap-1 sm:text-[10px]">
+                        <span className="inline-flex h-4 shrink-0 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap sm:h-5 sm:px-1.5">
+                          Возраст: {ageLabel}
+                        </span>
+                        <span className="inline-flex h-4 shrink-0 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap sm:h-5 sm:px-1.5">
+                          Пол: {genderLabel}
+                        </span>
+                        <span className="hidden h-5 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap sm:inline-flex sm:px-1.5">
+                          С нами с: {createdAtLabel || "неизвестной даты"}
+                        </span>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
-              {(viewPlayerProfile.gender || typeof viewPlayerProfile.age === "number") && (
-                <div className="grid grid-cols-1 gap-3 text-sm">
-                  {viewPlayerProfile.gender && (
-                    <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2">
-                      <div className="text-zinc-500 text-xs">Пол</div>
-                      <div className="text-zinc-100 mt-1">{genderLabel}</div>
-                    </div>
-                  )}
-                  {typeof viewPlayerProfile.age === "number" && (
-                    <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2">
-                      <div className="text-zinc-500 text-xs">Возраст</div>
-                      <div className="text-zinc-100 mt-1">{ageLabel}</div>
-                    </div>
-                  )}
+                <div className="px-2 py-1.5 text-center text-[11px] leading-4 text-zinc-400 sm:hidden">
+                  С нами с: {createdAtLabel || "неизвестной даты"}
                 </div>
-              )}
+              </div>
               {viewPlayerProfile.bio?.trim() && (
                 <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2">
                   <div className="text-zinc-500 text-xs">О себе</div>
@@ -8168,18 +8271,18 @@ export default function App() {
                   </div>
                 </div>
               )}
-              <div className="grid grid-cols-3 gap-2 text-center">
-                <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-2 py-2">
-                  <div className="text-[11px] text-zinc-500">Матчей</div>
-                  <div className="text-sm font-semibold mt-1">{viewPlayerProfile.stats?.totalMatches ?? 0}</div>
+              <div className="grid min-w-0 w-full max-w-full grid-cols-3 gap-2 text-center">
+                <div className="min-w-0 rounded-xl border border-zinc-800 bg-zinc-900/60 px-2 py-3 sm:py-3">
+                  <div className="text-xs text-zinc-500 sm:text-sm">Матчей</div>
+                  <div className="mt-1 text-lg font-bold sm:text-2xl">{viewPlayerProfile.stats?.totalMatches ?? 0}</div>
                 </div>
-                <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-2 py-2">
-                  <div className="text-[11px] text-zinc-500">Побед</div>
-                  <div className="text-sm font-semibold mt-1">{viewPlayerProfile.stats?.totalWins ?? 0}</div>
+                <div className="min-w-0 rounded-xl border border-zinc-800 bg-zinc-900/60 px-2 py-3 sm:py-3">
+                  <div className="text-xs text-zinc-500 sm:text-sm">Побед</div>
+                  <div className="mt-1 text-lg font-bold sm:text-2xl">{viewPlayerProfile.stats?.totalWins ?? 0}</div>
                 </div>
-                <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-2 py-2">
-                  <div className="text-[11px] text-zinc-500">Winrate</div>
-                  <div className="text-sm font-semibold mt-1">
+                <div className="min-w-0 rounded-xl border border-zinc-800 bg-zinc-900/60 px-2 py-3 sm:py-3">
+                  <div className="text-xs text-zinc-500 sm:text-sm">Winrate</div>
+                  <div className="mt-1 text-lg font-bold sm:text-2xl">
                     {Math.round(viewPlayerProfile.stats?.totalWinRate ?? 0)}%
                   </div>
                 </div>
@@ -10246,12 +10349,6 @@ export default function App() {
       );
       return;
     }
-    if (!isHost && isSelf && !room.usePreferredRoles) {
-      const selfPlayer = room.players.find((player) => player.id === selfPlayerId);
-      if (selfPlayer?.roleAssignmentSource === "manual") {
-        return;
-      }
-    }
     socket.emit("choose_lobby_role", {
       code: room.code,
       sessionToken: roomControlSessionToken,
@@ -11803,7 +11900,7 @@ export default function App() {
               </div>
               <div className="rounded-3xl border border-zinc-800 bg-zinc-950/70 overflow-hidden">
                 <div
-                  className="relative h-[176px] md:min-h-[122px] p-3.5 md:p-6 flex items-start md:items-end cursor-pointer group/banner"
+                  className="relative h-[138px] p-3 md:h-auto md:min-h-[122px] md:p-6 flex items-start md:items-end cursor-pointer group/banner"
                   style={getBannerStyle(profileBannerDraft, profileAvatarDraft, playerName || "Игрок")}
                   onClick={() => {
                     if (profileBannerLocked) {
@@ -11819,14 +11916,14 @@ export default function App() {
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/45 to-black/15" />
                   <div className="absolute inset-0 opacity-0 group-hover/banner:opacity-100 transition-opacity bg-black/15" />
                   {profileBannerLocked && (
-                    <div className="pointer-events-none absolute right-2 top-2 inline-flex h-7 items-center gap-1.5 rounded-full border border-zinc-500/80 bg-zinc-900/80 px-2.5 text-[11px] font-semibold text-zinc-100 md:right-3 md:top-3 md:h-8 md:px-3 md:text-xs">
-                      <Lock className="h-3.5 w-3.5" />
+                    <div className="pointer-events-none absolute right-2 top-2 inline-flex h-[18px] items-center gap-0.5 rounded-full border border-zinc-500/80 bg-zinc-900/80 px-1.5 text-[9px] font-semibold text-zinc-100 md:right-5 md:top-3 md:h-8 md:gap-1.5 md:px-3 md:text-xs">
+                      <Lock className="h-3 w-3 md:h-3.5 md:w-3.5" />
                       <span>Баннер</span>
                     </div>
                   )}
 
                   <div className="relative z-10 w-full md:hidden">
-                    <div className="pt-5 h-full flex flex-col justify-between">
+                    <div className="pt-3 h-full flex flex-col justify-between">
                       <div className="flex items-center gap-2.5">
                         <div
                           className="relative shrink-0 cursor-pointer group/avatar"
@@ -11835,19 +11932,19 @@ export default function App() {
                             avatarInputRef.current?.click();
                           }}
                         >
-                          <Avatar src={profileAvatarDraft} name={playerName || "?"} size={72} />
+                          <Avatar src={profileAvatarDraft} name={playerName || "?"} size={64} />
                           <div className="absolute inset-0 rounded-full bg-black/55 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity">
                             <Camera className="w-4 h-4 text-white" />
                           </div>
                         </div>
                         <div className="min-w-0 flex-1 pr-1 [text-shadow:0_1px_6px_rgba(0,0,0,0.75)]">
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <div className="max-w-full truncate text-[18px] font-bold leading-none">
+                          <div className="flex min-w-0 flex-nowrap items-center gap-1.5">
+                            <div className="min-w-0 truncate text-[18px] font-bold leading-none">
                               {playerName || "Игрок"}
                             </div>
                             {selectedBadgeKey && (
                               <span
-                                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] shadow-[0_6px_16px_rgba(0,0,0,0.45)] drop-shadow-[0_1px_4px_rgba(0,0,0,0.45)] ${
+                                className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] shadow-[0_6px_16px_rgba(0,0,0,0.45)] drop-shadow-[0_1px_4px_rgba(0,0,0,0.45)] ${
                                   getBadgeTheme(selectedBadgeKey).chip
                                 }`}
                               >
@@ -11859,15 +11956,12 @@ export default function App() {
                               </span>
                             )}
                           </div>
-                          <div className="mt-1.5 flex flex-wrap gap-1 text-[9px] [text-shadow:0_1px_6px_rgba(0,0,0,0.75)]">
+                          <div className="mt-1.5 flex flex-nowrap gap-1 text-[9px] [text-shadow:0_1px_6px_rgba(0,0,0,0.75)]">
                             <span className="inline-flex h-5 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap">
                               Возраст: {ageLabel}
                             </span>
                             <span className="inline-flex h-5 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap">
                               Пол: {genderLabel}
-                            </span>
-                            <span className="inline-flex h-5 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap">
-                              С нами с: {registeredAtLabel}
                             </span>
                           </div>
                         </div>
@@ -11875,7 +11969,7 @@ export default function App() {
                       <div className="mt-2">
                         <Button
                           variant="outline"
-                          className="h-8 w-full rounded-xl border-zinc-500/70 bg-black/30 text-sm text-zinc-100 hover:bg-black/50 hover:text-zinc-100"
+                          className="h-7 w-full rounded-xl border-zinc-500/70 bg-black/30 text-xs text-zinc-100 hover:bg-black/50 hover:text-zinc-100"
                           onClick={(e) => {
                             e.stopPropagation();
                             void resetProfileMedia();
@@ -11902,30 +11996,30 @@ export default function App() {
                         </div>
                       </div>
                       <div className="min-w-0 [text-shadow:0_1px_6px_rgba(0,0,0,0.75)]">
-                        <div className="flex min-w-0 flex-wrap items-center gap-2">
-                          <div className="text-3xl font-bold leading-none">{playerName || "Игрок"}</div>
+                        <div className="flex min-w-0 flex-nowrap items-center gap-2">
+                          <div className="text-4xl font-bold leading-none">{playerName || "Игрок"}</div>
                           {selectedBadgeKey && (
                             <span
-                              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs shadow-[0_6px_16px_rgba(0,0,0,0.45)] drop-shadow-[0_1px_4px_rgba(0,0,0,0.45)] ${
+                              className={`inline-flex shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 text-sm shadow-[0_6px_16px_rgba(0,0,0,0.45)] drop-shadow-[0_1px_4px_rgba(0,0,0,0.45)] ${
                                 getBadgeTheme(selectedBadgeKey).chip
                               }`}
                             >
                               <BadgeGlyph
                                 badgeKey={selectedBadgeKey}
-                                className={`h-3.5 w-3.5 ${getBadgeTheme(selectedBadgeKey).iconOnly ?? "text-zinc-300"}`}
+                                className={`h-4 w-4 ${getBadgeTheme(selectedBadgeKey).iconOnly ?? "text-zinc-300"}`}
                               />
                               {getBadgeTitleByKey(selectedBadgeKey, badges)}
                             </span>
                           )}
                         </div>
-                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                          <span className="inline-flex h-8 items-center rounded-full border border-zinc-600 bg-black/35 px-3 whitespace-nowrap">
+                        <div className="mt-2 flex flex-nowrap items-center gap-1.5 text-[11px]">
+                          <span className="inline-flex h-8 items-center rounded-full border border-zinc-600 bg-black/35 px-3 whitespace-nowrap text-xs">
                             Возраст: {ageLabel}
                           </span>
-                          <span className="inline-flex h-8 items-center rounded-full border border-zinc-600 bg-black/35 px-3 whitespace-nowrap">
+                          <span className="inline-flex h-8 items-center rounded-full border border-zinc-600 bg-black/35 px-3 whitespace-nowrap text-xs">
                             Пол: {genderLabel}
                           </span>
-                          <span className="inline-flex h-8 items-center rounded-full border border-zinc-600 bg-black/35 px-3 whitespace-nowrap">
+                          <span className="inline-flex h-8 items-center rounded-full border border-zinc-600 bg-black/35 px-3 whitespace-nowrap text-xs">
                             С нами с: {registeredAtLabel}
                           </span>
                         </div>
@@ -11944,6 +12038,9 @@ export default function App() {
                       </Button>
                     </div>
                   </div>
+                </div>
+                <div className="px-2 py-1.5 text-center text-[11px] leading-4 text-zinc-400 md:hidden">
+                  С нами с: {registeredAtLabel}
                 </div>
               </div>
               <input
@@ -12242,9 +12339,6 @@ export default function App() {
                           </div>
                           <div className="pl-0.5 text-[15px] font-normal leading-[2.0] text-zinc-200 md:text-[15px]">
                             Рейтинг открывается с подпиской «Стажер».
-                          </div>
-                          <div className="rounded-lg border border-zinc-800 bg-zinc-950/85 px-2.5 py-1 text-[13px] font-normal leading-[2.0] text-zinc-400">
-                            До активации подписки рейтинговая прогрессия недоступна.
                           </div>
                         </div>
                       ) : (
@@ -13313,27 +13407,25 @@ export default function App() {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
                     transition={{ duration: 0.22 }}
-                    className="md:hidden fixed inset-0 z-[240] flex items-center justify-center px-4 py-4"
+                    className="md:hidden fixed inset-0 z-[240] flex items-center justify-center px-3 py-3"
                   >
-                    <div className="w-full max-h-[92vh] overflow-y-auto rounded-3xl border border-zinc-800 bg-zinc-950/98 p-6 shadow-[0_24px_60px_rgba(0,0,0,0.72)]">
-                    <div className="mb-3">
-                      <div className="flex items-start justify-between gap-3">
+                    <div className="relative w-full max-h-[calc(100vh-1.5rem)] overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-950/98 p-4 shadow-[0_24px_60px_rgba(0,0,0,0.72)]">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setMobileMenuOpen(false)}
+                        className="!absolute right-3 top-3 z-20 aspect-square !h-6 !w-6 !min-h-6 !min-w-6 !max-h-6 !max-w-6 shrink-0 rounded-md border-zinc-700 bg-zinc-900/90 p-0 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                        style={{ width: 24, height: 24, minWidth: 24, minHeight: 24 }}
+                        aria-label="Закрыть меню"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    <div className="mb-3 pr-10">
+                      <div className="flex items-start gap-3">
                         <div className="text-xs uppercase tracking-[0.16em] text-zinc-500">Навигация</div>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => setMobileMenuOpen(false)}
-                          className="h-10 w-10 rounded-xl border-zinc-700 bg-zinc-900/80 p-0 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
-                          aria-label="Закрыть меню"
-                        >
-                          <X className="h-5 w-5" />
-                        </Button>
-                      </div>
-                      <div className="mt-1 text-sm text-zinc-400">
-                        Быстрые переходы по разделам сайта и личному кабинету.
                       </div>
                     </div>
-                    <div className="mb-8 flex justify-center">
+                    <div className="mb-4 flex justify-center">
                       {isAuthenticated ? (
                         <Button
                           variant="outline"
@@ -13341,12 +13433,16 @@ export default function App() {
                             setMobileMenuOpen(false);
                             openProfileScreen();
                           }}
-                          className="h-16 w-full max-w-[360px] rounded-2xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100 px-3 gap-3 justify-start"
+                          className="relative h-16 w-full overflow-hidden rounded-2xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100 px-3 gap-3 justify-start"
+                          style={getBannerStyle(banner, avatar, playerName || "Игрок")}
                         >
-                          <Avatar src={avatar} name={playerName || "Игрок"} size={34} />
-                          <span className="min-w-0 text-left">
-                            <span className="block max-w-[220px] truncate text-base font-semibold">{playerName || "Игрок"}</span>
-                            <span className="block text-xs text-zinc-400">Личный кабинет</span>
+                          <span className="pointer-events-none absolute inset-0 bg-black/45" />
+                          <span className="relative z-10">
+                            <Avatar src={avatar} name={playerName || "Игрок"} size={34} />
+                          </span>
+                          <span className="relative z-10 min-w-0 text-left [text-shadow:0_2px_8px_rgba(0,0,0,0.95)]">
+                            <span className="block max-w-[220px] truncate text-base font-semibold text-zinc-100">{playerName || "Игрок"}</span>
+                            <span className="block text-xs font-semibold text-zinc-200">Личный кабинет</span>
                           </span>
                         </Button>
                       ) : (
@@ -13358,14 +13454,14 @@ export default function App() {
                             setAuthView("form");
                             setAuthDialogOpen(true);
                           }}
-                          className="h-16 w-full max-w-[360px] rounded-2xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100 px-4 gap-2 inline-flex items-center justify-center"
+                          className="h-12 w-full max-w-[360px] rounded-2xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100 px-4 gap-2 inline-flex items-center justify-center"
                         >
                           <LogIn className="w-4 h-4" />
                           Войти
                         </Button>
                       )}
                     </div>
-                    <div className="grid gap-4">
+                    <div className="grid gap-3">
                       <Button
                         variant={homeTab === "play" ? "default" : "outline"}
                         onClick={() => {
@@ -13373,7 +13469,7 @@ export default function App() {
                           setProfileMenuOpen(false);
                           setMobileMenuOpen(false);
                         }}
-                        className={homeTab === "play" ? "h-[52px] rounded-xl bg-red-600 text-white hover:bg-red-500 border-0" : "h-[52px] rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"}
+                        className={homeTab === "play" ? "h-11 rounded-xl bg-red-600 text-white hover:bg-red-500 border-0" : "h-11 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"}
                       >
                         <Gamepad2 className="w-4 h-4 mr-2" />
                         Играть
@@ -13385,7 +13481,7 @@ export default function App() {
                           setProfileMenuOpen(false);
                           setMobileMenuOpen(false);
                         }}
-                        className={homeTab === "shop" ? "h-[52px] rounded-xl bg-red-600 text-white hover:bg-red-500 border-0" : "h-[52px] rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"}
+                        className={homeTab === "shop" ? "h-11 rounded-xl bg-red-600 text-white hover:bg-red-500 border-0" : "h-11 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"}
                       >
                         <Crown className="w-4 h-4 mr-2" />
                         Магазин
@@ -13397,7 +13493,7 @@ export default function App() {
                           setProfileMenuOpen(false);
                           setMobileMenuOpen(false);
                         }}
-                        className={homeTab === "development" ? "h-[52px] rounded-xl bg-red-600 text-white hover:bg-red-500 border-0" : "h-[52px] rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"}
+                        className={homeTab === "development" ? "h-11 rounded-xl bg-red-600 text-white hover:bg-red-500 border-0" : "h-11 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"}
                       >
                         <Wrench className="w-4 h-4 mr-2" />
                         Разработка
@@ -13410,21 +13506,21 @@ export default function App() {
                           setProfileMenuOpen(false);
                           setMobileMenuOpen(false);
                         }}
-                        className={homeTab === "help" ? "h-[52px] rounded-xl bg-red-600 text-white hover:bg-red-500 border-0" : "h-[52px] rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"}
+                        className={homeTab === "help" ? "h-11 rounded-xl bg-red-600 text-white hover:bg-red-500 border-0" : "h-11 rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"}
                       >
                         <CircleHelp className="w-4 h-4 mr-2" />
                         Помощь
                       </Button>
                     </div>
-                    <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
+                    <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-3">
                       <div className="text-xs uppercase tracking-[0.14em] text-zinc-500">Дополнительно</div>
-                      <div className="mt-2 text-sm text-zinc-300">
+                      <div className="mt-1 text-xs leading-5 text-zinc-300">
                         Поиск игроков и общение доступны в нашем Discord.
                       </div>
                       <Button
                         variant="outline"
                         onClick={() => window.open(DISCORD_INVITE_URL, "_blank", "noopener,noreferrer")}
-                        className="mt-3 h-11 w-full rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                        className="mt-2 h-10 w-full rounded-xl border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
                       >
                         <DiscordLogoIcon className="mr-2 h-4 w-4" />
                         Перейти в Discord
@@ -16190,7 +16286,7 @@ export default function App() {
                                                       />
 
                                                       <image
-                                                        href="https://solana.com/src/img/branding/solanaLogoMark.svg"
+                                                        href={SOLANA_MARK_DATA_URL}
                                                         x="206"
                                                         y="116"
                                                         width="100"
@@ -16781,7 +16877,6 @@ export default function App() {
         };
       }
       if (!isSelf) return null;
-      if (!usePreferredRoles && player.roleAssignmentSource === "manual") return null;
       if (!usePreferredRoles && !canChooseRoleInOtherLobbiesInRoom) return null;
       return {
         label: "Выбрать роль",
@@ -16801,8 +16896,7 @@ export default function App() {
           ? usePreferredRoles || canChooseRoleInOwnLobby
           : !usePreferredRoles && canLetPlayersChooseRoles
         : roleDialogTargetPlayer.id === (myLobbyPlayer?.id ?? roomControlPlayerId ?? myId) &&
-          (usePreferredRoles || canChooseRoleInOtherLobbiesInRoom) &&
-          (usePreferredRoles || roleDialogTargetPlayer.roleAssignmentSource !== "manual"));
+          (usePreferredRoles || canChooseRoleInOtherLobbiesInRoom));
     const canStartRoomNow = isQuickRoomMode
       ? activeLobbyPlayersCount >= 3
       : activeLobbyPlayersCount === roomMaxPlayers;
@@ -17561,6 +17655,7 @@ export default function App() {
                                 src={message.senderAvatar ?? null}
                                 name={message.senderName}
                                 size={30}
+                                staticIfAnimated
                               />
                               <div className="min-w-0 flex-1">
                                 <div className="flex flex-wrap items-center gap-2 text-zinc-400 text-xs">
@@ -17912,6 +18007,7 @@ export default function App() {
                                       src={ownerPlayer?.avatar ?? null}
                                       name={fact.owner}
                                       size={34}
+                                      staticIfAnimated
                                     />
                                     <div className="font-semibold text-base leading-none truncate">
                                       {fact.owner}
@@ -18810,6 +18906,7 @@ export default function App() {
                                   src={ownerPlayer?.avatar ?? null}
                                   name={fact.owner}
                                   size={34}
+                                  staticIfAnimated
                                 />
                                 <div className="font-semibold text-base leading-none truncate">
                                   {fact.owner}
@@ -18863,14 +18960,14 @@ export default function App() {
                           key={fact.id}
                           className="rounded-2xl bg-zinc-900/80 border-zinc-800 text-zinc-100"
                         >
-                          <CardContent className="p-4 flex flex-col gap-3">
-                            <div className="text-sm">{fact.text}</div>
+                          <CardContent className="flex min-h-[112px] flex-col gap-3 p-4">
+                            <div className="text-base leading-relaxed">{fact.text}</div>
                             <div className="flex items-center justify-between gap-3">
                               <Badge
                                 className={
                                   fact.revealed
-                                    ? "bg-red-600 text-white border-0"
-                                    : "bg-zinc-800 text-zinc-100 border border-zinc-700"
+                                    ? "bg-zinc-800 text-zinc-100 border border-zinc-700"
+                                    : "bg-red-600 text-white border-0"
                                 }
                               >
                                 {fact.revealed ? "Раскрыт" : "Скрыт"}
@@ -18879,18 +18976,14 @@ export default function App() {
                                 whileHover={{ scale: 1.04 }}
                                 whileTap={{ scale: 0.96 }}
                               >
-                              <Button
+                                <Button
                                   size="sm"
-                                  variant="outline"
-                                  className={
-                                    canRevealThisFact
-                                      ? "rounded-xl !bg-red-600 hover:!bg-red-500 !text-white !border-red-500/70"
-                                      : "rounded-xl !bg-zinc-800 !text-zinc-500 !border-zinc-700 hover:!bg-zinc-800"
-                                  }
+                                  variant="secondary"
+                                  className="rounded-xl bg-zinc-100 text-zinc-950 hover:bg-zinc-200 border-0 disabled:bg-zinc-800 disabled:text-zinc-500"
                                   onClick={() => revealFact(fact.id)}
                                   disabled={!canRevealThisFact}
                                 >
-                                  Раскрыть
+                                  {fact.revealed ? "Раскрыто" : "Раскрыть"}
                                 </Button>
                               </motion.div>
                             </div>
@@ -18992,6 +19085,7 @@ export default function App() {
                                   src={ownerPlayer?.avatar ?? null}
                                   name={entry.owner}
                                   size={30}
+                                  staticIfAnimated
                                 />
                                 <div className="font-semibold text-sm truncate">
                                   {entry.owner}
