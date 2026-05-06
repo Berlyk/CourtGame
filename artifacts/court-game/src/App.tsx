@@ -8184,7 +8184,7 @@ export default function App() {
             <div className="min-w-0 w-full max-w-full space-y-4 justify-self-stretch">
               <div className="w-full max-w-full overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-950/70">
                 <div
-                  className="relative mx-auto min-h-[142px] w-full max-w-full overflow-hidden rounded-t-3xl p-5 flex items-center sm:min-h-[185px] sm:rounded-3xl sm:p-7"
+                  className="relative mx-auto min-h-[142px] w-full max-w-full overflow-hidden rounded-t-3xl p-4 flex items-center sm:min-h-[185px] sm:rounded-3xl sm:p-7"
                   style={getBannerStyle(
                     viewPlayerProfile.banner,
                     viewPlayerProfile.avatar,
@@ -8192,11 +8192,16 @@ export default function App() {
                   )}
                 >
                   <div className="absolute inset-0 rounded-t-3xl bg-gradient-to-t from-black/75 via-black/35 to-black/10 sm:rounded-3xl" />
-                  <div className="relative z-10 flex min-w-0 items-center gap-3 sm:gap-4">
-                    <Avatar src={viewPlayerProfile.avatar ?? null} name={viewPlayerProfile.nickname} size={96} />
-                    <div className="min-w-0 flex-1 [text-shadow:0_1px_6px_rgba(0,0,0,0.75)]">
-                      <div className="flex min-w-0 flex-nowrap items-center gap-1.5 sm:gap-2">
-                        <div className="min-w-0 truncate text-xl font-bold leading-none [text-shadow:0_2px_8px_rgba(0,0,0,0.95)] sm:text-4xl">
+                  <div className="relative z-10 flex min-w-0 w-full items-center gap-2 sm:gap-4">
+                    <span className="block shrink-0 sm:hidden">
+                      <Avatar src={viewPlayerProfile.avatar ?? null} name={viewPlayerProfile.nickname} size={72} />
+                    </span>
+                    <span className="hidden shrink-0 sm:block">
+                      <Avatar src={viewPlayerProfile.avatar ?? null} name={viewPlayerProfile.nickname} size={96} />
+                    </span>
+                    <div className="min-w-0 flex-1 overflow-hidden [text-shadow:0_1px_6px_rgba(0,0,0,0.75)]">
+                      <div className="flex min-w-0 max-w-full flex-nowrap items-center gap-1 sm:gap-2">
+                        <div className="min-w-0 truncate text-lg font-bold leading-none [text-shadow:0_2px_8px_rgba(0,0,0,0.95)] sm:text-4xl">
                           {viewPlayerProfile.nickname}
                         </div>
                         {viewPlayerProfile.selectedBadgeKey ? (
@@ -8232,11 +8237,11 @@ export default function App() {
                           </div>
                         ) : null}
                       </div>
-                      <div className="mt-1.5 flex flex-nowrap items-center gap-1 text-[10px] sm:mt-2 sm:gap-2 sm:text-sm">
-                        <span className="inline-flex h-5 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap sm:h-8 sm:px-3">
+                      <div className="mt-1.5 flex max-w-full flex-nowrap items-center gap-0.5 overflow-hidden text-[9px] sm:mt-2 sm:gap-2 sm:text-sm">
+                        <span className="inline-flex h-4 items-center rounded-full border border-zinc-600 bg-black/35 px-1 whitespace-nowrap sm:h-8 sm:px-3">
                           Возраст: {ageLabel}
                         </span>
-                        <span className="inline-flex h-5 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap sm:h-8 sm:px-3">
+                        <span className="inline-flex h-4 items-center rounded-full border border-zinc-600 bg-black/35 px-1 whitespace-nowrap sm:h-8 sm:px-3">
                           Пол: {genderLabel}
                         </span>
                         <span className="hidden h-5 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap sm:inline-flex sm:h-8 sm:px-3">
