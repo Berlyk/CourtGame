@@ -8160,10 +8160,10 @@ export default function App() {
           overlayClassName={
             profileMatchesOpen || observerListDialogOpen ? "bg-transparent backdrop-blur-0" : undefined
           }
-          className="!w-[min(calc(100vw-3rem),420px)] !max-w-[420px] gap-2 overflow-visible !rounded-[32px] border-zinc-800 bg-zinc-950 p-5 text-zinc-100 sm:!w-full sm:!max-w-[832px] sm:px-10 sm:pb-10 sm:pt-4"
+          className="!w-[min(calc(100vw-3rem),420px)] !max-w-[420px] gap-2 overflow-visible !rounded-[32px] border-zinc-800 bg-zinc-950 p-5 text-zinc-100 sm:!w-full sm:!max-w-[832px] sm:px-10 sm:pb-10 sm:pt-3"
         >
-          <DialogHeader className="mb-0 grid w-full place-items-center text-center sm:mb-1">
-            <DialogTitle className="mx-auto w-fit max-w-full text-center text-2xl font-bold sm:text-[33px]">Профиль игрока</DialogTitle>
+          <DialogHeader className="mb-0 grid min-w-0 w-full place-items-center justify-self-stretch text-center sm:mb-1">
+            <DialogTitle className="mx-auto block w-full min-w-0 max-w-full text-center text-2xl font-bold sm:text-[33px]">Профиль игрока</DialogTitle>
             <DialogDescription className="sr-only">Публичная информация.</DialogDescription>
           </DialogHeader>
           {viewPlayerProfileLoading ? (
@@ -8181,7 +8181,7 @@ export default function App() {
               {viewPlayerProfileError}
             </div>
           ) : viewPlayerProfile ? (
-            <div className="space-y-4">
+            <div className="min-w-0 w-full max-w-full space-y-4 justify-self-stretch">
               <div className="w-full max-w-full overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-950/70">
                 <div
                   className="relative mx-auto min-h-[142px] w-full max-w-full overflow-hidden rounded-t-3xl p-5 flex items-center sm:min-h-[185px] sm:rounded-3xl sm:p-7"
@@ -8258,16 +8258,16 @@ export default function App() {
                   </div>
                 </div>
               )}
-              <div className="grid grid-cols-3 gap-2 text-center">
-                <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-2 py-3 sm:py-4">
+              <div className="grid min-w-0 w-full max-w-full grid-cols-3 gap-2 text-center">
+                <div className="min-w-0 rounded-xl border border-zinc-800 bg-zinc-900/60 px-2 py-3 sm:py-4">
                   <div className="text-xs text-zinc-500 sm:text-base">Матчей</div>
                   <div className="mt-1 text-lg font-bold sm:text-3xl">{viewPlayerProfile.stats?.totalMatches ?? 0}</div>
                 </div>
-                <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-2 py-3 sm:py-4">
+                <div className="min-w-0 rounded-xl border border-zinc-800 bg-zinc-900/60 px-2 py-3 sm:py-4">
                   <div className="text-xs text-zinc-500 sm:text-base">Побед</div>
                   <div className="mt-1 text-lg font-bold sm:text-3xl">{viewPlayerProfile.stats?.totalWins ?? 0}</div>
                 </div>
-                <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-2 py-3 sm:py-4">
+                <div className="min-w-0 rounded-xl border border-zinc-800 bg-zinc-900/60 px-2 py-3 sm:py-4">
                   <div className="text-xs text-zinc-500 sm:text-base">Winrate</div>
                   <div className="mt-1 text-lg font-bold sm:text-3xl">
                     {Math.round(viewPlayerProfile.stats?.totalWinRate ?? 0)}%
@@ -11903,8 +11903,8 @@ export default function App() {
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/45 to-black/15" />
                   <div className="absolute inset-0 opacity-0 group-hover/banner:opacity-100 transition-opacity bg-black/15" />
                   {profileBannerLocked && (
-                    <div className="pointer-events-none absolute right-2 top-2 inline-flex h-4 items-center gap-0.5 rounded-full border border-zinc-500/80 bg-zinc-900/80 px-1.5 text-[8px] font-semibold text-zinc-100 md:right-5 md:top-3 md:h-9 md:gap-1.5 md:px-3.5 md:text-sm">
-                      <Lock className="h-2.5 w-2.5 md:h-4 md:w-4" />
+                    <div className="pointer-events-none absolute right-2 top-2 inline-flex h-[18px] items-center gap-0.5 rounded-full border border-zinc-500/80 bg-zinc-900/80 px-1.5 text-[9px] font-semibold text-zinc-100 md:right-5 md:top-3 md:h-8 md:gap-1.5 md:px-3 md:text-xs">
+                      <Lock className="h-3 w-3 md:h-3.5 md:w-3.5" />
                       <span>Баннер</span>
                     </div>
                   )}
