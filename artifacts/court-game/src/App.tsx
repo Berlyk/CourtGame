@@ -8160,10 +8160,10 @@ export default function App() {
           overlayClassName={
             profileMatchesOpen || observerListDialogOpen ? "bg-transparent backdrop-blur-0" : undefined
           }
-          className="!w-[min(calc(100vw-3rem),420px)] !max-w-[420px] gap-2 overflow-visible !rounded-[32px] border-zinc-800 bg-zinc-950 p-5 text-zinc-100 sm:!w-full sm:!max-w-[832px] sm:px-10 sm:pb-10 sm:pt-3"
+          className="!w-[min(calc(100vw-3rem),420px)] !max-w-[420px] gap-2 overflow-visible !rounded-[32px] border-zinc-800 bg-zinc-950 p-5 text-zinc-100 sm:!w-full sm:!max-w-[582px] sm:px-7 sm:pb-7 sm:pt-3"
         >
           <DialogHeader className="mb-0 grid min-w-0 w-full place-items-center justify-self-stretch text-center sm:mb-1">
-            <DialogTitle className="mx-auto block w-full min-w-0 max-w-full text-center text-2xl font-bold sm:text-[33px]">Профиль игрока</DialogTitle>
+            <DialogTitle className="mx-auto block w-full min-w-0 max-w-full text-center text-2xl font-bold sm:text-[23px]">Профиль игрока</DialogTitle>
             <DialogDescription className="sr-only">Публичная информация.</DialogDescription>
           </DialogHeader>
           {viewPlayerProfileLoading ? (
@@ -8184,7 +8184,7 @@ export default function App() {
             <div className="min-w-0 w-full max-w-full space-y-4 justify-self-stretch">
               <div className="w-full max-w-full overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-950/70">
                 <div
-                  className="relative mx-auto min-h-[132px] w-full max-w-full overflow-hidden rounded-t-3xl p-4 flex items-center sm:min-h-[185px] sm:rounded-3xl sm:p-7"
+                  className="relative mx-auto min-h-[132px] w-full max-w-full overflow-hidden rounded-t-3xl px-3 py-4 flex items-center sm:min-h-[130px] sm:rounded-3xl sm:p-5"
                   style={getBannerStyle(
                     viewPlayerProfile.banner,
                     viewPlayerProfile.avatar,
@@ -8200,16 +8200,16 @@ export default function App() {
                       )?.description ?? "Информация о бейдже отсутствует."}
                     </div>
                   ) : null}
-                  <div className="relative z-10 flex min-w-0 w-full items-center gap-2 sm:gap-4">
+                  <div className="relative z-10 flex min-w-0 w-full items-center gap-1 sm:gap-3">
                     <span className="block shrink-0 sm:hidden">
                       <Avatar src={viewPlayerProfile.avatar ?? null} name={viewPlayerProfile.nickname} size={76} />
                     </span>
                     <span className="hidden shrink-0 sm:block">
-                      <Avatar src={viewPlayerProfile.avatar ?? null} name={viewPlayerProfile.nickname} size={96} />
+                      <Avatar src={viewPlayerProfile.avatar ?? null} name={viewPlayerProfile.nickname} size={67} />
                     </span>
                     <div className="min-w-0 flex-1 overflow-hidden [text-shadow:0_1px_6px_rgba(0,0,0,0.75)]">
                       <div className="flex min-w-0 max-w-full flex-nowrap items-center gap-1 sm:gap-2">
-                        <div className="min-w-0 truncate text-xl font-bold leading-none [text-shadow:0_2px_8px_rgba(0,0,0,0.95)] sm:text-4xl">
+                        <div className="min-w-0 truncate text-xl font-bold leading-none [text-shadow:0_2px_8px_rgba(0,0,0,0.95)] sm:text-2xl">
                           {viewPlayerProfile.nickname}
                         </div>
                         {viewPlayerProfile.selectedBadgeKey ? (
@@ -8219,13 +8219,13 @@ export default function App() {
                               onClick={() =>
                                 setViewProfileBadgeHintOpen((prev) => !prev)
                               }
-                              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] transition-colors shadow-[0_6px_16px_rgba(0,0,0,0.45)] drop-shadow-[0_1px_4px_rgba(0,0,0,0.75)] [text-shadow:0_2px_8px_rgba(0,0,0,0.95)] sm:gap-2 sm:px-3.5 sm:py-1.5 sm:text-base ${
+                              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] transition-colors shadow-[0_6px_16px_rgba(0,0,0,0.45)] drop-shadow-[0_1px_4px_rgba(0,0,0,0.75)] [text-shadow:0_2px_8px_rgba(0,0,0,0.95)] sm:gap-1.5 sm:px-2.5 sm:py-1 sm:text-sm ${
                                 getBadgeTheme(viewPlayerProfile.selectedBadgeKey).chip
                               }`}
                             >
                               <BadgeGlyph
                                 badgeKey={viewPlayerProfile.selectedBadgeKey}
-                                className={`h-3.5 w-3.5 sm:h-5 sm:w-5 ${getBadgeTheme(viewPlayerProfile.selectedBadgeKey).iconOnly ?? "text-zinc-300"}`}
+                                className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${getBadgeTheme(viewPlayerProfile.selectedBadgeKey).iconOnly ?? "text-zinc-300"}`}
                               />
                               <span>
                                 {getBadgeTitleByKey(
@@ -8245,14 +8245,14 @@ export default function App() {
                           </div>
                         ) : null}
                       </div>
-                      <div className="mt-1.5 flex max-w-full flex-nowrap items-center gap-0.5 overflow-hidden text-[10px] sm:mt-2 sm:gap-2 sm:text-sm">
-                        <span className="inline-flex h-4 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap sm:h-8 sm:px-3">
+                      <div className="mt-1.5 flex max-w-full flex-nowrap items-center gap-0.5 text-[10px] sm:mt-2 sm:gap-1.5 sm:text-xs">
+                        <span className="inline-flex h-4 shrink-0 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap sm:h-6 sm:px-2">
                           Возраст: {ageLabel}
                         </span>
-                        <span className="inline-flex h-4 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap sm:h-8 sm:px-3">
+                        <span className="inline-flex h-4 shrink-0 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap sm:h-6 sm:px-2">
                           Пол: {genderLabel}
                         </span>
-                        <span className="hidden h-5 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap sm:inline-flex sm:h-8 sm:px-3">
+                        <span className="hidden h-5 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap sm:inline-flex sm:h-6 sm:px-2">
                           С нами с: {createdAtLabel || "неизвестной даты"}
                         </span>
                       </div>
@@ -8272,17 +8272,17 @@ export default function App() {
                 </div>
               )}
               <div className="grid min-w-0 w-full max-w-full grid-cols-3 gap-2 text-center">
-                <div className="min-w-0 rounded-xl border border-zinc-800 bg-zinc-900/60 px-2 py-3 sm:py-4">
-                  <div className="text-xs text-zinc-500 sm:text-base">Матчей</div>
-                  <div className="mt-1 text-lg font-bold sm:text-3xl">{viewPlayerProfile.stats?.totalMatches ?? 0}</div>
+                <div className="min-w-0 rounded-xl border border-zinc-800 bg-zinc-900/60 px-2 py-3 sm:py-3">
+                  <div className="text-xs text-zinc-500 sm:text-sm">Матчей</div>
+                  <div className="mt-1 text-lg font-bold sm:text-2xl">{viewPlayerProfile.stats?.totalMatches ?? 0}</div>
                 </div>
-                <div className="min-w-0 rounded-xl border border-zinc-800 bg-zinc-900/60 px-2 py-3 sm:py-4">
-                  <div className="text-xs text-zinc-500 sm:text-base">Побед</div>
-                  <div className="mt-1 text-lg font-bold sm:text-3xl">{viewPlayerProfile.stats?.totalWins ?? 0}</div>
+                <div className="min-w-0 rounded-xl border border-zinc-800 bg-zinc-900/60 px-2 py-3 sm:py-3">
+                  <div className="text-xs text-zinc-500 sm:text-sm">Побед</div>
+                  <div className="mt-1 text-lg font-bold sm:text-2xl">{viewPlayerProfile.stats?.totalWins ?? 0}</div>
                 </div>
-                <div className="min-w-0 rounded-xl border border-zinc-800 bg-zinc-900/60 px-2 py-3 sm:py-4">
-                  <div className="text-xs text-zinc-500 sm:text-base">Winrate</div>
-                  <div className="mt-1 text-lg font-bold sm:text-3xl">
+                <div className="min-w-0 rounded-xl border border-zinc-800 bg-zinc-900/60 px-2 py-3 sm:py-3">
+                  <div className="text-xs text-zinc-500 sm:text-sm">Winrate</div>
+                  <div className="mt-1 text-lg font-bold sm:text-2xl">
                     {Math.round(viewPlayerProfile.stats?.totalWinRate ?? 0)}%
                   </div>
                 </div>
