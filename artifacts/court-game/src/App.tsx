@@ -8160,10 +8160,10 @@ export default function App() {
           overlayClassName={
             profileMatchesOpen || observerListDialogOpen ? "bg-transparent backdrop-blur-0" : undefined
           }
-          className="max-w-[520px] overflow-visible !rounded-[32px] border-zinc-800 bg-zinc-950 text-zinc-100"
+          className="max-w-[640px] overflow-visible !rounded-[32px] border-zinc-800 bg-zinc-950 text-zinc-100"
         >
-          <DialogHeader className="mb-2 pr-12">
-            <DialogTitle>Профиль игрока</DialogTitle>
+          <DialogHeader className="mb-3 text-center">
+            <DialogTitle className="text-center text-2xl font-bold sm:text-3xl">Профиль игрока</DialogTitle>
             <DialogDescription className="sr-only">Публичная информация.</DialogDescription>
           </DialogHeader>
           {viewPlayerProfileLoading ? (
@@ -8195,57 +8195,56 @@ export default function App() {
                   <div className="relative z-10 flex min-w-0 items-center gap-3">
                     <Avatar src={viewPlayerProfile.avatar ?? null} name={viewPlayerProfile.nickname} size={82} />
                     <div className="min-w-0 flex-1 [text-shadow:0_1px_6px_rgba(0,0,0,0.75)]">
-                      <div className="text-xl font-bold leading-none truncate max-w-[240px] sm:max-w-[320px]">
-                        {viewPlayerProfile.nickname}
-                      </div>
-                      {viewPlayerProfile.selectedBadgeKey ? (
-                        <div className="mt-2 relative inline-flex">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setViewProfileBadgeHintOpen((prev) => !prev)
-                            }
-                            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors shadow-[0_6px_16px_rgba(0,0,0,0.45)] drop-shadow-[0_1px_4px_rgba(0,0,0,0.45)] ${
-                              getBadgeTheme(viewPlayerProfile.selectedBadgeKey).chip
-                            }`}
-                          >
-                            <BadgeGlyph
-                              badgeKey={viewPlayerProfile.selectedBadgeKey}
-                              className={`h-3.5 w-3.5 ${getBadgeTheme(viewPlayerProfile.selectedBadgeKey).iconOnly ?? "text-zinc-300"}`}
-                            />
-                            <span>
-                              {getBadgeTitleByKey(
-                                viewPlayerProfile.selectedBadgeKey,
-                                viewPlayerProfile.badges,
-                              )}
-                            </span>
-                          </button>
-                          {viewProfileBadgeHintOpen ? (
-                            <div className="absolute left-1/2 top-full z-30 mt-1.5 w-max min-w-[150px] max-w-[min(220px,calc(100vw-4rem))] -translate-x-1/2 rounded-lg border border-zinc-700 bg-zinc-900/95 px-2.5 py-1.5 text-xs leading-snug text-zinc-200 shadow-[0_10px_24px_rgba(0,0,0,0.45)] whitespace-normal break-words sm:left-0 sm:translate-x-0">
-                              {findBadgeByKey(
-                                viewPlayerProfile.selectedBadgeKey,
-                                viewPlayerProfile.badges,
-                              )?.description ?? "Информация о бейдже отсутствует."}
-                            </div>
-                          ) : null}
+                      <div className="flex min-w-0 flex-nowrap items-center gap-1.5">
+                        <div className="min-w-0 truncate text-xl font-bold leading-none sm:text-2xl">
+                          {viewPlayerProfile.nickname}
                         </div>
-                      ) : null}
-                      <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] sm:gap-2 sm:text-xs">
-                        <span className="inline-flex h-6 items-center rounded-full border border-zinc-600 bg-black/35 px-2 whitespace-nowrap sm:h-7 sm:px-2.5">
+                        {viewPlayerProfile.selectedBadgeKey ? (
+                          <div className="relative inline-flex shrink-0">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setViewProfileBadgeHintOpen((prev) => !prev)
+                              }
+                              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] transition-colors shadow-[0_6px_16px_rgba(0,0,0,0.45)] drop-shadow-[0_1px_4px_rgba(0,0,0,0.45)] sm:gap-1.5 sm:px-2.5 sm:py-1 sm:text-xs ${
+                                getBadgeTheme(viewPlayerProfile.selectedBadgeKey).chip
+                              }`}
+                            >
+                              <BadgeGlyph
+                                badgeKey={viewPlayerProfile.selectedBadgeKey}
+                                className={`h-3 w-3 sm:h-3.5 sm:w-3.5 ${getBadgeTheme(viewPlayerProfile.selectedBadgeKey).iconOnly ?? "text-zinc-300"}`}
+                              />
+                              <span>
+                                {getBadgeTitleByKey(
+                                  viewPlayerProfile.selectedBadgeKey,
+                                  viewPlayerProfile.badges,
+                                )}
+                              </span>
+                            </button>
+                            {viewProfileBadgeHintOpen ? (
+                              <div className="absolute left-1/2 top-full z-30 mt-1.5 w-max min-w-[150px] max-w-[min(220px,calc(100vw-4rem))] -translate-x-1/2 rounded-lg border border-zinc-700 bg-zinc-900/95 px-2.5 py-1.5 text-xs leading-snug text-zinc-200 shadow-[0_10px_24px_rgba(0,0,0,0.45)] whitespace-normal break-words sm:left-0 sm:translate-x-0">
+                                {findBadgeByKey(
+                                  viewPlayerProfile.selectedBadgeKey,
+                                  viewPlayerProfile.badges,
+                                )?.description ?? "Информация о бейдже отсутствует."}
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </div>
+                      <div className="mt-1.5 flex flex-nowrap items-center gap-1 text-[9px] sm:gap-1.5 sm:text-[11px]">
+                        <span className="inline-flex h-5 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap sm:h-6 sm:px-2">
                           Возраст: {ageLabel}
                         </span>
-                        <span className="inline-flex h-6 items-center rounded-full border border-zinc-600 bg-black/35 px-2 whitespace-nowrap sm:h-7 sm:px-2.5">
+                        <span className="inline-flex h-5 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap sm:h-6 sm:px-2">
                           Пол: {genderLabel}
                         </span>
-                        <span className="hidden h-6 items-center rounded-full border border-zinc-600 bg-black/35 px-2 whitespace-nowrap sm:inline-flex sm:h-7 sm:px-2.5">
+                        <span className="inline-flex h-5 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap sm:h-6 sm:px-2">
                           С нами с: {createdAtLabel || "неизвестной даты"}
                         </span>
                       </div>
                     </div>
                   </div>
-                </div>
-                <div className="px-2 py-1 text-center text-[11px] leading-4 text-zinc-400 sm:hidden">
-                  С нами с: {createdAtLabel || "неизвестной даты"}
                 </div>
               </div>
               {viewPlayerProfile.bio?.trim() && (
@@ -11923,13 +11922,13 @@ export default function App() {
                           </div>
                         </div>
                         <div className="min-w-0 flex-1 pr-1 [text-shadow:0_1px_6px_rgba(0,0,0,0.75)]">
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <div className="max-w-full truncate text-[18px] font-bold leading-none">
+                          <div className="flex min-w-0 flex-nowrap items-center gap-1.5">
+                            <div className="min-w-0 truncate text-[18px] font-bold leading-none">
                               {playerName || "Игрок"}
                             </div>
                             {selectedBadgeKey && (
                               <span
-                                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] shadow-[0_6px_16px_rgba(0,0,0,0.45)] drop-shadow-[0_1px_4px_rgba(0,0,0,0.45)] ${
+                                className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] shadow-[0_6px_16px_rgba(0,0,0,0.45)] drop-shadow-[0_1px_4px_rgba(0,0,0,0.45)] ${
                                   getBadgeTheme(selectedBadgeKey).chip
                                 }`}
                               >
@@ -11941,12 +11940,15 @@ export default function App() {
                               </span>
                             )}
                           </div>
-                          <div className="mt-1.5 flex flex-wrap gap-1 text-[9px] [text-shadow:0_1px_6px_rgba(0,0,0,0.75)]">
+                          <div className="mt-1.5 flex flex-nowrap gap-1 text-[9px] [text-shadow:0_1px_6px_rgba(0,0,0,0.75)]">
                             <span className="inline-flex h-5 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap">
                               Возраст: {ageLabel}
                             </span>
                             <span className="inline-flex h-5 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap">
                               Пол: {genderLabel}
+                            </span>
+                            <span className="inline-flex h-5 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap">
+                              С нами с: {registeredAtLabel}
                             </span>
                           </div>
                         </div>
@@ -11981,11 +11983,11 @@ export default function App() {
                         </div>
                       </div>
                       <div className="min-w-0 [text-shadow:0_1px_6px_rgba(0,0,0,0.75)]">
-                        <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        <div className="flex min-w-0 flex-nowrap items-center gap-2">
                           <div className="text-3xl font-bold leading-none">{playerName || "Игрок"}</div>
                           {selectedBadgeKey && (
                             <span
-                              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs shadow-[0_6px_16px_rgba(0,0,0,0.45)] drop-shadow-[0_1px_4px_rgba(0,0,0,0.45)] ${
+                              className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs shadow-[0_6px_16px_rgba(0,0,0,0.45)] drop-shadow-[0_1px_4px_rgba(0,0,0,0.45)] ${
                                 getBadgeTheme(selectedBadgeKey).chip
                               }`}
                             >
@@ -11997,14 +11999,14 @@ export default function App() {
                             </span>
                           )}
                         </div>
-                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                          <span className="inline-flex h-8 items-center rounded-full border border-zinc-600 bg-black/35 px-3 whitespace-nowrap">
+                        <div className="mt-2 flex flex-nowrap items-center gap-1.5 text-[11px]">
+                          <span className="inline-flex h-7 items-center rounded-full border border-zinc-600 bg-black/35 px-2.5 whitespace-nowrap">
                             Возраст: {ageLabel}
                           </span>
-                          <span className="inline-flex h-8 items-center rounded-full border border-zinc-600 bg-black/35 px-3 whitespace-nowrap">
+                          <span className="inline-flex h-7 items-center rounded-full border border-zinc-600 bg-black/35 px-2.5 whitespace-nowrap">
                             Пол: {genderLabel}
                           </span>
-                          <span className="inline-flex h-8 items-center rounded-full border border-zinc-600 bg-black/35 px-3 whitespace-nowrap">
+                          <span className="inline-flex h-7 items-center rounded-full border border-zinc-600 bg-black/35 px-2.5 whitespace-nowrap">
                             С нами с: {registeredAtLabel}
                           </span>
                         </div>
@@ -12023,9 +12025,6 @@ export default function App() {
                       </Button>
                     </div>
                   </div>
-                </div>
-                <div className="px-2 py-1 text-center text-[11px] leading-4 text-zinc-400 md:hidden">
-                  С нами с: {registeredAtLabel}
                 </div>
               </div>
               <input
@@ -13399,7 +13398,7 @@ export default function App() {
                         type="button"
                         variant="outline"
                         onClick={() => setMobileMenuOpen(false)}
-                        className="!absolute right-3 top-3 z-20 h-7 w-7 rounded-lg border-zinc-700 bg-zinc-900/90 p-0 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                        className="!absolute right-3 top-3 z-20 !h-7 !w-7 min-w-7 rounded-lg border-zinc-700 bg-zinc-900/90 p-0 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
                         aria-label="Закрыть меню"
                       >
                         <X className="h-4 w-4" />
@@ -13409,7 +13408,7 @@ export default function App() {
                         <div className="text-xs uppercase tracking-[0.16em] text-zinc-500">Навигация</div>
                       </div>
                     </div>
-                    <div className="mb-4 flex justify-center pr-8">
+                    <div className="mb-4 flex justify-center">
                       {isAuthenticated ? (
                         <Button
                           variant="outline"
