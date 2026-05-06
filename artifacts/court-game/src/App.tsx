@@ -8160,7 +8160,7 @@ export default function App() {
           overlayClassName={
             profileMatchesOpen || observerListDialogOpen ? "bg-transparent backdrop-blur-0" : undefined
           }
-          className="w-[calc(100vw-1.5rem)] max-w-[760px] overflow-visible !rounded-[32px] border-zinc-800 bg-zinc-950 text-zinc-100"
+          className="w-[calc(100vw-1.5rem)] max-w-[640px] overflow-visible !rounded-[32px] border-zinc-800 bg-zinc-950 p-7 text-zinc-100 sm:p-8"
         >
           <DialogHeader className="mb-1 text-center sm:mb-2">
             <DialogTitle className="text-center text-2xl font-bold sm:text-3xl">Профиль игрока</DialogTitle>
@@ -8184,7 +8184,7 @@ export default function App() {
             <div className="space-y-4">
               <div className="rounded-3xl border border-zinc-800 bg-zinc-950/70">
                 <div
-                  className="relative min-h-[122px] overflow-hidden rounded-3xl p-4 flex items-center"
+                  className="relative min-h-[142px] overflow-hidden rounded-3xl p-5 flex items-center"
                   style={getBannerStyle(
                     viewPlayerProfile.banner,
                     viewPlayerProfile.avatar,
@@ -8246,7 +8246,7 @@ export default function App() {
                     </div>
                   </div>
                 </div>
-                <div className="px-2 py-1 text-center text-[11px] leading-4 text-zinc-400 sm:hidden">
+                <div className="px-2 py-1.5 text-center text-[11px] leading-4 text-zinc-400 sm:hidden">
                   С нами с: {createdAtLabel || "неизвестной даты"}
                 </div>
               </div>
@@ -11950,9 +11950,6 @@ export default function App() {
                             <span className="inline-flex h-5 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap">
                               Пол: {genderLabel}
                             </span>
-                            <span className="inline-flex h-5 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap">
-                              С нами с: {registeredAtLabel}
-                            </span>
                           </div>
                         </div>
                       </div>
@@ -12028,6 +12025,9 @@ export default function App() {
                       </Button>
                     </div>
                   </div>
+                </div>
+                <div className="px-2 py-1.5 text-center text-[11px] leading-4 text-zinc-400 md:hidden">
+                  С нами с: {registeredAtLabel}
                 </div>
               </div>
               <input
