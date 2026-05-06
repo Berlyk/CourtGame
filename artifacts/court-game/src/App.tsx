@@ -8160,7 +8160,7 @@ export default function App() {
           overlayClassName={
             profileMatchesOpen || observerListDialogOpen ? "bg-transparent backdrop-blur-0" : undefined
           }
-          className="w-[calc(100vw-1.5rem)] max-w-[640px] overflow-visible !rounded-[32px] border-zinc-800 bg-zinc-950 p-7 text-zinc-100 sm:p-8"
+          className="w-[calc(100vw-1.5rem)] max-w-[640px] overflow-visible !rounded-[32px] border-zinc-800 bg-zinc-950 p-7 text-zinc-100 sm:max-w-[832px] sm:p-10"
         >
           <DialogHeader className="mb-0 text-center sm:mb-1">
             <DialogTitle className="text-center text-2xl font-bold sm:text-3xl">Профиль игрока</DialogTitle>
@@ -8184,7 +8184,7 @@ export default function App() {
             <div className="space-y-4">
               <div className="rounded-3xl border border-zinc-800 bg-zinc-950/70">
                 <div
-                  className="relative min-h-[142px] overflow-hidden rounded-t-3xl p-5 flex items-center sm:rounded-3xl"
+                  className="relative min-h-[142px] overflow-hidden rounded-t-3xl p-5 flex items-center sm:min-h-[185px] sm:rounded-3xl sm:p-7"
                   style={getBannerStyle(
                     viewPlayerProfile.banner,
                     viewPlayerProfile.avatar,
@@ -8192,11 +8192,11 @@ export default function App() {
                   )}
                 >
                   <div className="absolute inset-0 rounded-t-3xl bg-gradient-to-t from-black/75 via-black/35 to-black/10 sm:rounded-3xl" />
-                  <div className="relative z-10 flex min-w-0 items-center gap-3">
+                  <div className="relative z-10 flex min-w-0 items-center gap-3 sm:gap-4">
                     <Avatar src={viewPlayerProfile.avatar ?? null} name={viewPlayerProfile.nickname} size={82} />
                     <div className="min-w-0 flex-1 [text-shadow:0_1px_6px_rgba(0,0,0,0.75)]">
-                      <div className="flex min-w-0 flex-nowrap items-center gap-1.5">
-                        <div className="min-w-0 truncate text-xl font-bold leading-none sm:text-2xl">
+                      <div className="flex min-w-0 flex-nowrap items-center gap-1.5 sm:gap-2">
+                        <div className="min-w-0 truncate text-xl font-bold leading-none sm:text-3xl">
                           {viewPlayerProfile.nickname}
                         </div>
                         {viewPlayerProfile.selectedBadgeKey ? (
@@ -8206,13 +8206,13 @@ export default function App() {
                               onClick={() =>
                                 setViewProfileBadgeHintOpen((prev) => !prev)
                               }
-                              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] transition-colors shadow-[0_6px_16px_rgba(0,0,0,0.45)] drop-shadow-[0_1px_4px_rgba(0,0,0,0.45)] sm:gap-1.5 sm:px-2.5 sm:py-1 sm:text-xs ${
+                              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] transition-colors shadow-[0_6px_16px_rgba(0,0,0,0.45)] drop-shadow-[0_1px_4px_rgba(0,0,0,0.45)] sm:gap-1.5 sm:px-3 sm:py-1 sm:text-sm ${
                                 getBadgeTheme(viewPlayerProfile.selectedBadgeKey).chip
                               }`}
                             >
                               <BadgeGlyph
                                 badgeKey={viewPlayerProfile.selectedBadgeKey}
-                                className={`h-3 w-3 sm:h-3.5 sm:w-3.5 ${getBadgeTheme(viewPlayerProfile.selectedBadgeKey).iconOnly ?? "text-zinc-300"}`}
+                                className={`h-3 w-3 sm:h-4 sm:w-4 ${getBadgeTheme(viewPlayerProfile.selectedBadgeKey).iconOnly ?? "text-zinc-300"}`}
                               />
                               <span>
                                 {getBadgeTitleByKey(
@@ -8232,14 +8232,14 @@ export default function App() {
                           </div>
                         ) : null}
                       </div>
-                      <div className="mt-1.5 flex flex-nowrap items-center gap-1 text-[9px] sm:gap-1.5 sm:text-[11px]">
-                        <span className="inline-flex h-5 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap sm:h-6 sm:px-2">
+                      <div className="mt-1.5 flex flex-nowrap items-center gap-1 text-[10px] sm:mt-2 sm:gap-2 sm:text-sm">
+                        <span className="inline-flex h-5 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap sm:h-8 sm:px-3">
                           Возраст: {ageLabel}
                         </span>
-                        <span className="inline-flex h-5 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap sm:h-6 sm:px-2">
+                        <span className="inline-flex h-5 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap sm:h-8 sm:px-3">
                           Пол: {genderLabel}
                         </span>
-                        <span className="hidden h-5 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap sm:inline-flex sm:h-6 sm:px-2">
+                        <span className="hidden h-5 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap sm:inline-flex sm:h-8 sm:px-3">
                           С нами с: {createdAtLabel || "неизвестной даты"}
                         </span>
                       </div>
@@ -8259,17 +8259,17 @@ export default function App() {
                 </div>
               )}
               <div className="grid grid-cols-3 gap-2 text-center">
-                <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-2 py-3">
-                  <div className="text-xs text-zinc-500">Матчей</div>
-                  <div className="mt-1 text-lg font-bold">{viewPlayerProfile.stats?.totalMatches ?? 0}</div>
+                <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-2 py-3 sm:py-4">
+                  <div className="text-xs text-zinc-500 sm:text-sm">Матчей</div>
+                  <div className="mt-1 text-lg font-bold sm:text-2xl">{viewPlayerProfile.stats?.totalMatches ?? 0}</div>
                 </div>
-                <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-2 py-3">
-                  <div className="text-xs text-zinc-500">Побед</div>
-                  <div className="mt-1 text-lg font-bold">{viewPlayerProfile.stats?.totalWins ?? 0}</div>
+                <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-2 py-3 sm:py-4">
+                  <div className="text-xs text-zinc-500 sm:text-sm">Побед</div>
+                  <div className="mt-1 text-lg font-bold sm:text-2xl">{viewPlayerProfile.stats?.totalWins ?? 0}</div>
                 </div>
-                <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-2 py-3">
-                  <div className="text-xs text-zinc-500">Winrate</div>
-                  <div className="mt-1 text-lg font-bold">
+                <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-2 py-3 sm:py-4">
+                  <div className="text-xs text-zinc-500 sm:text-sm">Winrate</div>
+                  <div className="mt-1 text-lg font-bold sm:text-2xl">
                     {Math.round(viewPlayerProfile.stats?.totalWinRate ?? 0)}%
                   </div>
                 </div>
@@ -11984,16 +11984,16 @@ export default function App() {
                       </div>
                       <div className="min-w-0 [text-shadow:0_1px_6px_rgba(0,0,0,0.75)]">
                         <div className="flex min-w-0 flex-nowrap items-center gap-2">
-                          <div className="text-3xl font-bold leading-none">{playerName || "Игрок"}</div>
+                          <div className="text-4xl font-bold leading-none">{playerName || "Игрок"}</div>
                           {selectedBadgeKey && (
                             <span
-                              className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs shadow-[0_6px_16px_rgba(0,0,0,0.45)] drop-shadow-[0_1px_4px_rgba(0,0,0,0.45)] ${
+                              className={`inline-flex shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 text-sm shadow-[0_6px_16px_rgba(0,0,0,0.45)] drop-shadow-[0_1px_4px_rgba(0,0,0,0.45)] ${
                                 getBadgeTheme(selectedBadgeKey).chip
                               }`}
                             >
                               <BadgeGlyph
                                 badgeKey={selectedBadgeKey}
-                                className={`h-3.5 w-3.5 ${getBadgeTheme(selectedBadgeKey).iconOnly ?? "text-zinc-300"}`}
+                                className={`h-4 w-4 ${getBadgeTheme(selectedBadgeKey).iconOnly ?? "text-zinc-300"}`}
                               />
                               {getBadgeTitleByKey(selectedBadgeKey, badges)}
                             </span>
