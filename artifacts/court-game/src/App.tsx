@@ -8184,7 +8184,7 @@ export default function App() {
             <div className="min-w-0 w-full max-w-full space-y-4 justify-self-stretch">
               <div className="w-full max-w-full overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-950/70">
                 <div
-                  className="relative mx-auto min-h-[142px] w-full max-w-full overflow-hidden rounded-t-3xl p-4 flex items-center sm:min-h-[185px] sm:rounded-3xl sm:p-7"
+                  className="relative mx-auto min-h-[132px] w-full max-w-full overflow-hidden rounded-t-3xl p-4 flex items-center sm:min-h-[185px] sm:rounded-3xl sm:p-7"
                   style={getBannerStyle(
                     viewPlayerProfile.banner,
                     viewPlayerProfile.avatar,
@@ -8192,16 +8192,24 @@ export default function App() {
                   )}
                 >
                   <div className="absolute inset-0 rounded-t-3xl bg-gradient-to-t from-black/75 via-black/35 to-black/10 sm:rounded-3xl" />
+                  {viewProfileBadgeHintOpen && viewPlayerProfile.selectedBadgeKey ? (
+                    <div className="absolute left-1/2 top-4 z-30 w-max min-w-[150px] max-w-[min(220px,calc(100vw-4rem))] -translate-x-1/2 rounded-lg border border-zinc-700 bg-zinc-900/95 px-2.5 py-1.5 text-xs leading-snug text-zinc-200 shadow-[0_10px_24px_rgba(0,0,0,0.45)] whitespace-normal break-words sm:hidden">
+                      {findBadgeByKey(
+                        viewPlayerProfile.selectedBadgeKey,
+                        viewPlayerProfile.badges,
+                      )?.description ?? "Информация о бейдже отсутствует."}
+                    </div>
+                  ) : null}
                   <div className="relative z-10 flex min-w-0 w-full items-center gap-2 sm:gap-4">
                     <span className="block shrink-0 sm:hidden">
-                      <Avatar src={viewPlayerProfile.avatar ?? null} name={viewPlayerProfile.nickname} size={72} />
+                      <Avatar src={viewPlayerProfile.avatar ?? null} name={viewPlayerProfile.nickname} size={76} />
                     </span>
                     <span className="hidden shrink-0 sm:block">
                       <Avatar src={viewPlayerProfile.avatar ?? null} name={viewPlayerProfile.nickname} size={96} />
                     </span>
                     <div className="min-w-0 flex-1 overflow-hidden [text-shadow:0_1px_6px_rgba(0,0,0,0.75)]">
                       <div className="flex min-w-0 max-w-full flex-nowrap items-center gap-1 sm:gap-2">
-                        <div className="min-w-0 truncate text-lg font-bold leading-none [text-shadow:0_2px_8px_rgba(0,0,0,0.95)] sm:text-4xl">
+                        <div className="min-w-0 truncate text-xl font-bold leading-none [text-shadow:0_2px_8px_rgba(0,0,0,0.95)] sm:text-4xl">
                           {viewPlayerProfile.nickname}
                         </div>
                         {viewPlayerProfile.selectedBadgeKey ? (
@@ -8211,13 +8219,13 @@ export default function App() {
                               onClick={() =>
                                 setViewProfileBadgeHintOpen((prev) => !prev)
                               }
-                              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] transition-colors shadow-[0_6px_16px_rgba(0,0,0,0.45)] drop-shadow-[0_1px_4px_rgba(0,0,0,0.75)] [text-shadow:0_2px_8px_rgba(0,0,0,0.95)] sm:gap-2 sm:px-3.5 sm:py-1.5 sm:text-base ${
+                              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] transition-colors shadow-[0_6px_16px_rgba(0,0,0,0.45)] drop-shadow-[0_1px_4px_rgba(0,0,0,0.75)] [text-shadow:0_2px_8px_rgba(0,0,0,0.95)] sm:gap-2 sm:px-3.5 sm:py-1.5 sm:text-base ${
                                 getBadgeTheme(viewPlayerProfile.selectedBadgeKey).chip
                               }`}
                             >
                               <BadgeGlyph
                                 badgeKey={viewPlayerProfile.selectedBadgeKey}
-                                className={`h-3 w-3 sm:h-5 sm:w-5 ${getBadgeTheme(viewPlayerProfile.selectedBadgeKey).iconOnly ?? "text-zinc-300"}`}
+                                className={`h-3.5 w-3.5 sm:h-5 sm:w-5 ${getBadgeTheme(viewPlayerProfile.selectedBadgeKey).iconOnly ?? "text-zinc-300"}`}
                               />
                               <span>
                                 {getBadgeTitleByKey(
@@ -8227,7 +8235,7 @@ export default function App() {
                               </span>
                             </button>
                             {viewProfileBadgeHintOpen ? (
-                              <div className="absolute left-1/2 top-full z-30 mt-1.5 w-max min-w-[150px] max-w-[min(220px,calc(100vw-4rem))] -translate-x-1/2 rounded-lg border border-zinc-700 bg-zinc-900/95 px-2.5 py-1.5 text-xs leading-snug text-zinc-200 shadow-[0_10px_24px_rgba(0,0,0,0.45)] whitespace-normal break-words sm:left-0 sm:translate-x-0">
+                              <div className="absolute left-1/2 top-full z-30 mt-1.5 hidden w-max min-w-[150px] max-w-[min(220px,calc(100vw-4rem))] -translate-x-1/2 rounded-lg border border-zinc-700 bg-zinc-900/95 px-2.5 py-1.5 text-xs leading-snug text-zinc-200 shadow-[0_10px_24px_rgba(0,0,0,0.45)] whitespace-normal break-words sm:block sm:left-0 sm:translate-x-0">
                                 {findBadgeByKey(
                                   viewPlayerProfile.selectedBadgeKey,
                                   viewPlayerProfile.badges,
@@ -8237,11 +8245,11 @@ export default function App() {
                           </div>
                         ) : null}
                       </div>
-                      <div className="mt-1.5 flex max-w-full flex-nowrap items-center gap-0.5 overflow-hidden text-[9px] sm:mt-2 sm:gap-2 sm:text-sm">
-                        <span className="inline-flex h-4 items-center rounded-full border border-zinc-600 bg-black/35 px-1 whitespace-nowrap sm:h-8 sm:px-3">
+                      <div className="mt-1.5 flex max-w-full flex-nowrap items-center gap-0.5 overflow-hidden text-[10px] sm:mt-2 sm:gap-2 sm:text-sm">
+                        <span className="inline-flex h-4 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap sm:h-8 sm:px-3">
                           Возраст: {ageLabel}
                         </span>
-                        <span className="inline-flex h-4 items-center rounded-full border border-zinc-600 bg-black/35 px-1 whitespace-nowrap sm:h-8 sm:px-3">
+                        <span className="inline-flex h-4 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap sm:h-8 sm:px-3">
                           Пол: {genderLabel}
                         </span>
                         <span className="hidden h-5 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap sm:inline-flex sm:h-8 sm:px-3">
