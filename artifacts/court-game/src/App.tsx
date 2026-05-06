@@ -8205,7 +8205,7 @@ export default function App() {
                       <Avatar src={viewPlayerProfile.avatar ?? null} name={viewPlayerProfile.nickname} size={76} />
                     </span>
                     <span className="hidden shrink-0 sm:block">
-                      <Avatar src={viewPlayerProfile.avatar ?? null} name={viewPlayerProfile.nickname} size={67} />
+                      <Avatar src={viewPlayerProfile.avatar ?? null} name={viewPlayerProfile.nickname} size={82} />
                     </span>
                     <div className="min-w-0 flex-1 overflow-hidden [text-shadow:0_1px_6px_rgba(0,0,0,0.75)]">
                       <div className="flex min-w-0 max-w-full flex-nowrap items-center gap-1 sm:gap-2">
@@ -8245,14 +8245,14 @@ export default function App() {
                           </div>
                         ) : null}
                       </div>
-                      <div className="mt-1.5 flex max-w-full flex-nowrap items-center gap-0.5 text-[10px] sm:mt-2 sm:gap-1.5 sm:text-xs">
-                        <span className="inline-flex h-4 shrink-0 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap sm:h-6 sm:px-2">
+                      <div className="mt-1.5 flex max-w-full flex-nowrap items-center gap-0.5 text-[10px] sm:mt-2 sm:gap-1 sm:text-[11px]">
+                        <span className="inline-flex h-4 shrink-0 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap sm:h-5 sm:px-1.5">
                           Возраст: {ageLabel}
                         </span>
-                        <span className="inline-flex h-4 shrink-0 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap sm:h-6 sm:px-2">
+                        <span className="inline-flex h-4 shrink-0 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap sm:h-5 sm:px-1.5">
                           Пол: {genderLabel}
                         </span>
-                        <span className="hidden h-5 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap sm:inline-flex sm:h-6 sm:px-2">
+                        <span className="hidden h-5 items-center rounded-full border border-zinc-600 bg-black/35 px-1.5 whitespace-nowrap sm:inline-flex sm:px-1.5">
                           С нами с: {createdAtLabel || "неизвестной даты"}
                         </span>
                       </div>
