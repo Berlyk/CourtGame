@@ -8162,7 +8162,7 @@ export default function App() {
           }
           className="w-[calc(100vw-1.5rem)] max-w-[640px] overflow-visible !rounded-[32px] border-zinc-800 bg-zinc-950 p-7 text-zinc-100 sm:max-w-[832px] sm:p-10"
         >
-          <DialogHeader className="mb-0 text-center sm:mb-1">
+          <DialogHeader className="mb-0 !items-center text-center sm:mb-1">
             <DialogTitle className="text-center text-2xl font-bold sm:text-3xl">Профиль игрока</DialogTitle>
             <DialogDescription className="sr-only">Публичная информация.</DialogDescription>
           </DialogHeader>
@@ -8184,7 +8184,7 @@ export default function App() {
             <div className="space-y-4">
               <div className="rounded-3xl border border-zinc-800 bg-zinc-950/70">
                 <div
-                  className="relative min-h-[142px] overflow-hidden rounded-t-3xl p-5 flex items-center sm:min-h-[185px] sm:rounded-3xl sm:p-7"
+                  className="relative mx-auto min-h-[142px] w-full overflow-hidden rounded-t-3xl p-5 flex items-center sm:min-h-[185px] sm:rounded-3xl sm:p-7"
                   style={getBannerStyle(
                     viewPlayerProfile.banner,
                     viewPlayerProfile.avatar,
@@ -8193,10 +8193,12 @@ export default function App() {
                 >
                   <div className="absolute inset-0 rounded-t-3xl bg-gradient-to-t from-black/75 via-black/35 to-black/10 sm:rounded-3xl" />
                   <div className="relative z-10 flex min-w-0 items-center gap-3 sm:gap-4">
-                    <Avatar src={viewPlayerProfile.avatar ?? null} name={viewPlayerProfile.nickname} size={82} />
+                    <span className="sm:[&>*]:!h-[108px] sm:[&>*]:!w-[108px]">
+                      <Avatar src={viewPlayerProfile.avatar ?? null} name={viewPlayerProfile.nickname} size={82} />
+                    </span>
                     <div className="min-w-0 flex-1 [text-shadow:0_1px_6px_rgba(0,0,0,0.75)]">
                       <div className="flex min-w-0 flex-nowrap items-center gap-1.5 sm:gap-2">
-                        <div className="min-w-0 truncate text-xl font-bold leading-none sm:text-3xl">
+                        <div className="min-w-0 truncate text-xl font-bold leading-none [text-shadow:0_2px_8px_rgba(0,0,0,0.95)] sm:text-4xl">
                           {viewPlayerProfile.nickname}
                         </div>
                         {viewPlayerProfile.selectedBadgeKey ? (
@@ -8206,13 +8208,13 @@ export default function App() {
                               onClick={() =>
                                 setViewProfileBadgeHintOpen((prev) => !prev)
                               }
-                              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] transition-colors shadow-[0_6px_16px_rgba(0,0,0,0.45)] drop-shadow-[0_1px_4px_rgba(0,0,0,0.45)] sm:gap-1.5 sm:px-3 sm:py-1 sm:text-sm ${
+                              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] transition-colors shadow-[0_6px_16px_rgba(0,0,0,0.45)] drop-shadow-[0_1px_4px_rgba(0,0,0,0.75)] [text-shadow:0_2px_8px_rgba(0,0,0,0.95)] sm:gap-2 sm:px-3.5 sm:py-1.5 sm:text-base ${
                                 getBadgeTheme(viewPlayerProfile.selectedBadgeKey).chip
                               }`}
                             >
                               <BadgeGlyph
                                 badgeKey={viewPlayerProfile.selectedBadgeKey}
-                                className={`h-3 w-3 sm:h-4 sm:w-4 ${getBadgeTheme(viewPlayerProfile.selectedBadgeKey).iconOnly ?? "text-zinc-300"}`}
+                                className={`h-3 w-3 sm:h-5 sm:w-5 ${getBadgeTheme(viewPlayerProfile.selectedBadgeKey).iconOnly ?? "text-zinc-300"}`}
                               />
                               <span>
                                 {getBadgeTitleByKey(
@@ -8260,16 +8262,16 @@ export default function App() {
               )}
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-2 py-3 sm:py-4">
-                  <div className="text-xs text-zinc-500 sm:text-sm">Матчей</div>
-                  <div className="mt-1 text-lg font-bold sm:text-2xl">{viewPlayerProfile.stats?.totalMatches ?? 0}</div>
+                  <div className="text-xs text-zinc-500 sm:text-base">Матчей</div>
+                  <div className="mt-1 text-lg font-bold sm:text-3xl">{viewPlayerProfile.stats?.totalMatches ?? 0}</div>
                 </div>
                 <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-2 py-3 sm:py-4">
-                  <div className="text-xs text-zinc-500 sm:text-sm">Побед</div>
-                  <div className="mt-1 text-lg font-bold sm:text-2xl">{viewPlayerProfile.stats?.totalWins ?? 0}</div>
+                  <div className="text-xs text-zinc-500 sm:text-base">Побед</div>
+                  <div className="mt-1 text-lg font-bold sm:text-3xl">{viewPlayerProfile.stats?.totalWins ?? 0}</div>
                 </div>
                 <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-2 py-3 sm:py-4">
-                  <div className="text-xs text-zinc-500 sm:text-sm">Winrate</div>
-                  <div className="mt-1 text-lg font-bold sm:text-2xl">
+                  <div className="text-xs text-zinc-500 sm:text-base">Winrate</div>
+                  <div className="mt-1 text-lg font-bold sm:text-3xl">
                     {Math.round(viewPlayerProfile.stats?.totalWinRate ?? 0)}%
                   </div>
                 </div>
