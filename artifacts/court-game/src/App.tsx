@@ -8162,7 +8162,7 @@ export default function App() {
           }
           className="w-[calc(100vw-1.5rem)] max-w-[640px] overflow-visible !rounded-[32px] border-zinc-800 bg-zinc-950 p-7 text-zinc-100 sm:p-8"
         >
-          <DialogHeader className="mb-1 text-center sm:mb-2">
+          <DialogHeader className="mb-0 text-center sm:mb-1">
             <DialogTitle className="text-center text-2xl font-bold sm:text-3xl">Профиль игрока</DialogTitle>
             <DialogDescription className="sr-only">Публичная информация.</DialogDescription>
           </DialogHeader>
@@ -8184,14 +8184,14 @@ export default function App() {
             <div className="space-y-4">
               <div className="rounded-3xl border border-zinc-800 bg-zinc-950/70">
                 <div
-                  className="relative min-h-[142px] overflow-hidden rounded-3xl p-5 flex items-center"
+                  className="relative min-h-[142px] overflow-hidden rounded-t-3xl p-5 flex items-center sm:rounded-3xl"
                   style={getBannerStyle(
                     viewPlayerProfile.banner,
                     viewPlayerProfile.avatar,
                     viewPlayerProfile.nickname,
                   )}
                 >
-                  <div className="absolute inset-0 rounded-3xl bg-gradient-to-t from-black/75 via-black/35 to-black/10" />
+                  <div className="absolute inset-0 rounded-t-3xl bg-gradient-to-t from-black/75 via-black/35 to-black/10 sm:rounded-3xl" />
                   <div className="relative z-10 flex min-w-0 items-center gap-3">
                     <Avatar src={viewPlayerProfile.avatar ?? null} name={viewPlayerProfile.nickname} size={82} />
                     <div className="min-w-0 flex-1 [text-shadow:0_1px_6px_rgba(0,0,0,0.75)]">
@@ -12000,13 +12000,13 @@ export default function App() {
                           )}
                         </div>
                         <div className="mt-2 flex flex-nowrap items-center gap-1.5 text-[11px]">
-                          <span className="inline-flex h-7 items-center rounded-full border border-zinc-600 bg-black/35 px-2.5 whitespace-nowrap">
+                          <span className="inline-flex h-8 items-center rounded-full border border-zinc-600 bg-black/35 px-3 whitespace-nowrap text-xs">
                             Возраст: {ageLabel}
                           </span>
-                          <span className="inline-flex h-7 items-center rounded-full border border-zinc-600 bg-black/35 px-2.5 whitespace-nowrap">
+                          <span className="inline-flex h-8 items-center rounded-full border border-zinc-600 bg-black/35 px-3 whitespace-nowrap text-xs">
                             Пол: {genderLabel}
                           </span>
-                          <span className="inline-flex h-7 items-center rounded-full border border-zinc-600 bg-black/35 px-2.5 whitespace-nowrap">
+                          <span className="inline-flex h-8 items-center rounded-full border border-zinc-600 bg-black/35 px-3 whitespace-nowrap text-xs">
                             С нами с: {registeredAtLabel}
                           </span>
                         </div>
@@ -13401,7 +13401,8 @@ export default function App() {
                         type="button"
                         variant="outline"
                         onClick={() => setMobileMenuOpen(false)}
-                        className="!absolute right-3 top-3 z-20 !h-6 !w-6 !min-w-6 rounded-md border-zinc-700 bg-zinc-900/90 p-0 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                        className="!absolute right-3 top-3 z-20 aspect-square !h-6 !w-6 !min-h-6 !min-w-6 !max-h-6 !max-w-6 shrink-0 rounded-md border-zinc-700 bg-zinc-900/90 p-0 text-zinc-100 hover:bg-zinc-800 hover:text-zinc-100"
+                        style={{ width: 24, height: 24, minWidth: 24, minHeight: 24 }}
                         aria-label="Закрыть меню"
                       >
                         <X className="h-3.5 w-3.5" />
