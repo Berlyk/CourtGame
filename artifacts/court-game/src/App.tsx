@@ -8160,10 +8160,10 @@ export default function App() {
           overlayClassName={
             profileMatchesOpen || observerListDialogOpen ? "bg-transparent backdrop-blur-0" : undefined
           }
-          className="w-[calc(100vw-1.5rem)] max-w-[640px] overflow-visible !rounded-[32px] border-zinc-800 bg-zinc-950 p-7 text-zinc-100 sm:max-w-[832px] sm:p-10"
+          className="w-[calc(100vw-1.5rem)] max-w-[640px] overflow-visible !rounded-[32px] border-zinc-800 bg-zinc-950 p-5 text-zinc-100 sm:max-w-[832px] sm:p-10"
         >
-          <DialogHeader className="mb-0 !items-center text-center sm:mb-1">
-            <DialogTitle className="text-center text-2xl font-bold sm:text-3xl">Профиль игрока</DialogTitle>
+          <DialogHeader className="mb-0 flex w-full !items-center justify-center text-center sm:mb-1">
+            <DialogTitle className="mx-auto w-full text-center text-2xl font-bold sm:text-[39px]">Профиль игрока</DialogTitle>
             <DialogDescription className="sr-only">Публичная информация.</DialogDescription>
           </DialogHeader>
           {viewPlayerProfileLoading ? (
@@ -8193,9 +8193,7 @@ export default function App() {
                 >
                   <div className="absolute inset-0 rounded-t-3xl bg-gradient-to-t from-black/75 via-black/35 to-black/10 sm:rounded-3xl" />
                   <div className="relative z-10 flex min-w-0 items-center gap-3 sm:gap-4">
-                    <span className="sm:[&>*]:!h-[108px] sm:[&>*]:!w-[108px]">
-                      <Avatar src={viewPlayerProfile.avatar ?? null} name={viewPlayerProfile.nickname} size={82} />
-                    </span>
+                    <Avatar src={viewPlayerProfile.avatar ?? null} name={viewPlayerProfile.nickname} size={96} />
                     <div className="min-w-0 flex-1 [text-shadow:0_1px_6px_rgba(0,0,0,0.75)]">
                       <div className="flex min-w-0 flex-nowrap items-center gap-1.5 sm:gap-2">
                         <div className="min-w-0 truncate text-xl font-bold leading-none [text-shadow:0_2px_8px_rgba(0,0,0,0.95)] sm:text-4xl">
