@@ -78,37 +78,6 @@ app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true, limit: "20mb" }));
 
 app.use("/api", router);
-
-// Temporary one-off endpoint to pull headline stats for the owner. Remove after use.
-app.get("/api/debug/stats", async (req: Request, res: Response) => {
-  const key = String(process.env.DEBUG_STATS_KEY ?? "").trim();
-  if (!key || req.headers["x-debug-key"] !== key) {
-    res.status(404).end();
-    return;
-  }
-  try {
-    const { pool } = await import("@workspace/db");
-    const [users, activeSubs, games] = await Promise.all([
-      pool.query("SELECT COUNT(*)::int AS n FROM auth_users"),
-      pool.query(
-        `SELECT COUNT(*)::int AS n FROM auth_users
-         WHERE COALESCE(subscription_tier, 'free') != 'free'
-           AND (COALESCE(subscription_is_lifetime, FALSE) = TRUE
-                OR subscription_end_at IS NULL
-                OR subscription_end_at > NOW())`,
-      ),
-      pool.query("SELECT COUNT(*)::int AS n FROM match_rooms WHERE finished = TRUE"),
-    ]);
-    res.json({
-      totalUsers: users.rows[0].n,
-      activeSubscriptions: activeSubs.rows[0].n,
-      gamesPlayed: games.rows[0].n,
-    });
-  } catch (error) {
-    res.status(500).json({ message: error instanceof Error ? error.message : "error" });
-  }
-});
-
 const healthResponse = HealthCheckResponse.parse({ status: "ok" });
 app.get("/health", (_req, res) => {
   res.json(healthResponse);

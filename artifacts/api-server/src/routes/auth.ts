@@ -649,14 +649,12 @@ async function requireAdmin(
 
   const token = getRequestToken(req.headers as Record<string, unknown>);
   if (!token) {
-    console.log("[admin-debug] no token", { clientIp, xff: req.headers["x-forwarded-for"], cf: req.headers["cf-connecting-ip"] });
     registerAdminFailure(clientIp, nowMs);
     res.status(401).json({ message: "Не авторизован." });
     return null;
   }
   const adminUser = await getUserByToken(token, clientIp);
   if (!adminUser) {
-    console.log("[admin-debug] no adminUser for token", { clientIp });
     registerAdminFailure(clientIp, nowMs);
     res.status(403).json({ message: "Недостаточно прав." });
     return null;
@@ -667,7 +665,6 @@ async function requireAdmin(
   const isOwnerById = requiredAdminUserId ? adminUser.id === requiredAdminUserId : true;
   const isOwner = isOwnerByLogin && isOwnerById;
   if (adminUser.ban?.isBanned && !isOwner) {
-    console.log("[admin-debug] banned", { clientIp, login: adminUser.login });
     registerAdminFailure(clientIp, nowMs);
     res.status(403).json({ message: "Аккаунт заблокирован." });
     return null;
@@ -684,14 +681,12 @@ async function requireAdmin(
   }
 
   if (!accessRole) {
-    console.log("[admin-debug] no accessRole", { clientIp, login: adminUser.login, isOwnerByLogin, isOwnerById, adminLogin });
     registerAdminFailure(clientIp, nowMs);
     res.status(403).json({ message: "Недостаточно прав." });
     return null;
   }
   const requiredKey = String(process.env.ADMIN_PANEL_KEY ?? "").trim();
   if (!requiredKey) {
-    console.log("[admin-debug] ADMIN_PANEL_KEY missing on server");
     registerAdminFailure(clientIp, nowMs);
     res.status(503).json({ message: "ADMIN_PANEL_KEY не настроен на сервере." });
     return null;
@@ -704,14 +699,12 @@ async function requireAdmin(
         ? String(providedRaw[0] ?? "").trim()
         : "";
   if (!provided || !secureCompare(provided, requiredKey)) {
-    console.log("[admin-debug] admin key mismatch", { clientIp, providedLen: provided.length, requiredLen: requiredKey.length });
     registerAdminFailure(clientIp, nowMs);
     res.status(403).json({ message: "Неверный ключ админ-панели." });
     return null;
   }
   const allowedIps = getAdminAllowedIps();
   if (allowedIps.size > 0) {
-    console.log("[admin-debug] ip check", { clientIp, allowedIps: [...allowedIps], xff: req.headers["x-forwarded-for"], cf: req.headers["cf-connecting-ip"] });
     if (!clientIp || !isIpAllowed(clientIp, allowedIps)) {
       registerAdminFailure(clientIp, nowMs);
       res.status(403).json({ message: "IP не разрешен для админ-панели." });
