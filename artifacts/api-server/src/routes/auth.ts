@@ -544,6 +544,40 @@ function resolveUserAgent(headers: Record<string, unknown>): string {
   return "";
 }
 
+/**
+ * Первые 64 бита IPv6-адреса (сетевой префикс, который провайдер обычно не
+ * меняет), нормализованные до 4 групп по 4 hex-цифры. Возвращает null для IPv4
+ * или некорректного адреса.
+ */
+function ipv6Prefix64(ip: string): string | null {
+  const clean = ip.replace(/^\[|\]$/g, "").split("%")[0] ?? "";
+  if (!clean.includes(":")) return null;
+  const parts = clean.split("::");
+  if (parts.length > 2) return null;
+  const head = parts[0] ? parts[0].split(":") : [];
+  const tail = parts.length > 1 && parts[1] ? parts[1].split(":") : [];
+  const missing = 8 - head.length - tail.length;
+  if (missing < 0) return null;
+  const groups = [...head, ...Array(missing).fill("0"), ...tail];
+  if (groups.length !== 8 || groups.some((g) => !/^[0-9a-fA-F]{1,4}$/.test(g))) return null;
+  return groups.slice(0, 4).map((g) => g.padStart(4, "0").toLowerCase()).join(":");
+}
+
+/**
+ * IPv6-хвост часто меняется (privacy extensions, SLAAC), а сетевой префикс у
+ * того же провайдерского подключения обычно стабилен — поэтому для IPv6
+ * сравниваем по /64, а не побайтово. Для IPv4 остаётся точное совпадение.
+ */
+function isIpAllowed(clientIp: string, allowedIps: Set<string>): boolean {
+  if (allowedIps.has(clientIp)) return true;
+  const clientPrefix = ipv6Prefix64(clientIp);
+  if (!clientPrefix) return false;
+  for (const entry of allowedIps) {
+    if (ipv6Prefix64(entry) === clientPrefix) return true;
+  }
+  return false;
+}
+
 function getAdminAllowedIps(): Set<string> {
   const fromEnv = String(process.env.ADMIN_ALLOWED_IPS ?? "")
     .split(",")
@@ -678,7 +712,7 @@ async function requireAdmin(
   const allowedIps = getAdminAllowedIps();
   if (allowedIps.size > 0) {
     console.log("[admin-debug] ip check", { clientIp, allowedIps: [...allowedIps], xff: req.headers["x-forwarded-for"], cf: req.headers["cf-connecting-ip"] });
-    if (!clientIp || !allowedIps.has(clientIp)) {
+    if (!clientIp || !isIpAllowed(clientIp, allowedIps)) {
       registerAdminFailure(clientIp, nowMs);
       res.status(403).json({ message: "IP не разрешен для админ-панели." });
       return null;
