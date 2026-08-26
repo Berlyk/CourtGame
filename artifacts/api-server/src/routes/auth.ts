@@ -250,6 +250,13 @@ function secureCompare(a: string, b: string): boolean {
 }
 
 function resolveClientIp(req: Parameters<typeof authRouter.get>[1]): string {
+  // Cloudflare выставляет этот заголовок в реальный IP посетителя и сам его
+  // перезаписывает на границе сети, поэтому ему доверяем в первую очередь.
+  // x-forwarded-for после Cloudflare содержит IP прокси Coolify/Traefik, а не клиента.
+  const cfIp = req.headers["cf-connecting-ip"];
+  if (typeof cfIp === "string" && cfIp.trim()) {
+    return cfIp.trim();
+  }
   const forwarded = req.headers["x-forwarded-for"];
   if (typeof forwarded === "string" && forwarded.trim()) {
     return forwarded.split(",")[0]?.trim() ?? "";

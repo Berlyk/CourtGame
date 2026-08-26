@@ -20,6 +20,10 @@ const HTTP_RATE_LIMIT_PAYMENTS = 120;
 const httpRateBuckets = new Map<string, RateBucket>();
 
 function getRequestIp(req: Request): string {
+  const cfIp = req.headers["cf-connecting-ip"];
+  if (typeof cfIp === "string" && cfIp.trim()) {
+    return cfIp.trim();
+  }
   const forwarded = req.headers["x-forwarded-for"];
   if (typeof forwarded === "string" && forwarded.trim()) {
     return forwarded.split(",")[0]?.trim() || "unknown";

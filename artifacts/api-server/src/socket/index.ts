@@ -1196,6 +1196,10 @@ export function setupSocket(httpServer: HttpServer) {
   };
 
   const resolveSocketIp = (headers: Record<string, unknown>, fallback?: string | null): string => {
+    const cfIp = headers["cf-connecting-ip"];
+    if (typeof cfIp === "string" && cfIp.trim()) {
+      return cfIp.trim();
+    }
     const forwarded = headers["x-forwarded-for"];
     if (typeof forwarded === "string" && forwarded.trim()) {
       return forwarded.split(",")[0]?.trim() ?? "";

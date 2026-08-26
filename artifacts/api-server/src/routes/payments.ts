@@ -67,6 +67,10 @@ function getRequestToken(headers: Record<string, unknown>): string | null {
 }
 
 function resolveClientIp(req: Request): string {
+  const cfIp = req.headers["cf-connecting-ip"];
+  if (typeof cfIp === "string" && cfIp.trim()) {
+    return cfIp.trim();
+  }
   const forwarded = req.headers["x-forwarded-for"];
   if (typeof forwarded === "string" && forwarded.trim()) {
     return forwarded.split(",")[0]?.trim() ?? "";
